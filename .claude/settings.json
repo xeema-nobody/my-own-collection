@@ -1,0 +1,36 @@
+{
+  "enabledPlugins": {
+    "caveman@caveman": true,
+    "modern-python@trailofbits": true,
+    "property-based-testing@trailofbits": true,
+    "insecure-defaults@trailofbits": true,
+    "sharp-edges@trailofbits": true,
+    "differential-review@trailofbits": true,
+    "static-analysis@trailofbits": true,
+    "supply-chain-risk-auditor@trailofbits": true,
+    "gh-cli@trailofbits": true
+  },
+  "extraKnownMarketplaces": {
+    "caveman": { "source": { "source": "github", "repo": "JuliusBrussee/caveman" } },
+    "trailofbits": { "source": { "source": "github", "repo": "trailofbits/skills" } }
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)",
+      "Bash(git branch:*)", "Bash(git add:*)", "Bash(git stash:*)",
+      "Bash(uv:*)", "Bash(pytest:*)", "Bash(python -m pytest:*)", "Bash(ruff:*)",
+      "Bash(uvicorn:*)",
+      "Bash(npm run build:*)", "Bash(npm run lint:*)", "Bash(npm run dev:*)",
+      "Bash(npm run test:*)", "Bash(npm install:*)", "Bash(npx tsc:*)", "Bash(npx vitest:*)",
+      "Bash(docker compose:*)", "Bash(docker ps:*)", "Bash(docker logs:*)",
+      "Bash(curl -s http://localhost:*)",
+      "Bash(ls:*)", "Bash(find:*)", "Bash(grep:*)", "Bash(rg:*)",
+      "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(tree:*)"
+    ],
+    "deny": [
+      "Read(./.env)", "Read(.env)", "Read(./.env.local)", "Read(./.env.*.local)",
+      "Read(**/*.pem)", "Read(**/*.key)",
+      "Bash(cat .env)", "Bash(cat ./.env)", "Bash(head .env)", "Bash(tail .env)"
+    ]
+  }
+}

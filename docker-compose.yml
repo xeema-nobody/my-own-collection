@@ -1,0 +1,54 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: moc-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?set in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set in .env}
+    volumes:
+      - moc_mongo_data:/data/db   # named volume: data survives down/up
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ping:1}).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: moc-app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MONGO_URL: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin
+      MONGO_DB: owncollection
+      CORS_ORIGINS: http://localhost:5180
+    depends_on:
+      mongo: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:8100:8000"
+    volumes:
+      - ./app:/code/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  web:
+    image: node:20-alpine
+    container_name: moc-web
+    working_dir: /web
+    command: sh -c "npm install --no-audit --no-fund && npm run dev -- --host 0.0.0.0 --port 5180"
+    environment:
+      VITE_API_URL: http://localhost:8100
+    volumes:
+      - ./web:/web
+      - moc_web_node_modules:/web/node_modules
+    ports:
+      - "127.0.0.1:5180:5180"
+
+volumes:
+  moc_mongo_data:
+  moc_web_node_modules:
