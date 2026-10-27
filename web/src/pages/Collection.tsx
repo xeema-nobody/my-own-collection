@@ -28,7 +28,7 @@ export default function Collection() {
             <td><img src={i.card?.images?.small} className="h-12" /></td>
             <td><Link className="hover:underline" to={`/cards/${encodeURIComponent(i.card_id)}`}>{i.card?.name}</Link></td>
             <td>{i.card?.set?.name} #{i.card?.number}</td>
-            <td>{i.variant} · {i.language.toUpperCase()} · {i.grading ? `${i.grading.company} ${i.grading.grade}` : i.condition}</td>
+            <td>{i.variant ? `${i.variant} · ` : ""}{i.language.toUpperCase()} · {i.grading ? `${i.grading.company} ${i.grading.grade}` : i.condition}</td>
             <td>{i.quantity}</td>
             <td>{money(i.value)}{i.estimated && <span title="Estimated: raw price used for graded / variant fallback"> ≈</span>}</td>
             <td>{money(i.cost)}</td></tr>))}

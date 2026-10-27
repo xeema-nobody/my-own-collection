@@ -5,12 +5,12 @@ Personal, local, single-user web app to administer trading-card collections. Pok
 ## Features
 
 - **Catalog**: cards and sets imported from an external API into own MongoDB. Idempotent (re-import is safe).
-- **Search**: free text over name / set / number / types / rarity / rules text (accent-insensitive, multi-token AND, `4/102`, `#4`, `base1-4`). Filters: set, type, rarity, supertype, price range, owned only. Sort by release, name, price. URL-synced filters.
+- **Search**: free text over name / set / number / types / rarity / rules text (accent-insensitive, multi-token AND, `4/102`, `#4`, `base1-4`). Filters: set, type, rarity, supertype, price range, has price (yes/no), owned only. Unpriced cards sort last on price ascending. Sort by release, name, price. URL-synced filters.
 - **Card detail**: image, metadata, prices per source, price history chart, sold-sales stats, owned stacks (+/−/remove), add-to-collection form.
 - **Collection**: stacks of identical copies (card + variant + language + condition or grading). Raw copies need a condition; graded copies need grader + grade (optional cert, which makes the slab unique). Purchase price/date/notes. Browser with filters, sort, value, cost, P/L.
 - **Prices**: aggregate market prices from TCGplayer (USD) and Cardmarket (EUR), converted to the base currency (default EUR). Manual sale entry for sources without an API (e.g. alt.xyz).
 - **Dashboard**: value KPIs, value-over-time line per source (daily snapshots), breakdown by set / rarity / condition / language / TCG, top movers.
-- **Settings**: catalog import, price refresh, provider status, job log.
+- **Settings**: set picker (per-set priced/total) to import or refresh prices for chosen sets, "Retry failed imports" for sets that failed the last full import, provider status, job log. One job per type at a time (second start returns 409; buttons disable while running).
 
 ## Usage
 

@@ -17,7 +17,7 @@ export default function Search() {
 
   const params = Object.fromEntries(sp.entries());
   const filters = useQuery({ queryKey: ["filters"], queryFn: api.filters });
-  const sets = useQuery({ queryKey: ["sets"], queryFn: api.sets });
+  const sets = useQuery({ queryKey: ["sets"], queryFn: () => api.sets() });
   const cards = useQuery({ queryKey: ["cards", params], queryFn: () => api.cards({
     ...params, price_min: params.price_min ? +params.price_min * 100 : undefined,
     price_max: params.price_max ? +params.price_max * 100 : undefined }) });
@@ -41,6 +41,10 @@ export default function Search() {
           <input className="input w-1/2" placeholder="min €" defaultValue={sp.get("price_min") ?? ""} onBlur={(e) => set("price_min", e.target.value)} />
           <input className="input w-1/2" placeholder="max €" defaultValue={sp.get("price_max") ?? ""} onBlur={(e) => set("price_max", e.target.value)} />
         </div>
+        <label className="block text-sm">Has price
+          <select className="input mt-1 w-full" value={sp.get("has_price") ?? ""} onChange={(e) => set("has_price", e.target.value)}>
+            <option value="">Any</option><option value="true">Yes</option><option value="false">No</option>
+          </select></label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={sp.get("owned") === "true"} onChange={(e) => set("owned", e.target.checked ? "true" : "")} />Owned only</label>
       </aside>
       <main>
@@ -55,7 +59,9 @@ export default function Search() {
               <img src={c.images?.small} alt={c.name} loading="lazy" className="mx-auto h-48" />
               <div className="mt-2 text-sm font-medium">{c.name}</div>
               <div className="text-xs opacity-70">{c.set?.name} · {c.number}</div>
-              <div className="text-sm">{money(c.price_base)}</div>
+              {c.price_base == null
+                ? <div className="text-sm opacity-50" title="No source has data for this card yet">no price</div>
+                : <div className="text-sm">{money(c.price_base)}</div>}
             </Link>))}
         </div>
         {cards.data && <div className="mt-4 flex items-center gap-3">

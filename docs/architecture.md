@@ -9,16 +9,17 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 | Module | Role |
 |---|---|
 | `providers/catalog/pokemontcg.py` | httpx + tenacity retry on 429/5xx, maps payload to card/set docs, extracts price points |
-| `services/catalog_import.py` | per-set import, upsert by `_id`, job logging, failed-set isolation |
+| `services/catalog_import.py` | per-set import (all / chosen sets / retry of failed), upsert by `_id`, job logging, failed-set isolation |
+| `services/sets.py` | sets with imported / priced card counts |
 | `services/search.py` | builds Mongo query from `q` + filters |
 | `services/collection.py` | add/stack-merge, valuation per source |
 | `services/pricing.py` | stores price points, denormalises `latest_price` / `price_base` on cards |
 | `services/fx.py` | daily FX cache in `fx_rates`, fallback to last stored rate |
 | `services/snapshots.py` | daily collection snapshot (idempotent per UTC date) |
-| `services/refresh.py` | price refresh job (collection or all) then snapshot |
+| `services/refresh.py` | price refresh job (collection, all, or chosen sets) then snapshot |
 | `jobs/scheduler.py` | APScheduler daily cron, only if `SCHEDULER_ENABLED` |
 
-Long jobs run as asyncio tasks; state is persisted in the `jobs` collection (UI polls `/api/admin/jobs`).
+Long jobs run as asyncio tasks; state is persisted in the `jobs` collection (UI polls `/api/admin/jobs`). One `running` job per type: API returns 409, and a partial unique index on `jobs.type` (status=running) is the race-free backstop. Orphaned `running` jobs are marked `interrupted` on boot.
 
 ## Data model (collections)
 
@@ -34,10 +35,10 @@ Money: integer cents + currency everywhere. Missing price = `null`, never 0.
 
 ## API (prefix `/api`; Swagger at `/docs`)
 
-`GET /cards`, `/cards/{id}`, `/cards/{id}/prices`, `POST /cards/{id}/sales`, `GET /sets`, `/filters`;
+`GET /cards` (incl. `has_price`), `/cards/{id}`, `/cards/{id}/prices`, `POST /cards/{id}/sales`, `GET /sets` (`?with_stats=true`), `/filters`;
 `/collection` (POST add, GET list, `/summary`, PATCH/DELETE `/{id}`, POST `/{id}/remove`);
 `/dashboard/history|breakdown|movers`;
-`/admin/catalog/import`, `/admin/prices/refresh`, `/admin/snapshot`, `/admin/jobs`, `/admin/status`.
+`/admin/catalog/import` (`?sets=` repeatable), `/admin/catalog/import/retry-failed`, `/admin/prices/refresh` (`?scope=&sets=`), `/admin/snapshot`, `/admin/jobs`, `/admin/status`.
 Health: `/health`, `/health/ready` (pings Mongo).
 
 ## Config (`.env`, see `.env.example`)

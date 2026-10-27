@@ -1,29 +1,67 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 
 export default function Settings() {
-  const [set, setSet] = useState("");
+  const qc = useQueryClient();
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState("");
   const status = useQuery({ queryKey: ["status"], queryFn: api.status });
-  const sets = useQuery({ queryKey: ["sets"], queryFn: api.sets });
+  const sets = useQuery({ queryKey: ["sets", "stats"], queryFn: () => api.sets(true) });
   const jobs = useQuery({ queryKey: ["jobs"], queryFn: api.jobs, refetchInterval: 3000 });
-  const imp = useMutation({ mutationFn: () => api.importCatalog(set || undefined) });
-  const ref = useMutation({ mutationFn: (scope: string) => api.refreshPrices(scope) });
+  const done = () => { qc.invalidateQueries({ queryKey: ["jobs"] }); qc.invalidateQueries({ queryKey: ["sets"] }); };
+  const imp = useMutation({ mutationFn: (ids?: string[]) => api.importCatalog(ids), onSettled: done });
+  const retry = useMutation({ mutationFn: api.retryFailedImports, onSettled: done });
+  const ref = useMutation({ mutationFn: (a: { scope: string; sets?: string[] }) => api.refreshPrices(a.scope, a.sets), onSettled: done });
+  const running = (type: string) => jobs.data?.find((j: any) => j.type === type && j.status === "running");
+  const importing = !!running("catalog_import"), refreshing = !!running("price_refresh");
+  const lastFull = jobs.data?.find((j: any) => j.type === "catalog_import" && j.status !== "running" &&
+    (["full", "retry"].includes(j.stats?.origin) || (!j.stats?.origin && !j.stats?.set)));
+  const failed: string[] = lastFull?.stats?.failed_sets ?? [];
+  const ids = [...picked];
+  const shown = (sets.data ?? []).filter((x: any) =>
+    `${x.name} ${x.external_id}`.toLowerCase().includes(filter.toLowerCase()));
+  const toggle = (id: string) => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const err = imp.error || retry.error || ref.error;
   const s = status.data;
   return (
     <div className="space-y-4">
-      <section className="card"><h2 className="mb-2 font-semibold">Catalog</h2>
+      <section className="card"><h2 className="mb-2 font-semibold">Catalog &amp; prices</h2>
         <div className="flex flex-wrap items-center gap-2">
-          <input className="input" list="setids" placeholder="set id (e.g. base1) — empty = full catalog" value={set} onChange={(e) => setSet(e.target.value)} />
-          <datalist id="setids">{sets.data?.map((x: any) => <option key={x.id} value={x.external_id}>{x.name}</option>)}</datalist>
-          <button className="btn" onClick={() => imp.mutate()}>Import</button>
-          <button className="btn-ghost" onClick={() => ref.mutate("collection")}>Refresh collection prices</button>
-          <button className="btn-ghost" onClick={() => ref.mutate("all")}>Refresh all prices</button>
+          <button className="btn" disabled={importing || !ids.length} onClick={() => imp.mutate(ids)}>Import selected ({ids.length})</button>
+          <button className="btn" disabled={refreshing || !ids.length} onClick={() => ref.mutate({ scope: "sets", sets: ids })}>Refresh prices for selected</button>
+          <button className="btn-ghost" disabled={importing || !failed.length} onClick={() => retry.mutate()}>Retry failed imports ({failed.length})</button>
+          <button className="btn-ghost" disabled={importing} onClick={() => imp.mutate(undefined)}>Import all</button>
+          <button className="btn-ghost" disabled={refreshing} onClick={() => ref.mutate({ scope: "collection" })}>Refresh collection prices</button>
+          <button className="btn-ghost" disabled={refreshing} onClick={() => ref.mutate({ scope: "all" })}>Refresh all prices</button>
         </div>
-        <p className="mt-2 text-xs opacity-70">Imports run in the background; the first import also lists all sets. Progress below.</p></section>
+        {err && <p className="mt-2 text-sm text-red-500">{String(err)}</p>}
+        {(importing || refreshing) && <p className="mt-2 text-sm text-amber-500">
+          Running: {[running("catalog_import"), running("price_refresh")].filter(Boolean)
+            .map((j: any) => `${j.type} ${JSON.stringify(j.stats)}`).join(" · ")}</p>}
+        {failed.length > 0 && <p className="mt-2 text-xs opacity-70">Failed in last full import: {failed.join(", ")}</p>}
+        <input className="input mt-3 w-full" placeholder="Filter sets by name or id…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <div className="mt-2 flex gap-2 text-xs">
+          <button className="underline" onClick={() => setPicked(new Set(shown.map((x: any) => x.external_id)))}>select shown</button>
+          <button className="underline" onClick={() => setPicked(new Set())}>clear</button>
+          <button className="underline" onClick={() => setPicked(new Set(failed))}>select failed</button>
+        </div>
+        <ul className="mt-2 max-h-80 overflow-y-auto text-sm">
+          {shown.map((x: any) => (
+            <li key={x.external_id}><label className="flex cursor-pointer items-center gap-2 py-0.5">
+              <input type="checkbox" checked={picked.has(x.external_id)} onChange={() => toggle(x.external_id)} />
+              <span>{x.name}</span><span className="opacity-60">{x.external_id}</span>
+              <span className="ml-auto tabular-nums">{x.cards_priced} / {x.cards_total} priced</span>
+              {x.cards_total === 0 && <span className="text-amber-500">not imported</span>}
+              {x.cards_total > 0 && x.cards_priced === 0 && <span className="text-slate-400" title="No price block in the source payload">no price source</span>}
+            </label></li>))}
+        </ul>
+        <p className="mt-2 text-xs opacity-70">Imports run in the background; one job per type at a time. Progress below.</p></section>
       {s && <section className="card text-sm"><h2 className="mb-2 font-semibold">Config</h2>
         <p>Base currency: {s.base_currency} · Scheduler: {s.scheduler_enabled ? `on (${s.price_refresh_cron})` : "off (manual)"}</p>
-        <p>Providers: {Object.entries(s.providers).map(([k, v]) => `${k}: ${v ? "enabled" : "disabled"}`).join(" · ")}</p></section>}
+        <table className="mt-2 w-full"><thead><tr className="text-left opacity-70"><th>Price source</th><th>Kinds</th><th>Grades</th><th>Status</th></tr></thead><tbody>
+          {s.price_sources.map((p: any) => <tr key={p.id} className="border-t dark:border-slate-700" title={p.note}><td>{p.label}</td><td>{p.kinds.join(", ")}</td><td>{p.grades}</td>
+            <td className={p.enabled ? "text-emerald-600" : "opacity-60"}>{p.enabled ? "enabled" : "not available yet"}</td></tr>)}</tbody></table></section>}
       <section className="card"><h2 className="mb-2 font-semibold">Jobs</h2>
         <table className="w-full text-sm"><tbody>{jobs.data?.map((j: any) => (
           <tr key={j.id} className="border-t dark:border-slate-700"><td>{j.type}</td><td>{j.status}</td><td>{j.started_at.slice(0, 19)}</td><td>{JSON.stringify(j.stats)}</td><td className="text-red-500">{j.error}</td></tr>))}</tbody></table></section>

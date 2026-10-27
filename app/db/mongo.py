@@ -4,6 +4,8 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo import ASCENDING, DESCENDING, TEXT
 
 from app.config import settings
+from app.db import migrate_prices_v2
+from app.services import jobs
 
 _client: AsyncIOMotorClient | None = None
 _db: AsyncIOMotorDatabase | None = None
@@ -43,11 +45,17 @@ async def init_indexes() -> None:
         [("stack_key", ASCENDING)], unique=True
     )
     await db.collection_items.create_index([("card_id", ASCENDING)])
+    # Rows must carry observed_on (and old index gone) before the v2 unique key can build.
+    await migrate_prices_v2.migrate(db)
     await db.prices.create_index(
-        [("card_id", 1), ("variant", 1), ("source", 1), ("kind", 1), ("grade_key", 1), ("as_of", 1)],
-        unique=True,
+        [("card_id", 1), ("variant", 1), ("source", 1), ("kind", 1), ("grade_key", 1), ("observed_on", 1)],
+        unique=True, name="prices_observation_key",
     )
     await db.sales.create_index([("card_id", 1), ("grade_key", 1), ("source", 1), ("sold_at", -1)])
     await db.collection_snapshots.create_index([("date", ASCENDING)], unique=True)
     await db.fx_rates.create_index([("date", 1), ("base", 1), ("quote", 1)], unique=True)
     await db.jobs.create_index([("started_at", DESCENDING)])
+    # Orphans must be closed before the unique index can build over existing `running` rows.
+    await jobs.mark_orphans(db)
+    await db.jobs.create_index([("type", ASCENDING)], unique=True, name="jobs_one_running_per_type",
+                               partialFilterExpression={"status": "running"})

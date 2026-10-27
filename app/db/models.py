@@ -23,7 +23,7 @@ class Acquired(BaseModel):
 
 class CollectionIn(BaseModel):
     card_id: str
-    variant: str = "normal"
+    variant: str | None = None  # None when the card has no distinct variants
     language: Language = "en"
     condition: Condition | None = None
     grading: Grading | None = None
@@ -55,7 +55,7 @@ class RemoveIn(BaseModel):
 
 
 class SaleIn(BaseModel):
-    variant: str = "normal"
+    variant: str | None = None
     grade_key: str = "raw"
     source: str = "manual"
     price: int = Field(ge=0, description="cents")

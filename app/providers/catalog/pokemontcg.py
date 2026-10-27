@@ -25,7 +25,8 @@ def _retryable(e: BaseException) -> bool:
 
 
 def _cents(v) -> int | None:
-    return None if v is None else round(float(v) * 100)
+    # Upstream sends 0 for "no data"; a price of 0 is never real, so it is missing (None).
+    return None if not v else round(float(v) * 100)
 
 
 def _date(s: str | None) -> datetime | None:
@@ -56,7 +57,7 @@ def map_card(c: dict) -> dict:
     rules = list(c.get("rules") or [])
     for part in (c.get("abilities") or []) + (c.get("attacks") or []):
         rules.append(" ".join(filter(None, [part.get("name"), part.get("text")])))
-    variants = list((tp.get("prices") or {}).keys()) or ["normal"]
+    variants = list((tp.get("prices") or {}).keys())  # [] = card has no distinct variants
     number = c.get("number", "")
     doc = {
         "_id": f"pokemon:{c['id']}", "tcg": "pokemon", "external_id": c["id"],
@@ -84,23 +85,24 @@ def map_card(c: dict) -> dict:
 
 
 def extract_prices(doc: dict) -> list[dict]:
-    """Aggregate price points (kind=market) from the embedded tcgplayer/cardmarket blocks."""
+    """Aggregate price points (kind=market, raw) from the embedded tcgplayer/cardmarket blocks."""
     out: list[dict] = []
     raw = doc["_prices_raw"]
     tp, cm = raw["tcgplayer"], raw["cardmarket"]
+    base = {"kind": "market", "grade_key": "raw"}
     as_of = _date(tp.get("updatedAt"))
     for variant, p in (tp.get("prices") or {}).items():
-        out.append({"source": "tcgplayer", "variant": variant, "currency": "USD", "as_of": as_of,
-                    "low": _cents(p.get("low")), "avg": _cents(p.get("mid")),
+        out.append({**base, "source": "tcgplayer", "variant": variant, "currency": "USD", "as_of": as_of,
+                    "url": tp.get("url"), "low": _cents(p.get("low")), "avg": _cents(p.get("mid")),
                     "high": _cents(p.get("high")), "market": _cents(p.get("market"))})
     cp = cm.get("prices") or {}
-    if cp:
-        out.append({"source": "cardmarket", "variant": "default", "currency": "EUR",
-                    "as_of": _date(cm.get("updatedAt")),
+    if cp:  # one price per card, no per-variant split
+        out.append({**base, "source": "cardmarket", "variant": None, "currency": "EUR",
+                    "as_of": _date(cm.get("updatedAt")), "url": cm.get("url"),
                     "low": _cents(cp.get("lowPrice")), "avg": _cents(cp.get("averageSellPrice")),
                     "trend": _cents(cp.get("trendPrice")), "market": _cents(cp.get("trendPrice")),
                     "avg7": _cents(cp.get("avg7")), "avg30": _cents(cp.get("avg30"))})
-    return [p for p in out if p["as_of"] is not None]
+    return out
 
 
 class PokemonTcgCatalog:

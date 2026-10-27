@@ -14,7 +14,10 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 const qs = (p: Record<string, unknown>) => {
   const u = new URLSearchParams();
-  Object.entries(p).forEach(([k, v]) => v !== undefined && v !== "" && v !== null && u.set(k, String(v)));
+  Object.entries(p).forEach(([k, v]) => {
+    if (Array.isArray(v)) v.forEach((x) => u.append(k, String(x)));
+    else if (v !== undefined && v !== "" && v !== null) u.set(k, String(v));
+  });
   const s = u.toString();
   return s ? "?" + s : "";
 };
@@ -23,9 +26,12 @@ const post = (b: unknown): RequestInit => ({ method: "POST", body: JSON.stringif
 export const api = {
   cards: (p: Record<string, unknown>) => req<any>("/api/cards" + qs(p)),
   card: (id: string) => req<any>(`/api/cards/${encodeURIComponent(id)}`),
-  priceHistory: (id: string) => req<any[]>(`/api/cards/${encodeURIComponent(id)}/prices`),
+  priceHistory: (id: string, p: { source?: string[]; kind?: string; grade_key?: string; days?: number } = {}) =>
+    req<any[]>(`/api/cards/${encodeURIComponent(id)}/prices` + qs(p)),
+  priceMatrix: (id: string) => req<any>(`/api/cards/${encodeURIComponent(id)}/price-matrix`),
+  priceSources: () => req<any[]>("/api/admin/price-sources"),
   addSale: (id: string, b: unknown) => req<any>(`/api/cards/${encodeURIComponent(id)}/sales`, post(b)),
-  sets: () => req<any[]>("/api/sets"),
+  sets: (withStats = false) => req<any[]>("/api/sets" + qs({ with_stats: withStats || undefined })),
   filters: () => req<any>("/api/filters"),
   collection: (p: Record<string, unknown>) => req<any>("/api/collection" + qs(p)),
   collectionSummary: () => req<any>("/api/collection/summary"),
@@ -37,8 +43,10 @@ export const api = {
   movers: (days = 7) => req<any>(`/api/dashboard/movers?days=${days}`),
   jobs: () => req<any[]>("/api/admin/jobs"),
   status: () => req<any>("/api/admin/status"),
-  importCatalog: (set?: string) => req<any>("/api/admin/catalog/import" + qs({ set }), { method: "POST" }),
-  refreshPrices: (scope = "collection") => req<any>("/api/admin/prices/refresh" + qs({ scope }), { method: "POST" }),
+  importCatalog: (sets?: string[]) => req<any>("/api/admin/catalog/import" + qs({ sets }), { method: "POST" }),
+  retryFailedImports: () => req<{ started: boolean; sets: string[] }>("/api/admin/catalog/import/retry-failed", { method: "POST" }),
+  refreshPrices: (scope = "collection", sets?: string[]) =>
+    req<any>("/api/admin/prices/refresh" + qs({ scope, sets }), { method: "POST" }),
   snapshot: () => req<any>("/api/admin/snapshot", { method: "POST" }),
 };
 

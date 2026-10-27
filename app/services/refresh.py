@@ -9,23 +9,31 @@ from app.services.snapshots import take_snapshot
 log = logging.getLogger(__name__)
 
 
-async def refresh_prices(scope: str = "collection", provider=None) -> dict:
-    """Re-fetch cards from the catalog API (prices ride along). Per-set batches for owned cards."""
+async def refresh_prices(scope: str = "collection", sets: list[str] | None = None, provider=None) -> dict:
+    """Re-fetch cards from the catalog API (prices ride along). Per-set batches.
+
+    `sets` given: refresh every card of those sets (scope becomes `sets`).
+    """
     db = get_db()
     provider = provider or PokemonTcgCatalog()
+    scope = "sets" if sets else scope
     job = await jobs.start(db, "price_refresh")
-    stats = {"scope": scope, "cards": 0, "prices": 0, "errors": 0}
+    stats = {"scope": scope, "sets": sets, "cards": 0, "prices": 0, "errors": 0}
     try:
         rates = await get_rates(db)
         owned = await db.collection_items.distinct("card_id")
-        sets = set()
+        owned_sets = set()
         for cid in owned:
             c = await db.cards.find_one({"_id": cid}, {"set.id": 1})
             if c:
-                sets.add(c["set"]["id"])
+                owned_sets.add(c["set"]["id"])
         if scope == "all":
-            sets = {s["external_id"] async for s in db.sets.find({"tcg": "pokemon"})}
-        for sid in sorted(sets):
+            target_sets = {s["external_id"] async for s in db.sets.find({"tcg": "pokemon"})}
+        elif scope == "sets":
+            target_sets = set(sets)
+        else:
+            target_sets = owned_sets
+        for sid in sorted(target_sets):
             try:
                 async for card in provider.iter_cards(sid):
                     if scope == "collection" and card["_id"] not in owned:

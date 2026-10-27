@@ -4,9 +4,13 @@ from statistics import mean
 from fastapi import APIRouter, HTTPException, Query
 
 from app.api.deps import clean, get_db
+from app.config import settings
 from app.db.models import SaleIn
 from app.services.collection import _out
-from app.services.search import SORTS, build_query
+from app.services.fx import convert, rates_to_base
+from app.services.price_matrix import build_matrix, grade_keys, value_of
+from app.services.search import build_query, find_page
+from app.services.sets import sets_with_stats
 
 router = APIRouter(prefix="/api", tags=["cards"])
 
@@ -15,15 +19,13 @@ router = APIRouter(prefix="/api", tags=["cards"])
 async def search_cards(q: str | None = None, tcg: str | None = None, set: str | None = None,
                        type: str | None = None, rarity: str | None = None,
                        supertype: str | None = None, price_min: int | None = None,
-                       price_max: int | None = None, owned: bool = False, sort: str = "release",
+                       price_max: int | None = None, has_price: bool | None = None, owned: bool = False, sort: str = "release",
                        page: int = Query(1, ge=1), page_size: int = Query(40, ge=1, le=100)):
     db = get_db()
     owned_ids = await db.collection_items.distinct("card_id") if owned else None
-    flt = build_query(q, tcg, set, type, rarity, supertype, price_min, price_max, owned_ids)
+    flt = build_query(q, tcg, set, type, rarity, supertype, price_min, price_max, has_price, owned_ids)
     total = await db.cards.count_documents(flt)
-    cur = (db.cards.find(flt, {"raw": 0}).sort(SORTS.get(sort, SORTS["release"]))
-           .skip((page - 1) * page_size).limit(page_size))
-    cards = [clean(c) async for c in cur]
+    cards = [clean(c) for c in await find_page(db, flt, sort, (page - 1) * page_size, page_size)]
     qty = {r["_id"]: r["n"] async for r in db.collection_items.aggregate([
         {"$match": {"card_id": {"$in": [c["id"] for c in cards]}}},
         {"$group": {"_id": "$card_id", "n": {"$sum": "$quantity"}}}])}
@@ -56,13 +58,32 @@ async def _sales_stats(card_id: str, last: int = 10, days: int = 90) -> list[dic
 
 
 @router.get("/cards/{card_id}/prices")
-async def price_history(card_id: str, source: str | None = None, grade_key: str = "raw", days: int = 365):
-    since = datetime.now(timezone.utc) - timedelta(days=days)
-    flt: dict = {"card_id": card_id, "grade_key": grade_key, "as_of": {"$gte": since}}
+async def price_history(card_id: str, source: list[str] | None = Query(None), kind: str | None = None,
+                        grade_key: str = "raw", days: int = Query(365, ge=1, le=3650)):
+    """Observation log, oldest first; one point per (series, observed_on). `market_base` = EUR-style
+    base-currency cents (today's FX) so series in different currencies share one axis."""
+    db = get_db()
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    flt: dict = {"card_id": card_id, "grade_key": grade_key, "observed_on": {"$gte": since}}
     if source:
-        flt["source"] = source
-    return [{k: v for k, v in p.items() if k != "_id"}
-            async for p in get_db().prices.find(flt).sort("as_of", 1)]
+        flt["source"] = {"$in": source}
+    if kind:
+        flt["kind"] = kind
+    rows = [p async for p in db.prices.find(flt).sort("observed_on", 1)]
+    rates = await rates_to_base(db, {p["currency"] for p in rows})
+    return [{**{k: v for k, v in p.items() if k != "_id"}, "base_currency": settings.base_currency,
+             "market_base": convert(value_of(p), p["currency"], rates)} for p in rows]
+
+
+@router.get("/cards/{card_id}/price-matrix")
+async def price_matrix(card_id: str):
+    db = get_db()
+    card = await db.cards.find_one({"_id": card_id}, {"variants": 1})
+    if not card:
+        raise HTTPException(404, "card not found")
+    rows = [p async for p in db.prices.find({"card_id": card_id, "grade_key": {"$in": grade_keys()}})]
+    rates = await rates_to_base(db, {p["currency"] for p in rows})
+    return {**build_matrix(card, rows, rates), "base_currency": settings.base_currency}
 
 
 @router.post("/cards/{card_id}/sales", status_code=201)
@@ -77,7 +98,9 @@ async def add_sale(card_id: str, s: SaleIn):
 
 
 @router.get("/sets")
-async def sets(tcg: str | None = None):
+async def sets(tcg: str | None = None, with_stats: bool = False):
+    if with_stats:
+        return [clean(s) for s in await sets_with_stats(get_db(), tcg)]
     flt = {"tcg": tcg} if tcg else {}
     return [clean(s) async for s in get_db().sets.find(flt).sort("release_date", -1)]
 
