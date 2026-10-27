@@ -4,7 +4,7 @@ Guidance for Claude Code in this repo. Keep current when tooling or layout chang
 
 ## What this is
 
-**my-own-collection** — personal TCG collection manager (Pokémon first, schema generic). FastAPI + Motor (MongoDB 7) backend, Vite React TS SPA. Local only, single user, no auth. Plan: `temp/instance_plan.md`; decisions: `docs/decisions.md`.
+**my-own-collection** — personal TCG collection manager (Pokémon first, schema generic). FastAPI + Motor (MongoDB 7) backend, Vite React TS SPA. Local only, single user, no auth. Docs: `docs/README.md` (overview/usage), `architecture.md`, `pricing.md`, `decisions.md`, `roadmap.md`. Session context: `temp/follow_up.md` (gitignored).
 
 ## Layout
 
