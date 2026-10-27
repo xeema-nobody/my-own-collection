@@ -32,12 +32,13 @@ async def breakdown(by: str = "set"):
 @router.get("/movers")
 async def movers(days: int = 7):
     db = get_db()
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
     res = []
     for cid in await db.collection_items.distinct("card_id"):
         pts = [p async for p in db.prices.find(
-            {"card_id": cid, "source": "cardmarket", "grade_key": "raw", "as_of": {"$gte": since}}
-        ).sort("as_of", 1)]
+            {"card_id": cid, "source": "cardmarket", "kind": "market", "grade_key": "raw",
+             "observed_on": {"$gte": since}}
+        ).sort("observed_on", 1)]
         if len(pts) < 2 or not pts[0].get("market") or not pts[-1].get("market"):
             continue
         a, b = pts[0]["market"], pts[-1]["market"]

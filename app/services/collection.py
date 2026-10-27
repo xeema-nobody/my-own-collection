@@ -9,11 +9,17 @@ from app.services.pricing import get_rates, price_for
 SOURCES = ("tcgplayer", "cardmarket")
 
 
+def make_stack_key(card_id: str, variant: str | None, language: str, condition: str | None,
+                   grading) -> str:
+    """`grading` is a Grading model, a stored dict or None."""
+    g = grading.model_dump() if hasattr(grading, "model_dump") else grading
+    return "|".join(map(str, [card_id, variant or "", language, condition or "",
+                              g["company"] if g else "", g["grade"] if g else "",
+                              g.get("cert_number") or "" if g else ""]))
+
+
 def stack_key(i: CollectionIn) -> str:
-    g = i.grading
-    return "|".join(map(str, [i.card_id, i.variant, i.language, i.condition or "",
-                              g.company if g else "", g.grade if g else "",
-                              g.cert_number if g and g.cert_number else ""]))
+    return make_stack_key(i.card_id, i.variant, i.language, i.condition, i.grading)
 
 
 def grade_key(item: dict) -> str:
