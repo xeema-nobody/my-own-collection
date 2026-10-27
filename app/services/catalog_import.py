@@ -24,13 +24,21 @@ async def import_catalog(set_id: str | None = None, provider=None) -> dict:
             await db.sets.bulk_write(ops, ordered=False)
         stats["sets"] = len(ops)
         rates = await get_rates(db)
-        async for card in provider.iter_cards(set_id):
-            await db.cards.update_one({"_id": card["_id"]}, {"$set": _without_raw(card)}, upsert=True)
-            stats["prices"] += await store_card_prices(db, card, rates)
-            stats["cards"] += 1
-            if stats["cards"] % 250 == 0:
-                await jobs.progress(db, job, stats)
-        await jobs.finish(db, job, "ok", stats)
+        # Per-set batches: deep pagination on the upstream API is flaky, and one bad set
+        # must not abort the rest.
+        targets = [set_id] if set_id else [s["external_id"] for s in sets]
+        stats["failed_sets"] = []
+        for sid in targets:
+            try:
+                async for card in provider.iter_cards(sid):
+                    await db.cards.update_one({"_id": card["_id"]}, {"$set": _without_raw(card)}, upsert=True)
+                    stats["prices"] += await store_card_prices(db, card, rates)
+                    stats["cards"] += 1
+            except Exception as e:  # noqa: BLE001
+                log.warning("set %s failed: %s", sid, e)
+                stats["failed_sets"].append(sid)
+            await jobs.progress(db, job, stats)
+        await jobs.finish(db, job, "partial" if stats["failed_sets"] else "ok", stats)
     except Exception as e:  # noqa: BLE001
         log.exception("catalog import failed")
         await jobs.finish(db, job, "error", stats, str(e))
