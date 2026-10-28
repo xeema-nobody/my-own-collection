@@ -82,3 +82,4 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - Failed queries keep the page layout and show one red box per failed query with its own Retry (not one page-level error), so a single failing endpoint does not hide the rest. Stale data stays visible if a refetch fails after a success.
 - No global toast/notification layer and no per-page loading skeletons: plain "Loading..." text where a list was blank before.
 - FE tests mock `fetch` (no network, no MSW dependency) and cover the API client, `QueryState`, `ErrorBoundary`, page empty/error states, the Settings import summary and the 404 route. No browser/e2e framework; visual checks stay manual.
+- Backend gap tests (fx, price matrix, unique-index constraints, same-day snapshot re-run) assert current behaviour; no app code changed. FX with no stored rate and a provider outage returns `None` (callers treat as unpriced), by design.
