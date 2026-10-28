@@ -52,15 +52,28 @@ One cell per (grade, source): newest observation day, then sold > market > ask, 
 
 ## Valuation
 
-- Item value = quantity x source market price, converted to base currency (FX from frankfurter.dev, cached daily).
-- tcgplayer: matching variant, else first variant (flagged estimated). cardmarket: single price for any variant.
-- Graded items have no graded prices yet: valued at raw price, flagged estimated (`≈`).
-- Headline value = cardmarket if present, else tcgplayer. Unpriced items counted, not valued at 0.
+`services/valuation.py` (`resolve_item`, pure) picks one price per collection item; `collection.valuate` is the only entry point (collection list/summary, dashboard, snapshots all use it).
+
+Grade chain, first hit wins (raw items: step 1 only):
+1. **exact** grade (`PSA9`).
+2. **bucket** `G9` (PriceCharting, company-agnostic; none for 10s). Not exact.
+3. **lower**: nearest lower grade of the same company that has data. Not exact.
+4. **raw_fallback**: raw market price. Not exact.
+5. **none**: unpriced, value `None` (never 0).
+
+Only `exact` is shown without `≈`. Every other match sets `estimated`; the UI says why (bucket / lower grade / raw fallback / variant fallback).
+
+Within one grade (D-A): **sold** if >= `SOLD_MIN_SALES` (3) sales in the last `SOLD_WINDOW_DAYS` (90): median of the last `SOLD_SAMPLE` (10), pooled across sources in `sales` and converted to base currency; else aggregate **market** by `PREFERRED_SOURCES` (default `cardmarket_web > cardmarket > pricecharting > altxyz > tcgplayer`, then any other source); else **thin sold** (1-2 sales, or a sold point in `latest_price`), flagged `thin` with the sale count. All three are env settings (`app/config.py`), no UI.
+- Ask prices (Cardmarket "From") are never used: a listing floor is not a value.
+- Scraped raw sales have unknown condition, so they never value a raw item or a raw fallback; only `manual` sales do.
+- Variant: item variant, else the source's no-variant price, else the first variant (flagged estimated).
+- Item value = quantity x price, converted to base currency (FX from frankfurter.dev, cached daily). Row fields: `value`, `price_kind`, `source`, `match`, `grade_key_used`, `estimated`, `thin`, `sample_size`; `values[source]` / `sources[source]` = result when only that source is used (own fallback chain).
 - Cost = acquired price converted at today's rate. P/L = value - cost (null when no cost recorded).
+- Raw headline `cards.price_base` is unchanged (cardmarket, else tcgplayer); valuation of raw items follows `PREFERRED_SOURCES`, so it can differ from it.
 
 ## Snapshots
 
-Taken after each refresh (or `POST /api/admin/snapshot`). One per UTC date. No backfill possible: history starts at the first snapshot.
+Taken after each refresh (or `POST /api/admin/snapshot`). One per UTC date. No backfill possible: history starts at the first snapshot. Fields: `totals_by_source` (value via that source alone), `total_value` (the headline valuation), `value_kind_breakdown` (sum per sold/market), `estimated_count`. Snapshots before Phase 4 valued slabs at raw price and lack `total_value`; the dashboard change % only compares snapshots that have it.
 
 ## Unpriced cards
 Some sets/cards have no price block in the pokemontcg.io payload (e.g. `me55`, `me5`, `me2pt5`, `mcd*`, `tk*`), so they stay unpriced (`price_base = None`, shown as "no price"). That is a source gap, not an import failure; only another source can fill it. Settings shows priced/total per set.

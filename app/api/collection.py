@@ -45,12 +45,15 @@ async def list_items(q: str | None = None, tcg: str | None = None, set: str | No
 @router.get("/summary")
 async def summary():
     rows = await svc.valuate(get_db())
-    value = {s: sum(r["values"][s] or 0 for r in rows) for s in svc.SOURCES}
+    value = {s: sum(r["values"][s] or 0 for r in rows) if any(r["values"][s] is not None for r in rows)
+             else None for s in svc.source_ids()}
     cost = sum(r["cost"] or 0 for r in rows)
     best = sum(r["value"] or 0 for r in rows)
     return {"distinct": len(rows), "cards": sum(r["item"]["quantity"] for r in rows),
             "value_by_source": value, "value": best, "cost": cost,
             "pl": best - cost if cost else None,
+            "value_by_kind": {k: sum(r["value"] for r in rows if r["price_kind"] == k)
+                              for k in {r["price_kind"] for r in rows if r["value"] is not None}},
             "unpriced": sum(1 for r in rows if r["value"] is None),
             "estimated": sum(1 for r in rows if r["estimated"])}
 

@@ -18,10 +18,12 @@ export default function Dashboard() {
   const refresh = useMutation({ mutationFn: () => api.refreshPrices("collection"), onSuccess: () => qc.invalidateQueries() });
   const snap = useMutation({ mutationFn: api.snapshot, onSuccess: () => qc.invalidateQueries({ queryKey: ["history"] }) });
 
-  const rows = (hist.data ?? []).map((s: any) => ({ date: s.date, ...Object.fromEntries(Object.entries(s.totals_by_source).map(([k, v]: any) => [k, v / 100])) }));
-  const last = hist.data?.at(-1), first = hist.data?.[0];
-  const cur = last ? Object.values(last.totals_by_source as Record<string, number>).reduce((a, b) => Math.max(a, b), 0) : null;
-  const old = first ? Object.values(first.totals_by_source as Record<string, number>).reduce((a, b) => Math.max(a, b), 0) : null;
+  const rows = (hist.data ?? []).map((s: any) => ({ date: s.date, ...(s.total_value != null && { total: s.total_value / 100 }), ...Object.fromEntries(Object.entries(s.totals_by_source).map(([k, v]: any) => [k, v / 100])) }));
+  // Snapshots before Phase 4 valued slabs at raw price and lack total_value: not comparable, so the
+  // change % only spans snapshots that have it.
+  const cmp = (hist.data ?? []).filter((s: any) => s.total_value != null);
+  const cur = cmp.length > 1 ? cmp.at(-1).total_value : null;
+  const old = cmp.length > 1 ? cmp[0].total_value : null;
   const delta = cur != null && old ? ((cur - old) / old) * 100 : null;
   const lastRun = jobs.data?.find((j: any) => j.type === "price_refresh");
 
@@ -33,7 +35,8 @@ export default function Dashboard() {
         <span className="text-sm opacity-70">Last refresh: {lastRun ? `${lastRun.finished_at?.slice(0, 16) ?? "running"} (${lastRun.status})` : "never"}</span>
       </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="card"><div className="text-xs opacity-70">Value</div><div className="text-xl font-semibold">{money(sum.data?.value)}</div></div>
+        <div className="card"><div className="text-xs opacity-70">Value</div><div className="text-xl font-semibold">{money(sum.data?.value)}</div>
+          {sum.data?.estimated > 0 && <div className="text-xs opacity-70">{sum.data.estimated} estimated (≈ in Collection)</div>}</div>
         <div className="card"><div className="text-xs opacity-70">Cost</div><div className="text-xl font-semibold">{money(sum.data?.cost)}</div></div>
         <div className="card"><div className="text-xs opacity-70">P/L</div><div className="text-xl font-semibold">{sum.data?.pl == null ? "—" : money(sum.data.pl)}</div></div>
         <div className="card"><div className="text-xs opacity-70">Change ({range})</div>
@@ -43,7 +46,8 @@ export default function Dashboard() {
         <div className="mb-2 flex gap-1">{Object.keys(RANGES).map((r) => <button key={r} className={r === range ? "btn" : "btn-ghost"} onClick={() => setRange(r)}>{r}</button>)}</div>
         {rows.length < 2 ? <p className="py-10 text-center text-sm opacity-70">History starts at the first snapshot ({rows.length} so far). No past prices can be backfilled; snapshots are taken after each price refresh.</p> :
           <div className="h-72"><ResponsiveContainer><LineChart data={rows}><CartesianGrid strokeDasharray="3 3" opacity={0.3} /><XAxis dataKey="date" /><YAxis /><Tooltip /><Legend />
-            {Object.keys(SOURCE_COLOR).filter((k) => rows[0] && k in rows[0]).map((k) => <Line key={k} dataKey={k} stroke={SOURCE_COLOR[k]} dot={false} />)}</LineChart></ResponsiveContainer></div>}
+            {rows.some((r: any) => "total" in r) && <Line dataKey="total" name="value (best)" stroke="#6366f1" strokeWidth={3} dot={false} />}
+            {Object.keys(SOURCE_COLOR).filter((k) => rows.some((r: any) => k in r)).map((k) => <Line key={k} dataKey={k} stroke={SOURCE_COLOR[k]} dot={false} />)}</LineChart></ResponsiveContainer></div>}
       </section>
       <div className="grid gap-4 md:grid-cols-2">
         <section className="card"><div className="mb-2 flex gap-1">{["set", "rarity", "condition", "language", "tcg"].map((b) => <button key={b} className={b === by ? "btn" : "btn-ghost"} onClick={() => setBy(b)}>{b}</button>)}</div>

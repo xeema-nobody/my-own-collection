@@ -2,6 +2,27 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, money } from "../lib/api";
+import { KIND_CLASS } from "../lib/colors";
+
+// Why a value is not an exact-grade price; "" = exact.
+function whyEstimated(i: any): string {
+  const why = [] as string[];
+  if (i.match === "bucket") why.push(`company-agnostic ${i.grade_key_used} price, not ${i.grading?.company} ${i.grading?.grade}`);
+  else if (i.match === "lower") why.push(`no ${i.grading?.company} ${i.grading?.grade} price, using lower grade ${i.grade_key_used}`);
+  else if (i.match === "raw_fallback") why.push("no graded price, using raw price");
+  if (i.estimated && i.match === "exact") why.push("variant price missing, used another variant");
+  return why.join("; ");
+}
+
+function Value({ i }: { i: any }) {
+  if (i.value == null) return <span className="opacity-70" title="No price for this grade">no price</span>;
+  const why = whyEstimated(i);
+  const per = Object.entries(i.sources ?? {}).map(([s, v]: any) => `${s}: ${money(v.value)} (${v.price_kind}${v.match !== "exact" ? `, ${v.match}` : ""})`).join("\n");
+  return <span title={per}>{money(i.value)}{why && <span title={why}> ≈</span>}
+    <span className={`ml-1 rounded px-1 text-xs ${KIND_CLASS[i.price_kind] ?? ""}`}>{i.price_kind}</span>
+    <span className="ml-1 text-xs opacity-70">{i.source}{i.thin && i.sample_size ? ` · only ${i.sample_size} sold` : ""}</span>
+    {why && <div className="text-xs text-amber-600 dark:text-amber-400">{why}</div>}</span>;
+}
 
 export default function Collection() {
   const [f, setF] = useState({ q: "", graded: "", language: "", condition: "", sort: "added" });
@@ -30,7 +51,7 @@ export default function Collection() {
             <td>{i.card?.set?.name} #{i.card?.number}</td>
             <td>{i.variant ? `${i.variant} · ` : ""}{i.language.toUpperCase()} · {i.grading ? `${i.grading.company} ${i.grading.grade}` : i.condition}</td>
             <td>{i.quantity}</td>
-            <td>{money(i.value)}{i.estimated && <span title="Estimated: raw price used for graded / variant fallback"> ≈</span>}</td>
+            <td><Value i={i} /></td>
             <td>{money(i.cost)}</td></tr>))}
       </tbody></table>
     </div>
