@@ -5,6 +5,8 @@ import Collection from "./pages/Collection";
 import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
 import Alerts from "./pages/Alerts";
+import NotFound from "./pages/NotFound";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./lib/api";
 
@@ -28,14 +30,15 @@ export default function App() {
         <AlertsLink />
         <NavLink to="/settings" className={link}>Settings</NavLink>
       </nav>
-      <Routes>
+      <ErrorBoundary><Routes>
         <Route path="/" element={<Search />} />
         <Route path="/cards/:id" element={<CardDetail />} />
         <Route path="/collection" element={<Collection />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/settings" element={<Settings />} />
-      </Routes>
+        <Route path="*" element={<NotFound />} />
+      </Routes></ErrorBoundary>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ago, api, money, type AlertEvent, type AlertIn, type AlertRule } from "../lib/api";
+import { QueryError } from "../components/QueryState";
 import { KIND_CLASS } from "../lib/colors";
 
 const OPS = { above: "goes above", below: "drops below", up_pct: "rises by", down_pct: "falls by" } as const;
@@ -26,6 +27,8 @@ function Inbox() {
     <section className="space-y-2">
       <div className="flex items-center gap-3"><h2 className="text-lg font-semibold">Inbox</h2>
         <button className="btn-ghost" disabled={!unread.length} onClick={() => read.mutate(undefined)}>Mark all read</button></div>
+      <QueryError q={ev} label="Inbox" />
+      {ev.isLoading && <p className="opacity-70">Loading…</p>}
       {ev.data?.length === 0 && <p className="opacity-70">No alerts yet. Rules are checked after every price fetch, refresh and snapshot.</p>}
       <ul className="space-y-1">
         {ev.data?.map((e) => (
@@ -82,6 +85,7 @@ function RuleForm() {
         <label className="text-sm"><input type="checkbox" checked={f.est} onChange={(e) => setF({ ...f, est: e.target.checked })} /> include estimated</label>
         <button className="btn" disabled={create.isPending} onClick={submit}>Add rule</button>
       </div>
+      <QueryError q={items} label="Stacks" />
       {err && <p role="alert" className="text-sm text-red-500">{err}</p>}
       <p className="text-xs opacity-70">Fires once when the condition becomes true and re-arms when it clears. A rule that is already true fires on the next check. Amounts are in EUR.</p>
     </section>
@@ -99,7 +103,9 @@ function Rules() {
     <section className="space-y-2">
       <div className="flex items-center gap-3"><h2 className="text-lg font-semibold">Rules</h2>
         <button className="btn-ghost" disabled={check.isPending} onClick={() => check.mutate()}>Check now</button>
-        {check.data && <span className="text-sm opacity-70">{check.data.fired} new</span>}</div>
+        {check.data && !!check.data.fired && <span className="text-sm opacity-70">{check.data.fired} new</span>}</div>
+      <QueryError q={rules} label="Rules" />
+      {rules.isLoading && <p className="opacity-70">Loading…</p>}
       {rules.data?.length === 0 && <p className="opacity-70">No rules yet.</p>}
       <table className="w-full text-sm"><tbody>
         {rules.data?.map((r) => (

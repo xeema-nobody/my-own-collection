@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, money } from "../lib/api";
 import { KIND_CLASS } from "../lib/colors";
+import { QueryError } from "../components/QueryState";
 import SourceCompare from "../components/SourceCompare";
 
 // Why a value is not an exact-grade price; "" = exact.
@@ -35,6 +36,7 @@ export default function Collection() {
   const tile = (l: string, v: string, cls = "") => <div className="card"><div className="text-xs opacity-70">{l}</div><div className={`text-xl font-semibold ${cls}`}>{v}</div></div>;
   return (
     <div className="space-y-4">
+      <QueryError q={sum} label="Summary" />
       {s && <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {tile("Cards", `${s.cards} (${s.distinct} distinct)`)}{tile("Value", money(s.value))}{tile("Cost", money(s.cost))}
         {tile("P/L", s.pl == null ? "—" : money(s.pl), s.pl == null ? "" : s.pl >= 0 ? "text-emerald-600" : "text-red-500")}
@@ -45,6 +47,8 @@ export default function Collection() {
         <select className="input" value={f.condition} onChange={(e) => setF({ ...f, condition: e.target.value })}><option value="">Any cond.</option>{["NM", "LP", "MP", "HP", "DMG"].map((c) => <option key={c}>{c}</option>)}</select>
         <select className="input" value={f.sort} onChange={(e) => setF({ ...f, sort: e.target.value })}><option value="added">Newest</option><option value="value">Value</option><option value="name">Name</option></select>
       </div>
+      <QueryError q={list} label="Collection" />
+      {list.isLoading && <p className="opacity-70">Loading…</p>}
       {list.data?.items.length === 0 && <p className="opacity-70">Nothing here. Add cards from the Search page.</p>}
       <table className="w-full text-sm"><thead><tr className="text-left opacity-70"><th></th><th>Card</th><th>Set</th><th>Details</th><th>Qty</th><th>Value</th><th>Cost</th></tr></thead><tbody>
         {list.data?.items.map((i: any) => (

@@ -28,6 +28,7 @@ docker compose up -d --build          # mongo + api :8100 + web :5180 (vite dev)
 docker compose restart app            # backend has no --reload; restart after edits
 docker compose run --rm -v $PWD/tests:/code/tests -v $PWD/pytest.ini:/code/pytest.ini app sh -c "pip install -q pytest pytest-asyncio && python -m pytest"
 docker compose exec web npx tsc --noEmit   # FE typecheck
+docker compose exec web npm test         # FE vitest (jsdom, fetch mocked)
 scripts/backup.sh                     # mongodump -> backups/ (docs/backup.md)
 scripts/restore.sh <file> [--to-scratch]   # restore / verify a dump
 ```

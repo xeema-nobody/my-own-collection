@@ -1,3 +1,4 @@
+import { QueryError } from "../components/QueryState";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -64,7 +65,7 @@ export default function Search() {
             {fetchSel.error && <span className="text-red-500">{String(fetchSel.error)}</span>}
           </div>)}
         {cards.isLoading && <p>Loading…</p>}
-        {cards.error && <p className="text-red-500">{String(cards.error)}</p>}
+        <QueryError q={cards} label="Search" />
         {cards.data && cards.data.total === 0 && <p className="opacity-70">No cards. Import a set in Settings.</p>}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {cards.data?.items.map((c: any) => (

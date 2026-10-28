@@ -37,7 +37,7 @@ Data lives in docker volume `moc_mongo_data`. Never `docker compose down -v`. Th
 
 Needs Google Chrome installed. One command: `scripts/fetcher.sh start` (check `curl localhost:8110/health`); nothing else is needed from you unless a Chrome window opens with a Cloudflare / login page: solve it there, the fetch continues. Chrome closes after 120 s idle. Setup (first time) and details: `fetcher/README.md` (`python3 -m venv .venv && pip install -e .[dev]`, then `python -m fetcher`). It only opens Chrome while a fetch runs.
 
-Tests: see `CLAUDE.md` for the command.
+Tests: see `CLAUDE.md` for the commands. Backend: pytest against a throwaway mongo. Frontend: `docker compose exec web npm test` (vitest + jsdom + Testing Library; `fetch` is mocked via `web/src/test/utils.tsx`, no network). UI failure handling: `QueryState`/`QueryError` (`web/src/components/QueryState.tsx`) show an error box with Retry when a query fails; `ErrorBoundary` catches render crashes; unknown URLs show a NotFound page.
 
 ## More
 
