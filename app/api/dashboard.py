@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query
 
 from app.api.deps import get_db
 from app.services import collection as svc
+from app.services.movers import movers
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -30,20 +31,5 @@ async def breakdown(by: str = "set"):
 
 
 @router.get("/movers")
-async def movers(days: int = 7):
-    db = get_db()
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
-    res = []
-    for cid in await db.collection_items.distinct("card_id"):
-        pts = [p async for p in db.prices.find(
-            {"card_id": cid, "source": "cardmarket", "kind": "market", "grade_key": "raw",
-             "observed_on": {"$gte": since}}
-        ).sort("observed_on", 1)]
-        if len(pts) < 2 or not pts[0].get("market") or not pts[-1].get("market"):
-            continue
-        a, b = pts[0]["market"], pts[-1]["market"]
-        card = await db.cards.find_one({"_id": cid}, {"name": 1, "images": 1, "set.name": 1})
-        res.append({"card_id": cid, "name": card["name"], "set": card["set"]["name"],
-                    "images": card.get("images"), "from": a, "to": b, "pct": round((b - a) / a * 100, 2)})
-    res.sort(key=lambda r: r["pct"])
-    return {"down": res[:5], "up": list(reversed(res[-5:]))}
+async def top_movers(days: int = Query(7, ge=1, le=365)):
+    return await movers(get_db(), days)

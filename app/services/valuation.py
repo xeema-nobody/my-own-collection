@@ -10,12 +10,13 @@ Within one grade (D-A): sold if >= `sold_min_sales` sales in the window (median 
 `sold_sample`), else aggregate market by `preferred_sources`, else thin sold (fewer sales, flagged).
 Ask prices are never used. Missing price = None, never 0.
 """
+from datetime import datetime, timedelta, timezone
 from statistics import median
 
 from app.config import settings
 from app.services.fx import convert
 from app.services.price_matrix import _BUCKET, _COMPANY
-from app.services.pricing import grade_slot, price_for
+from app.services.pricing import grade_slot, price_entry, price_for
 
 NO_SALES_SOURCES = ("manual",)  # raw sales from scrapers have unknown condition -> only manual counts
 
@@ -67,7 +68,33 @@ def _sold_pool(sales: list[dict], grade: str, rates: dict, only: str | None) -> 
     return sorted(out, reverse=True)
 
 
-def _price_at(card, item, grade, rates, sales, cfg, only):
+def _stale(entry: dict, cfg, now: datetime) -> bool:
+    """Upstream `as_of` older than the cut-off. Scraped points have no `as_of` (dated by our fetch): fresh."""
+    as_of = entry.get("as_of")
+    if not as_of:
+        return False
+    if as_of.tzinfo is None:
+        as_of = as_of.replace(tzinfo=timezone.utc)
+    return as_of < now - timedelta(days=cfg.market_max_age_days)
+
+
+def _market_hit(card, item, grade, rates, cfg, only, now):
+    """First fresh market price in source preference order, else the first stale one."""
+    stale = None
+    for src in ([only] if only else _sources(card, cfg)):
+        entry, est = price_entry(card, src, item.get("variant"), grade, "market")
+        v, _ = price_for(card, src, item.get("variant"), rates, grade, "market")
+        if v is None:
+            continue
+        hit = {"value": v, "kind": "market", "thin": False, "source": src, "sample_size": None,
+               "variant_est": est}
+        if not _stale(entry, cfg, now):
+            return hit
+        stale = stale or hit
+    return stale
+
+
+def _price_at(card, item, grade, rates, sales, cfg, only, now=None):
     """Best price for exactly one grade key, or None. Dict: value (per copy), kind, source, thin,
     sample_size, variant_est."""
     pool = _sold_pool(sales, grade, rates, only)
@@ -77,11 +104,9 @@ def _price_at(card, item, grade, rates, sales, cfg, only):
                 "source": "+".join(sorted({s for *_, s in last})), "sample_size": len(last),
                 "variant_est": False}
     variant = item.get("variant")
-    for src in ([only] if only else _sources(card, cfg)):
-        v, est = price_for(card, src, variant, rates, grade, "market")
-        if v is not None:
-            return {"value": v, "kind": "market", "thin": False, "source": src, "sample_size": None,
-                    "variant_est": est}
+    hit = _market_hit(card, item, grade, rates, cfg, only, now or datetime.now(timezone.utc))
+    if hit:
+        return hit
     if pool:
         last = pool[: cfg.sold_sample]
         return {"value": round(median(c for _, c, _ in last)), "kind": "sold", "thin": True,
@@ -108,8 +133,9 @@ def _chain(card, item, sales, gk) -> list[tuple[str, str]]:
 
 
 def resolve_item(card: dict | None, item: dict, rates: dict, sales: list[dict], cfg=settings,
-                 only: str | None = None) -> dict:
-    """Value of the whole stack (quantity applied, base-currency cents). `only` restricts to one source."""
+                 only: str | None = None, now: datetime | None = None) -> dict:
+    """Value of the whole stack (quantity applied, base-currency cents). `only` restricts to one source;
+    `now` is the valuation date (staleness cut-off), default today."""
     gk = grade_key(item)
     none = {"value": None, "price_kind": None, "source": None, "match": "none", "grade_key_used": None,
             "estimated": False, "thin": False, "sample_size": None}
@@ -117,7 +143,7 @@ def resolve_item(card: dict | None, item: dict, rates: dict, sales: list[dict], 
         return none
     # raw_fallback passes no sales: scraped raw sales have unknown condition
     for match, g in _chain(card, item, sales, gk):
-        hit = _price_at(card, item, g, rates, sales if match != "raw_fallback" else [], cfg, only)
+        hit = _price_at(card, item, g, rates, sales if match != "raw_fallback" else [], cfg, only, now)
         if hit:
             return {"value": hit["value"] * item["quantity"], "price_kind": hit["kind"],
                     "source": hit["source"], "match": match, "grade_key_used": g,

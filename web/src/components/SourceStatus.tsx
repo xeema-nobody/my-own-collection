@@ -38,10 +38,12 @@ export default function SourceStatus({ cardId }: { cardId: string }) {
                 : <span className="opacity-50">not fetched</span>}
               {l && <span className="opacity-70">{ago(l.fetched_at)}{l.detail ? ` · ${l.detail}` : ""}</span>}
               {l?.url && <a className="underline" href={l.url} target="_blank" rel="noreferrer">open</a>}
+              {m?.url && <span className="font-mono text-xs opacity-60" title="Matched product: different versions / prints of the same card have different prices">{decodeURIComponent(m.url.split("?")[0].split("/").pop() ?? "")}</span>}
               {m?.url && m.confirmed_by && <button className="btn-ghost" disabled={reset.isPending} onClick={() => reset.mutate(s)}>Reset match ({m.confirmed_by})</button>}
             </div>
             {m?.candidates?.length > 0 && !(m.url && m.confirmed_by === "user") && (
               <ul className="ml-4 mt-1 space-y-1">
+                <li className="text-xs opacity-70">Several versions / prints share this card number and their prices differ: check the product page before choosing.</li>
                 {m.candidates.map((c: any) => (
                   <li key={c.url} className="flex items-center gap-2">
                     <a className="underline" href={c.url} target="_blank" rel="noreferrer">{c.title}</a>

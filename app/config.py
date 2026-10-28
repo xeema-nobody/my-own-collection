@@ -18,7 +18,10 @@ class Settings(BaseSettings):
     sold_min_sales: int = 3
     sold_window_days: int = 90
     sold_sample: int = 10
-    preferred_sources: str = "cardmarket_web,cardmarket,pricecharting,altxyz,tcgplayer"
+    # order of trust for aggregate (market) prices; Cardmarket catalog figure can be months stale
+    preferred_sources: str = "pricecharting,tcgplayer,cardmarket_web,cardmarket,altxyz"
+    # market points older than this are only used when no fresher source has the grade
+    market_max_age_days: int = 180
 
 
 settings = Settings()

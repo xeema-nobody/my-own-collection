@@ -6,8 +6,11 @@ from fastapi import HTTPException
 from app.db.models import CollectionIn
 from app.config import settings
 from app.providers.price import registry
-from app.services.pricing import get_rates
+from app.services.pricing import get_rates, latest_as_of
 from app.services.valuation import grade_key, resolve_item  # noqa: F401 - grade_key re-exported
+
+
+SOURCE_FIELDS = ("value", "price_kind", "match", "grade_key_used", "thin", "sample_size")
 
 
 def source_ids() -> list[str]:
@@ -55,31 +58,35 @@ def oid(id_: str) -> ObjectId:
         raise HTTPException(404, "item not found")
 
 
-async def valuate(db, filt: dict | None = None) -> list[dict]:
+async def valuate(db, filt: dict | None = None, as_of: datetime | None = None) -> list[dict]:
     """Items joined with card + best price (see services/valuation.py). Base-currency cents for the
-    whole stack; None = unpriced. `values[source]` = value when only that source is used."""
+    whole stack; None = unpriced. `values[source]` = value when only that source is used.
+    `as_of` revalues the same items at a past date from the observation log + sales (see services/movers.py)."""
     rates = await get_rates(db)
     items = await db.collection_items.find(filt or {}).to_list(None)
     ids = list({i["card_id"] for i in items})
     cards = {c["_id"]: c async for c in db.cards.find({"_id": {"$in": ids}})}
-    since = datetime.now(timezone.utc) - timedelta(days=settings.sold_window_days)
+    now = as_of or datetime.now(timezone.utc)
+    if as_of:
+        past = await latest_as_of(db, ids, as_of.strftime("%Y-%m-%d"))
+        cards = {i: {**c, "latest_price": past.get(i, {})} for i, c in cards.items()}
+    since = now - timedelta(days=settings.sold_window_days)
     sales: dict[str, list[dict]] = {}
-    async for s in db.sales.find({"card_id": {"$in": ids}, "sold_at": {"$gte": since}}):
+    async for s in db.sales.find({"card_id": {"$in": ids}, "sold_at": {"$gte": since, "$lte": now}}):
         sales.setdefault(s["card_id"], []).append(s)
     out = []
     for it in items:
         card = cards.get(it["card_id"])
         sl = sales.get(it["card_id"], [])
-        best = resolve_item(card, it, rates, sl)
-        sources = {s: resolve_item(card, it, rates, sl, only=s) for s in source_ids()}
+        best = resolve_item(card, it, rates, sl, now=now)
+        sources = {s: resolve_item(card, it, rates, sl, only=s, now=now) for s in source_ids()}
         cost = None
         a = it.get("acquired") or {}
         if a.get("price") is not None:
             r = rates.get(a.get("currency", "EUR"))
             cost = round(a["price"] * r * it["quantity"]) if r else None
         out.append({"item": it, "card": card, "values": {s: r["value"] for s, r in sources.items()},
-                    "sources": {s: {k: r[k] for k in ("value", "price_kind", "match", "grade_key_used")}
-                                for s, r in sources.items() if r["value"] is not None},
+                    "sources": {s: {k: r[k] for k in SOURCE_FIELDS} for s, r in sources.items() if r["value"] is not None},
                     "cost": cost, **best, "value": best["value"]})
     return out
 

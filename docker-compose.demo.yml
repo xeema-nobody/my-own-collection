@@ -1,0 +1,7 @@
+# Run the app against the demo database (real data untouched):
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d app
+# Back to real data: docker compose up -d app
+services:
+  app:
+    environment:
+      MONGO_DB: owncollection_demo

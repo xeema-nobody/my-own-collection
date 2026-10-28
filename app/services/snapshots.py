@@ -12,6 +12,7 @@ async def take_snapshot(db) -> dict:
     totals = {s: 0 for s in srcs}
     unpriced = {s: 0 for s in srcs}
     by_kind: dict[str, int] = defaultdict(int)
+    weak = {s: False for s in srcs}  # any item valued thin / not exact via that source
     by_set, by_rarity, by_tcg = defaultdict(int), defaultdict(int), defaultdict(int)
     for v in vals:
         for s in srcs:
@@ -19,6 +20,8 @@ async def take_snapshot(db) -> dict:
                 unpriced[s] += 1
             else:
                 totals[s] += v["values"][s]
+                src = v["sources"][s]
+                weak[s] = weak[s] or src["thin"] or src["match"] != "exact"
         if v["value"] is not None:
             by_kind[v["price_kind"]] += v["value"]
         if v["value"] is not None and v["card"]:
@@ -26,7 +29,7 @@ async def take_snapshot(db) -> dict:
             by_rarity[v["card"].get("rarity") or "Unknown"] += v["value"]
             by_tcg[v["card"]["tcg"]] += v["value"]
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    doc = {"date": date, "base_currency": settings.base_currency, "totals_by_source": totals,
+    doc = {"date": date, "base_currency": settings.base_currency, "totals_by_source": totals, "weak_by_source": weak,
            "total_value": sum(v["value"] or 0 for v in vals), "value_kind_breakdown": dict(by_kind),
            "estimated_count": sum(1 for v in vals if v["estimated"]),
            "total_cost": sum(v["cost"] or 0 for v in vals), "item_count": len(vals),
