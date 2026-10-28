@@ -66,6 +66,13 @@ export const api = {
   filters: () => req<any>("/api/filters"),
   ownedItems: (cardId: string) => req<any>("/api/collection" + qs({ card_id: cardId })),
   collection: (p: Record<string, unknown>) => req<any>("/api/collection" + qs(p)),
+  exportCollectionUrl: (format: "json" | "csv") => `${BASE}/api/collection/export?format=${format}`,
+  importCollection: async (file: File, format: "json" | "csv", mode: "set" | "add") => {
+    const r = await fetch(`${BASE}/api/collection/import${qs({ format, mode })}`, { method: "POST", body: file });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new ApiError(typeof body.detail === "string" ? body.detail : r.statusText, r.status);
+    return body as { created: number; updated: number; errors: { row: number; error: string }[] };
+  },
   collectionSummary: () => req<any>("/api/collection/summary"),
   addToCollection: (b: unknown) => req<any>("/api/collection", post(b)),
   removeFromCollection: (id: string, quantity = 1) => req<any>(`/api/collection/${id}/remove`, post({ quantity })),

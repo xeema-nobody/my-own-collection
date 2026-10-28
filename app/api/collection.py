@@ -1,11 +1,13 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import Response
 
 from app.api.deps import get_db
 from app.config import settings
 from app.db.models import CollectionIn, CollectionPatch, RemoveIn
 from app.services import collection as svc
+from app.services import portability
 
 router = APIRouter(prefix="/api/collection", tags=["collection"])
 
@@ -13,6 +15,32 @@ router = APIRouter(prefix="/api/collection", tags=["collection"])
 @router.post("", status_code=201)
 async def add_item(body: CollectionIn):
     return await svc.add(get_db(), body)
+
+
+MAX_UPLOAD = 5_000_000
+
+
+@router.get("/export")
+async def export(format: str = Query("json", pattern="^(json|csv)$")):
+    db = get_db()
+    items = await portability.export_items(db)
+    body = await portability.to_csv(db, items) if format == "csv" else portability.to_json(items)
+    day = datetime.now(timezone.utc).strftime("%Y%m%d")
+    return Response(body, media_type="text/csv" if format == "csv" else "application/json",
+                    headers={"Content-Disposition": f'attachment; filename="collection-{day}.{format}"'})
+
+
+@router.post("/import")
+async def import_(request: Request, format: str = Query("json", pattern="^(json|csv)$"),
+                  mode: str = Query("set", pattern="^(set|add)$")):
+    raw = await request.body()  # raw file body; no multipart dependency
+    if len(raw) > MAX_UPLOAD:
+        raise HTTPException(413, "file too large")
+    try:
+        rows = portability.parse(raw, format)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return await portability.import_items(get_db(), rows, mode)
 
 
 @router.get("")
