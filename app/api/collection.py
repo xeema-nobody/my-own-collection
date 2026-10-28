@@ -33,9 +33,15 @@ async def export(format: str = Query("json", pattern="^(json|csv)$")):
 @router.post("/import")
 async def import_(request: Request, format: str = Query("json", pattern="^(json|csv)$"),
                   mode: str = Query("set", pattern="^(set|add)$")):
-    raw = await request.body()  # raw file body; no multipart dependency
-    if len(raw) > MAX_UPLOAD:
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > MAX_UPLOAD:
         raise HTTPException(413, "file too large")
+    raw = bytearray()  # raw file body (no multipart dependency); capped while streaming
+    async for chunk in request.stream():
+        raw += chunk
+        if len(raw) > MAX_UPLOAD:
+            raise HTTPException(413, "file too large")
+    raw = bytes(raw)
     try:
         rows = portability.parse(raw, format)
     except ValueError as e:

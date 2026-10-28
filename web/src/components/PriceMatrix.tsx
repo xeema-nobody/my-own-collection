@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ago, api, money } from "../lib/api";
+import { ago, api, money, safeUrl } from "../lib/api";
 import { KIND_CLASS, SOURCE_COLOR } from "../lib/colors";
 
 const BUCKET = /^G(\d+(?:\.\d+)?)$/;
@@ -39,7 +39,7 @@ export default function PriceMatrix({ cardId }: { cardId: string }) {
                 cell.as_of && `upstream ${String(cell.as_of).slice(0, 10)}`, cell.sample_size != null && `${cell.sample_size} sales`].filter(Boolean).join(" · ");
               return (
                 <td key={c.id} title={tip}>
-                  {cell.url ? <a className="underline decoration-dotted" href={cell.url} target="_blank" rel="noreferrer">{money(cell.price, cell.currency)}</a> : money(cell.price, cell.currency)}{" "}
+                  {safeUrl(cell.url) ? <a className="underline decoration-dotted" href={safeUrl(cell.url)} target="_blank" rel="noreferrer">{money(cell.price, cell.currency)}</a> : money(cell.price, cell.currency)}{" "}
                   <span className={`rounded px-1 text-xs ${KIND_CLASS[cell.kind] ?? ""}`}>{cell.kind}</span></td>);
             })}
           </tr>))}

@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     mongo_url: str = "mongodb://localhost:27017"
     mongo_db: str = "owncollection"
     cors_origins: str = "http://localhost:5180"
+    # Host headers the API answers to (DNS-rebinding guard); the FE and healthcheck use localhost
+    allowed_hosts: str = "localhost,127.0.0.1"
     base_currency: str = "EUR"
     pokemontcg_api_key: str = ""
     pokemontcg_base_url: str = "https://api.pokemontcg.io/v2"

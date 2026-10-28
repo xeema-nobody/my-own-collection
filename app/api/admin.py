@@ -70,7 +70,7 @@ async def snapshot():
 
 
 @router.get("/jobs")
-async def jobs(limit: int = 20):
+async def jobs(limit: int = Query(20, ge=1, le=200)):
     return [{**{k: v for k, v in j.items() if k != "_id"}, "id": str(j["_id"])}
             async for j in get_db().jobs.find().sort("started_at", -1).limit(limit)]
 

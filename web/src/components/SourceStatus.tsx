@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ago, api, SCRAPED_SOURCES } from "../lib/api";
+import { ago, api, SCRAPED_SOURCES, safeUrl } from "../lib/api";
 import { SOURCE_COLOR } from "../lib/colors";
 import { refreshCardPrices } from "./CardFetch";
 
@@ -37,7 +37,7 @@ export default function SourceStatus({ cardId }: { cardId: string }) {
               {l ? <span className={`rounded px-1 text-xs ${BADGE[l.status] ?? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"}`}>{l.status}</span>
                 : <span className="opacity-50">not fetched</span>}
               {l && <span className="opacity-70">{ago(l.fetched_at)}{l.detail ? ` · ${l.detail}` : ""}</span>}
-              {l?.url && <a className="underline" href={l.url} target="_blank" rel="noreferrer">open</a>}
+              {safeUrl(l?.url) && <a className="underline" href={safeUrl(l?.url)} target="_blank" rel="noreferrer">open</a>}
               {m?.url && <span className="text-xs" title="Matched product: different versions / prints of the same card have different prices">
                 matched print: <b>{m.product?.version ?? "—"}</b> <span className="font-mono opacity-60">{m.product?.slug}</span></span>}
               {m?.url && m.confirmed_by && <button className="btn-ghost" disabled={reset.isPending} onClick={() => reset.mutate(s)}>Reset match ({m.confirmed_by})</button>}
@@ -47,7 +47,7 @@ export default function SourceStatus({ cardId }: { cardId: string }) {
                 <li className="text-xs opacity-70">Several versions / prints share this card number and their prices differ: check the product page before choosing.</li>
                 {m.candidates.map((c: any) => (
                   <li key={c.url} className="flex items-center gap-2">
-                    <a className="underline" href={c.url} target="_blank" rel="noreferrer">{c.title}</a>
+                    <a className="underline" href={safeUrl(c.url)} target="_blank" rel="noreferrer">{c.title}</a>
                     {c.set_name && <span className="opacity-60">{c.set_name}</span>}
                     <span className="font-mono text-xs opacity-60">{c.product?.version ? `${c.product.version} · ` : ""}{c.product?.slug}</span>
                     <button className="btn-ghost" disabled={use.isPending} onClick={() => use.mutate({ source: s, url: c.url })}>Use this</button>

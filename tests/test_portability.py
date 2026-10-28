@@ -89,7 +89,7 @@ def test_parse_rejects_malformed(raw, fmt):
 
 async def test_api_export_import(db):
     await seed(db)
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://localhost") as c:
         r = await c.get("/api/collection/export", params={"format": "csv"})
         assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
         assert "attachment" in r.headers["content-disposition"]
@@ -101,3 +101,23 @@ async def test_api_export_import(db):
         bad = await c.post("/api/collection/import", content=b"{nope")
         assert bad.status_code == 400
         assert (await c.get("/api/collection/export", params={"format": "xml"})).status_code == 422
+
+
+async def test_import_bad_field_types_are_row_errors(db):
+    await seed(db)
+    rows = [{"card_id": ["x"], "condition": "NM"},
+            {"card_id": "pokemon:a-1", "condition": "NM", "created_at": 5},
+            {"card_id": "pokemon:a-2", "condition": "NM", "created_at": "not a date"}]
+    res = await pf.import_items(db, rows)
+    assert res["created"] == 0 and [e["row"] for e in res["errors"]] == [1, 2, 3]
+
+
+async def test_import_endpoint_streams_with_cap(db, monkeypatch):
+    from app.api import collection as api
+    monkeypatch.setattr(api, "MAX_UPLOAD", 100)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://localhost") as c:
+        r = await c.post("/api/collection/import", content=b"x" * 101)
+        assert r.status_code == 413
+        r = await c.post("/api/collection/import", content=b"x" * 101,
+                         headers={"content-length": "5"})   # lying header: the stream cap still applies
+        assert r.status_code in (413, 400)

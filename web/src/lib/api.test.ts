@@ -75,3 +75,12 @@ describe("formatters", () => {
     expect(ago(naive)).toBe("10 min ago");
   });
 });
+
+describe("safeUrl", () => {
+  it("only lets http(s) through", async () => {
+    const { safeUrl } = await import("./api");
+    expect(safeUrl("https://a.example/x")).toBe("https://a.example/x");
+    expect(safeUrl("javascript:alert(1)")).toBeUndefined();
+    expect(safeUrl(null)).toBeUndefined();
+  });
+});
