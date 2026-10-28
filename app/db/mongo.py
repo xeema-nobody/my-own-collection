@@ -1,7 +1,8 @@
 from datetime import timezone
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from pymongo import ASCENDING, DESCENDING, TEXT
+from pymongo import ASCENDING, DESCENDING
+from pymongo.errors import OperationFailure
 
 from app.config import settings
 from app.db import migrate_prices_v2
@@ -31,10 +32,11 @@ def get_db() -> AsyncIOMotorDatabase:
 
 async def init_indexes() -> None:
     db = get_db()
-    await db.cards.create_index(
-        [("name", TEXT), ("search_text", TEXT)],
-        weights={"name": 10, "search_text": 1}, name="cards_text",
-    )
+    # Search is a regex over `search_text`; the old text index was never queried (15 MB at 20k cards).
+    try:
+        await db.cards.drop_index("cards_text")
+    except OperationFailure:  # already gone (IndexNotFound / NamespaceNotFound)
+        pass
     await db.cards.create_index([("name_norm", ASCENDING)])
     await db.cards.create_index([("tcg", 1), ("set.id", 1), ("number_sort", 1)])
     await db.cards.create_index([("tcg", 1), ("rarity", 1)])

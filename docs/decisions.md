@@ -73,3 +73,7 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - Host scripts, not app code: the app container cannot reach docker. `mongodump --archive --gzip` run inside the mongo container with its own env credentials, streamed to `backups/` on the host (written as `.part`, renamed when non-empty).
 - Full dump by default (catalog is re-importable but slow to rebuild); `--no-catalog` for a small user-data dump. Keep newest 14 (`MOC_BACKUP_KEEP`), pruning only `moc-*.archive.gz`.
 - Restore replaces archive collections (`--drop`) after a typed confirmation; `--to-scratch` verifies an archive without touching live data. Scheduling is documented (cron/launchd), not automated.
+
+## Phase 8: perf (2026-10-28, defaults by me, change on objection)
+- Measured before changing: every search/sort path < 250 ms at 20k cards and valuation < 1 s at 2000 stacks, so no new indexes and no valuation cache. Thresholds to revisit are in `architecture.md`.
+- Dropped the unused `cards_text` text index (15 MB, extra write cost on catalog import). Search stays regex over `search_text`.
