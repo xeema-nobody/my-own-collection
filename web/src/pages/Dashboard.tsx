@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api, money } from "../lib/api";
+import { QueryError } from "../components/QueryState";
 import { KIND_CLASS, SOURCE_COLOR } from "../lib/colors";
 
 const RANGES: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90, "1y": 365, all: 3650 };
@@ -46,6 +47,7 @@ export default function Dashboard() {
         <button className="btn-ghost" onClick={() => snap.mutate()}>Snapshot now</button>
         <span className="text-sm opacity-70">Last refresh: {lastRun ? `${lastRun.finished_at?.slice(0, 16) ?? "running"} (${lastRun.status})` : "never"}</span>
       </div>
+      <QueryError q={sum} label="Summary" /><QueryError q={hist} label="History" /><QueryError q={brk} label="Breakdown" /><QueryError q={mov} label="Movers" /><QueryError q={jobs} label="Jobs" />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <div className="card"><div className="text-xs opacity-70">Value</div><div className="text-xl font-semibold">{money(sum.data?.value)}</div>
           {sum.data?.estimated > 0 && <div className="text-xs opacity-70">{sum.data.estimated} estimated (≈ in Collection)</div>}</div>

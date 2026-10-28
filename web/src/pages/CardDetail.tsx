@@ -1,3 +1,4 @@
+import { QueryError } from "../components/QueryState";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -38,7 +39,7 @@ export default function CardDetail() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["card", id] }) });
 
   if (card.isLoading) return <p>Loading…</p>;
-  if (card.error) return <p className="text-red-500">{String(card.error)}</p>;
+  if (card.error) return <QueryError q={card} label="Card" />;
   const c = card.data;
   const field = (label: string, el: React.ReactNode) => <label className="block text-sm">{label}{el}</label>;
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });

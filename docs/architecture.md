@@ -74,6 +74,8 @@ Health: `/health`, `/health/ready` (pings Mongo).
 
 Vite + React 18 + TS + react-router 6 + TanStack Query + Tailwind (dark via OS) + Recharts. All backend calls in `web/src/lib/api.ts`. One colour per price source in `lib/colors.ts`.
 
+Failure handling: every page query shows `QueryError` (`components/QueryState.tsx`: message + Retry) when the API is down; `ErrorBoundary` wraps the routes (render crash -> reload button); unknown URLs render `pages/NotFound.tsx`. Tests: vitest + jsdom + Testing Library, `fetch` mocked (`src/test/utils.tsx`), `docker compose exec web npm test`.
+
 ## Security posture
 
 Local single-user, no auth. API bound to 127.0.0.1, CORS limited to the web origin, Mongo not exposed on host, security headers set. Secrets only in `.env` (gitignored). Add auth before any deployment.

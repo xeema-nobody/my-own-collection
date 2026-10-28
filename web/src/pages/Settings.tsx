@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, FETCHER_START_CMD, SCRAPED_SOURCES } from "../lib/api";
+import { errorText, QueryError } from "../components/QueryState";
 import FetcherBadge from "../components/FetcherBadge";
 import FetchProgress from "../components/FetchProgress";
 
@@ -36,7 +37,7 @@ export default function Settings() {
   const fetchErr = fetchAll.error instanceof ApiError && fetchAll.error.status === 503
     ? `Fetcher not reachable. Start it on the host: ${FETCHER_START_CMD}`
     : fetchAll.error instanceof ApiError && fetchAll.error.status === 409 ? "A price fetch is already running."
-    : fetchAll.error ? String(fetchAll.error) : null;
+    : fetchAll.error ? errorText(fetchAll.error) : null;
   const [file, setFile] = useState<File | null>(null);
   const [impMode, setImpMode] = useState<"set" | "add">("set");
   const xfer = useMutation({
@@ -47,6 +48,7 @@ export default function Settings() {
   const s = status.data;
   return (
     <div className="space-y-4">
+      <QueryError q={status} label="Status" /><QueryError q={sets} label="Sets" /><QueryError q={jobs} label="Jobs" />
       <section className="card"><h2 className="mb-2 font-semibold">Catalog &amp; prices</h2>
         <div className="flex flex-wrap items-center gap-2">
           <button className="btn" disabled={importing || !ids.length} onClick={() => imp.mutate(ids)}>Import selected ({ids.length})</button>
@@ -56,7 +58,7 @@ export default function Settings() {
           <button className="btn-ghost" disabled={refreshing} onClick={() => ref.mutate({ scope: "collection" })}>Refresh collection prices</button>
           <button className="btn-ghost" disabled={refreshing} onClick={() => ref.mutate({ scope: "all" })}>Refresh all prices</button>
         </div>
-        {err && <p className="mt-2 text-sm text-red-500">{String(err)}</p>}
+        {err && <p className="mt-2 text-sm text-red-500">{errorText(err)}</p>}
         {(importing || refreshing) && <p className="mt-2 text-sm text-amber-500">
           Running: {[running("catalog_import"), running("price_refresh")].filter(Boolean)
             .map((j: any) => `${j.type} ${JSON.stringify(j.stats)}`).join(" · ")}</p>}
@@ -114,7 +116,7 @@ export default function Settings() {
         </div>
         {xfer.data && <div className="mt-2">Created {xfer.data.created}, updated {xfer.data.updated}, {xfer.data.errors.length} rejected.
           <ul className="text-xs text-red-500">{xfer.data.errors.slice(0, 10).map((e) => <li key={e.row}>row {e.row}: {e.error}</li>)}</ul></div>}
-        {xfer.error && <p className="mt-2 text-red-500">{String(xfer.error.message ?? xfer.error)}</p>}
+        {xfer.error && <p className="mt-2 text-red-500">{errorText(xfer.error)}</p>}
       </section>
       <section className="card"><h2 className="mb-2 font-semibold">Jobs</h2>
         <table className="w-full text-sm"><tbody>{jobs.data?.map((j: any) => (
