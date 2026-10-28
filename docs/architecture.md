@@ -12,7 +12,8 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 | `services/catalog_import.py` | per-set import (all / chosen sets / retry of failed), upsert by `_id`, job logging, failed-set isolation |
 | `services/sets.py` | sets with imported / priced card counts |
 | `services/search.py` | builds Mongo query from `q` + filters |
-| `services/collection.py` | add/stack-merge, valuation per source |
+| `services/collection.py` | add/stack-merge, `valuate` (loads cards + 90 d sales, per-source and best value) |
+| `services/valuation.py` | pure per-item price resolver: grade chain exact > bucket > lower > raw fallback, sold (D-A) > market > thin sold |
 | `services/pricing.py` | stores price points, denormalises `latest_price` / `price_base` on cards |
 | `services/fx.py` | daily FX cache in `fx_rates`, fallback to last stored rate |
 | `services/snapshots.py` | daily collection snapshot (idempotent per UTC date) |
@@ -44,7 +45,7 @@ Engine: real Google Chrome started by the fetcher with `--remote-debugging-port`
 - `collection_items`: one doc per stack, unique `stack_key` = card|variant|language|condition|grader|grade|cert. Add = `$inc quantity`; remove to 0 deletes.
 - `prices`: unique (card, variant, source, kind, grade_key, as_of); `kind` market | sold | listing_low. Re-refresh same day = same doc.
 - `sales`: sold records, manual (`POST /cards/{id}/sales`) and scraped (unique `(card_id, source, listing_id)` when `listing_id` is set); stats: last 10 within 90 days per source+grade.
-- `collection_snapshots`: unique per date; totals per source, cost, counts, unpriced counts, breakdowns.
+- `collection_snapshots`: unique per date; `totals_by_source`, `total_value`, `value_kind_breakdown`, `estimated_count`, cost, counts, unpriced counts, breakdowns (pre-Phase-4 docs lack the first three).
 - `product_matches`: `_id "{card_id}|{source}"`, `url`, `confirmed_by` auto|user|null, pending `candidates`; only `pricecharting`, `cardmarket_web`.
 - `fx_rates`, `jobs`.
 
@@ -53,14 +54,14 @@ Money: integer cents + currency everywhere. Missing price = `null`, never 0.
 ## API (prefix `/api`; Swagger at `/docs`)
 
 `GET /cards` (incl. `has_price`), `/cards/{id}`, `/cards/{id}/prices`, `POST /cards/{id}/sales`, `GET /cards/{id}/price-matrix` (grades/graders derived from stored rows), `GET /cards/{id}/fetch-status` (last scraped-fetch outcome per source), `GET /cards/{id}/match`, `POST|DELETE /cards/{id}/match/{source}` (confirm / reset product URL), `GET /sets` (`?with_stats=true`), `/filters`;
-`/collection` (POST add, GET list, `/summary`, PATCH/DELETE `/{id}`, POST `/{id}/remove`);
+`/collection` (POST add, GET list with per-item `value/price_kind/source/match/estimated/sources`, `/summary` with `value_by_kind`, PATCH/DELETE `/{id}`, POST `/{id}/remove`);
 `/dashboard/history|breakdown|movers`;
 `/admin/catalog/import` (`?sets=` repeatable), `/admin/catalog/import/retry-failed`, `/admin/prices/refresh` (`?scope=&sets=`), `/admin/snapshot`, `/admin/jobs`, `/admin/status`, `/admin/fetcher-status` (`{up, ...}`; 200 even when the fetcher is down), `/admin/prices/fetch`.
 Health: `/health`, `/health/ready` (pings Mongo).
 
 ## Config (`.env`, see `.env.example`)
 
-`MONGO_ROOT_USER/PASSWORD`, `BASE_CURRENCY`, `POKEMONTCG_API_KEY` (optional), `SCHEDULER_ENABLED`, `PRICE_REFRESH_CRON`, `FETCHER_URL`. `PRICECHARTING_TOKEN` is unused (no paid API).
+`MONGO_ROOT_USER/PASSWORD`, `BASE_CURRENCY`, `POKEMONTCG_API_KEY` (optional), `SCHEDULER_ENABLED`, `PRICE_REFRESH_CRON`, `FETCHER_URL`, valuation rules `SOLD_MIN_SALES` (3), `SOLD_WINDOW_DAYS` (90), `SOLD_SAMPLE` (10), `PREFERRED_SOURCES` (comma list). `PRICECHARTING_TOKEN` is unused (no paid API).
 
 ## Frontend
 

@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     fetcher_url: str = "http://host.docker.internal:8110"
     scheduler_enabled: bool = False
     price_refresh_cron: str = "0 4 * * *"
+    # valuation (D-A): sold beats aggregate when >= sold_min_sales sales in the window
+    sold_min_sales: int = 3
+    sold_window_days: int = 90
+    sold_sample: int = 10
+    preferred_sources: str = "cardmarket_web,cardmarket,pricecharting,altxyz,tcgplayer"
 
 
 settings = Settings()

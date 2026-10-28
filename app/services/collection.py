@@ -1,12 +1,17 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from bson import ObjectId
 from fastapi import HTTPException
 
 from app.db.models import CollectionIn
-from app.services.pricing import get_rates, price_for
+from app.config import settings
+from app.providers.price import registry
+from app.services.pricing import get_rates
+from app.services.valuation import grade_key, resolve_item  # noqa: F401 - grade_key re-exported
 
-SOURCES = ("tcgplayer", "cardmarket")
+
+def source_ids() -> list[str]:
+    return [s.id for s in registry()]
 
 
 def make_stack_key(card_id: str, variant: str | None, language: str, condition: str | None,
@@ -20,11 +25,6 @@ def make_stack_key(card_id: str, variant: str | None, language: str, condition: 
 
 def stack_key(i: CollectionIn) -> str:
     return make_stack_key(i.card_id, i.variant, i.language, i.condition, i.grading)
-
-
-def grade_key(item: dict) -> str:
-    g = item.get("grading")
-    return "raw" if not g else f"{g['company']}{g['grade']:g}"
 
 
 async def add(db, i: CollectionIn) -> dict:
@@ -56,32 +56,37 @@ def oid(id_: str) -> ObjectId:
 
 
 async def valuate(db, filt: dict | None = None) -> list[dict]:
-    """Items joined with card + per-source value (base-currency cents; None = unpriced)."""
+    """Items joined with card + best price (see services/valuation.py). Base-currency cents for the
+    whole stack; None = unpriced. `values[source]` = value when only that source is used."""
     rates = await get_rates(db)
     items = await db.collection_items.find(filt or {}).to_list(None)
-    cards = {c["_id"]: c async for c in db.cards.find({"_id": {"$in": list({i["card_id"] for i in items})}})}
+    ids = list({i["card_id"] for i in items})
+    cards = {c["_id"]: c async for c in db.cards.find({"_id": {"$in": ids}})}
+    since = datetime.now(timezone.utc) - timedelta(days=settings.sold_window_days)
+    sales: dict[str, list[dict]] = {}
+    async for s in db.sales.find({"card_id": {"$in": ids}, "sold_at": {"$gte": since}}):
+        sales.setdefault(s["card_id"], []).append(s)
     out = []
     for it in items:
         card = cards.get(it["card_id"])
-        values, estimated = {}, False
-        for s in SOURCES:
-            v, est = price_for(card, s, it["variant"], rates) if card else (None, False)
-            values[s] = None if v is None else v * it["quantity"]
-            estimated = estimated or est or (it.get("grading") is not None and v is not None)
-        best = values["cardmarket"] if values["cardmarket"] is not None else values["tcgplayer"]
+        sl = sales.get(it["card_id"], [])
+        best = resolve_item(card, it, rates, sl)
+        sources = {s: resolve_item(card, it, rates, sl, only=s) for s in source_ids()}
         cost = None
         a = it.get("acquired") or {}
         if a.get("price") is not None:
             r = rates.get(a.get("currency", "EUR"))
             cost = round(a["price"] * r * it["quantity"]) if r else None
-        out.append({"item": it, "card": card, "values": values, "value": best,
-                    "estimated": estimated, "cost": cost})
+        out.append({"item": it, "card": card, "values": {s: r["value"] for s, r in sources.items()},
+                    "sources": {s: {k: r[k] for k in ("value", "price_kind", "match", "grade_key_used")}
+                                for s, r in sources.items() if r["value"] is not None},
+                    "cost": cost, **best, "value": best["value"]})
     return out
 
 
 def present(v: dict) -> dict:
     c = v["card"] or {}
-    return {**_out(v["item"]), "value": v["value"], "values": v["values"], "cost": v["cost"],
-            "estimated": v["estimated"],
-            "card": {k: c.get(k) for k in ("_id", "name", "number", "rarity", "set", "images")}
-                    if c else None}
+    return {**_out(v["item"]), "cost": v["cost"], "card": {k: c.get(k) for k in (
+        "_id", "name", "number", "rarity", "set", "images")} if c else None,
+        **{k: v[k] for k in ("value", "values", "sources", "estimated", "price_kind", "source", "match",
+                             "grade_key_used", "thin", "sample_size")}}

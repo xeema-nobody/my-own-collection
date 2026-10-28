@@ -30,3 +30,9 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - Frankfurter moved to `api.frankfurter.dev/v1`.
 - Cardmarket `updatedAt` in the payload can be months old: shown as `as_of`.
 - Product matches live in their own collection `product_matches`, not `cards.external_ids`: catalog import rewrites `external_ids.cardmarket_url` (aggregate link) on every run. User-confirmed matches take precedence over auto ones.
+
+## Phase 4: graded valuation (2026-10-28, defaults by me, change on objection)
+- Ask prices are never used for valuation.
+- A company-agnostic bucket match (`G9` for a PSA 9) is NOT exact: shown with `≈` and a reason.
+- Sold rule (>=3 in 90 d, median of last 10), `PREFERRED_SOURCES` order are settings in `app/config.py`; no Settings UI. Sold sales are pooled across sources.
+- Scraped raw sales never value raw items (condition unknown); manual ones do.
