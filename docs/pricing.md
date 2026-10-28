@@ -84,5 +84,8 @@ Taken after each refresh (or `POST /api/admin/snapshot`). One per UTC date. No b
 
 Each owned item valued now vs N days ago with the same resolver (graded-aware, sold-based). Only items priced the same way at both ends count (same price kind, grade match and grade key): a changed fallback is a data gap, not a move. Past values use only what the observation log and sales held at that date; scraped sales are dated by `sold_at`, so a sale we fetched later still counts in the past window. Snapshots before Phase 4 valued slabs at raw price and lack `total_value`; the dashboard change % only compares snapshots that have it.
 
+## Scheduled fetches
+With `SCHEDULER_ENABLED`, a daily `price_fetch` covers up to `SCHEDULER_FETCH_CAP` owned cards (stalest first), with the usual 24 h cache-skip and unattended fetcher mode (see decisions.md, Phase 6). Sites that need a login yield no new points that day.
+
 ## Unpriced cards
 Some sets/cards have no price block in the pokemontcg.io payload (e.g. `me55`, `me5`, `me2pt5`, `mcd*`, `tk*`), so they stay unpriced (`price_base = None`, shown as "no price"). That is a source gap, not an import failure; only another source can fill it. Settings shows priced/total per set.

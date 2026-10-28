@@ -178,6 +178,17 @@ async def test_client_maps_http():
         await FetcherClient("http://f", httpx.MockTransport(boom)).fetch("altxyz", "https://x")
 
 
+async def test_client_sends_unattended_flag():
+    bodies = []
+
+    def handler(req):
+        bodies.append(__import__("json").loads(req.content))
+        return httpx.Response(200, json={"status": "ok"})
+    await FetcherClient("http://f", httpx.MockTransport(handler), unattended=True).fetch("altxyz", "https://alt.xyz")
+    await FetcherClient("http://f", httpx.MockTransport(handler)).fetch("altxyz", "https://alt.xyz")
+    assert [b["unattended"] for b in bodies] == [True, False]
+
+
 def test_registry_ids_are_stored_ids():
     ids = {s.id for s in registry()}
     assert ids == {"tcgplayer", "cardmarket", "pricecharting", "cardmarket_web", "altxyz", "manual"}

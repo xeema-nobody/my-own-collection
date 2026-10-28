@@ -9,7 +9,7 @@ from app.services.snapshots import take_snapshot
 log = logging.getLogger(__name__)
 
 
-async def refresh_prices(scope: str = "collection", sets: list[str] | None = None, provider=None) -> dict:
+async def refresh_prices(scope: str = "collection", sets: list[str] | None = None, provider=None, trigger: str = "manual") -> dict:
     """Re-fetch cards from the catalog API (prices ride along). Per-set batches.
 
     `sets` given: refresh every card of those sets (scope becomes `sets`).
@@ -17,7 +17,7 @@ async def refresh_prices(scope: str = "collection", sets: list[str] | None = Non
     db = get_db()
     provider = provider or PokemonTcgCatalog()
     scope = "sets" if sets else scope
-    job = await jobs.start(db, "price_refresh")
+    job = await jobs.start(db, "price_refresh", trigger)
     stats = {"scope": scope, "sets": sets, "cards": 0, "prices": 0, "errors": 0}
     try:
         rates = await get_rates(db)

@@ -244,3 +244,27 @@ async def test_fetcher_status_up_and_down(client, monkeypatch):
     monkeypatch.setattr("app.providers.fetcher.FetcherClient.status", down)
     r = await client.get("/api/admin/fetcher-status")
     assert r.status_code == 200 and r.json() == {"up": False, "detail": "fetcher unreachable"}
+
+
+async def test_stalest_owned_orders_caps_and_resumes(db):
+    ids = await seed(db, "1", "2", "3", "4")
+    for c in ids:
+        await db.collection_items.insert_one({"stack_key": c, "card_id": c})
+    now = datetime.now(timezone.utc)
+    await db.fetch_log.insert_one({"_id": f"{ids[0]}|pricecharting", "card_id": ids[0], "status": "ok",
+                                   "fetched_at": now - timedelta(days=1)})
+    await db.fetch_log.insert_one({"_id": f"{ids[1]}|pricecharting", "card_id": ids[1], "status": "needs_match",
+                                   "fetched_at": now - timedelta(days=3)})
+    first = await pf.stalest_owned(db, 3)
+    assert first == [ids[2], ids[3], ids[1]]          # never tried first (id order), then oldest
+    for c in first:                                   # run done -> next run resumes with the rest
+        await db.fetch_log.update_one({"_id": f"{c}|pricecharting"}, {"$set": {"card_id": c, "fetched_at": now}}, upsert=True)
+    assert await pf.stalest_owned(db, 3) == [ids[0], ids[1], ids[2]]
+
+
+async def test_trigger_stored_on_fetch_job(db):
+    [c] = await seed(db, "1")
+    p = FakeProvider("pricecharting")
+    await pf.fetch_prices([c], ["pricecharting"], provider_for=providers(pricecharting=p), client=FakeClient(),
+                          trigger="scheduler")
+    assert (await db.jobs.find_one({"type": "price_fetch"}))["trigger"] == "scheduler"

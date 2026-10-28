@@ -49,3 +49,10 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - Every source's value is shown next to the headline with kind, match, thin, data age and matched print. The headline rule is unchanged, only explained (`headline_rule`).
 - Outlier flag: a source is flagged when it is more than `OUTLIER_PCT` (40) % from the median of the sources that priced the item the same way as the headline (same match type; a raw fallback next to a graded price is not compared) and at least 3 sources have a value. With 2 sources only the gap is shown.
 - Matched print comes from the stored product url (slug, Cardmarket `V<n>`), titles are kept when the user picked among candidates. The matcher still cannot tell V3/V4/V5 apart on its own: it needs a user pick (`needs_match`).
+
+## Phase 6: scheduler (2026-10-28, defaults by me, change on objection)
+- Scheduler stays opt-in (`SCHEDULER_ENABLED=false`). Four independent tasks: catalog-API refresh of owned cards (04:00), scraped fetch of owned cards (04:30), snapshot (06:00), full catalog import (Sun 03:00). Times are container time (UTC).
+- Scheduled fetches are **unattended**: the fetcher fails a login/challenge page at once (`login_timeout` / `blocked`, "unattended: ...") instead of opening Chrome and waiting; the run then skips that site. Log in manually (Settings fetch) to restore the session; the next scheduled run uses it. If the fetcher is not running the run is recorded as a `skipped` job. No notification yet.
+- Cap 300 cards per scheduled fetch, stalest first (by last attempt in `fetch_log`, never-tried first). No resume state: fetched cards become fresh, so the next run takes the rest.
+- Boot catch-up: each task whose last `ok|partial` run is older than 24 h (7 d for the catalog; snapshot by `taken_at`) runs once, in order, in the background. Catalog catch-up is skipped until a first import exists. Catch-up uses the same cache-skip, so a manual fetch earlier the same day is not repeated.
+- `jobs.trigger`: `manual` (default for API calls), `scheduler`, `catchup`. Older rows lack it (UI shows manual).

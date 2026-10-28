@@ -10,7 +10,8 @@ from app.services.pricing import get_rates, store_card_prices
 log = logging.getLogger(__name__)
 
 
-async def import_catalog(set_ids: list[str] | None = None, provider=None, retry: bool = False) -> dict:
+async def import_catalog(set_ids: list[str] | None = None, provider=None, retry: bool = False,
+                         trigger: str = "manual") -> dict:
     """Idempotent: upserts sets/cards by _id and records prices embedded in the payload.
 
     `set_ids=None` imports the full catalog. `stats.origin` (full | selected | retry) lets
@@ -18,7 +19,7 @@ async def import_catalog(set_ids: list[str] | None = None, provider=None, retry:
     """
     db = get_db()
     provider = provider or PokemonTcgCatalog()
-    job = await jobs.start(db, "catalog_import")
+    job = await jobs.start(db, "catalog_import", trigger)
     stats = {"sets": 0, "cards": 0, "prices": 0, "set": set_ids[0] if set_ids and len(set_ids) == 1 else None,
              "set_ids": set_ids, "origin": "retry" if retry else "selected" if set_ids else "full"}
     try:
