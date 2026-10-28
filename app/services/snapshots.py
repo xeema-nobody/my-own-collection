@@ -1,8 +1,12 @@
+import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 
 from app.config import settings
+from app.services import alerts
 from app.services.collection import source_ids, valuate
+
+log = logging.getLogger(__name__)
 
 
 async def take_snapshot(db) -> dict:
@@ -37,4 +41,8 @@ async def take_snapshot(db) -> dict:
            "breakdowns": {"by_set": dict(by_set), "by_rarity": dict(by_rarity), "by_tcg": dict(by_tcg)},
            "taken_at": datetime.now(timezone.utc)}
     await db.collection_snapshots.update_one({"date": date}, {"$set": doc}, upsert=True)
+    try:
+        await alerts.evaluate(db, vals)
+    except Exception:  # noqa: BLE001 - alerts must never break a snapshot
+        log.exception("alert evaluation failed")
     return doc

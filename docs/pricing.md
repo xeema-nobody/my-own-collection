@@ -1,5 +1,8 @@
 # Pricing
 
+## Search -> product (fix 2026-10-28)
+`resolve.find_product(product_marker=...)`: PriceCharting and Cardmarket redirect a single-hit search straight to the product page, so a search with one hit has no results table. When the fetcher's `final_url` contains the marker (`/game/`, `/Products/Singles/`) it is taken as the product (no candidate scoring). alt.xyz tile titles name the rarity only for some prints ("Hyper Rare"); the rarity filter in `parse_sold` applies only when at least one tile of the same card carries it.
+
 ## Sources
 
 | Source id | How | Kind | Notes |
@@ -83,6 +86,15 @@ Taken after each refresh (or `POST /api/admin/snapshot`). One per UTC date. No b
 ## Movers (`services/movers.py`)
 
 Each owned item valued now vs N days ago with the same resolver (graded-aware, sold-based). Only items priced the same way at both ends count (same price kind, grade match and grade key): a changed fallback is a data gap, not a move. Past values use only what the observation log and sales held at that date; scraped sales are dated by `sold_at`, so a sale we fetched later still counts in the past window. Snapshots before Phase 4 valued slabs at raw price and lack `total_value`; the dashboard change % only compares snapshots that have it.
+
+## Alerts (`services/alerts.py`, Phase 7)
+
+Rules on one stack, one card (all its stacks) or the collection total: `above|below X` (EUR cents) or `up|down N% over D days`, optional price-kind filter (`sold|market|any`). Evaluated at the end of `take_snapshot`, which every refresh, scraped fetch and the scheduled snapshot already call, using the same `valuate()` result as the screens (so an alert value equals the Collection value). % rules compare with `valuate(as_of=now-D)` and only count items that pass `movers.comparable`.
+- One event per crossing: condition true and rule `triggered=false` -> atomic flip + one `alert_events` row; condition false -> re-armed. Unknown (unpriced, estimated, wrong kind, not comparable) leaves the state alone.
+- Estimated values (bucket / lower / raw fallback) do not alert unless the rule has `include_estimated`. Thin sold values do alert and the event says so.
+- Totals / card scope sum only items that are usable for the rule (priced, not estimated, kind matches).
+- Inbox also receives `system` items (deduped per day by key): scheduled fetch skipped because the fetcher is down, or a site needing login / challenge.
+- Failure isolation: an exception in alert evaluation is logged and never fails the snapshot.
 
 ## Scheduled fetches
 With `SCHEDULER_ENABLED`, a daily `price_fetch` covers up to `SCHEDULER_FETCH_CAP` owned cards (stalest first), with the usual 24 h cache-skip and unattended fetcher mode (see decisions.md, Phase 6). Sites that need a login yield no new points that day.

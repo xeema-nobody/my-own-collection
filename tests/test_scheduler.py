@@ -88,6 +88,8 @@ async def test_fetch_task_records_skipped_when_fetcher_down(db, monkeypatch):
     await sch._fetch("scheduler")
     j = await db.jobs.find_one({"type": "price_fetch"})
     assert j["status"] == "skipped" and j["trigger"] == "scheduler" and "down" in j["error"]
+    await sch._fetch("scheduler")                      # same day: still one inbox item
+    assert await db.alert_events.count_documents({"type": "system"}) == 1
 
 
 async def test_fetch_task_caps_and_passes_trigger(db, monkeypatch):

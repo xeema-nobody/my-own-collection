@@ -93,3 +93,48 @@ class FetchIn(CardFetchIn):
         if not (self.cards or self.sets or self.owned):
             raise ValueError("give cards, sets or owned")
         return self
+
+
+AlertScope = Literal["stack", "card", "total"]
+AlertOp = Literal["above", "below", "up_pct", "down_pct"]
+AlertKind = Literal["any", "sold", "market"]
+
+
+class AlertIn(BaseModel):
+    scope: AlertScope
+    item_id: str | None = None          # stack scope
+    card_id: str | None = None          # card scope
+    op: AlertOp
+    threshold: float = Field(gt=0, description="cents for above/below, percent for up_pct/down_pct")
+    days: int | None = Field(default=None, ge=1, le=365)    # pct ops only
+    kind: AlertKind = "any"
+    include_estimated: bool = False
+    enabled: bool = True
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.scope == "stack" and not self.item_id:
+            raise ValueError("stack alerts need item_id")
+        if self.scope == "card" and not self.card_id:
+            raise ValueError("card alerts need card_id")
+        if self.scope != "stack":
+            self.item_id = None
+        if self.scope != "card":
+            self.card_id = None
+        if self.op in ("above", "below"):
+            if self.threshold != int(self.threshold):
+                raise ValueError("price thresholds are whole cents")
+            self.threshold, self.days = int(self.threshold), None
+        else:
+            if self.days is None:
+                raise ValueError("percent alerts need days")
+            if self.threshold > 1000:
+                raise ValueError("percent threshold too large")
+        return self
+
+
+class AlertPatch(BaseModel):
+    enabled: bool | None = None
+    include_estimated: bool | None = None
+    threshold: float | None = Field(default=None, gt=0)
+    kind: AlertKind | None = None

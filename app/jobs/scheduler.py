@@ -9,7 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from app.config import settings
 from app.db.mongo import get_db
 from app.providers.fetcher import FetcherClient, FetcherUnavailable
-from app.services import jobs
+from app.services import alerts, jobs
 from app.services.catalog_import import import_catalog
 from app.services.price_fetch import fetch_prices, stalest_owned
 from app.services.refresh import refresh_prices
@@ -33,6 +33,8 @@ async def _fetch(trigger: str):
         await client.status()
     except FetcherUnavailable as e:
         await jobs.record_skipped(db, "price_fetch", trigger, str(e))
+        await alerts.notify_system(db, f"fetch_skipped:{datetime.now(timezone.utc):%Y-%m-%d}",
+                                   f"Scheduled fetch skipped: fetcher not running ({e})")
         return
     cards = await stalest_owned(db, settings.scheduler_fetch_cap)
     if cards:

@@ -17,7 +17,8 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 | `services/pricing.py` | stores price points, denormalises `latest_price` / `price_base` on cards |
 | `services/fx.py` | daily FX cache in `fx_rates`, fallback to last stored rate |
 | `services/movers.py` | top movers: `valuate` now vs `as_of` N days ago, comparable items only |
-| `services/snapshots.py` | daily collection snapshot (idempotent per UTC date) |
+| `services/snapshots.py` | daily collection snapshot (idempotent per UTC date); ends by calling `alerts.evaluate` with the same valuation |
+| `services/alerts.py` | price alert rules + state machine (`alerts`, `alert_events`), system inbox items, unread count |
 | `services/refresh.py` | price refresh job (collection, all, or chosen sets) then snapshot |
 | `providers/fetcher.py`, `providers/price/{pricecharting,cardmarket,altxyz,match,resolve}.py` | fetcher HTTP client; scraped-site adapters + matcher (see pricing.md) |
 | `services/price_fetch.py` | on-demand scraped fetch job `price_fetch` (cards / sets / owned x sources): adapters -> `prices` + `latest_price`, records matches, `fetch_log` (`{card_id}\|{source}`: status, detail, url, fetched_at), snapshot at end. Endpoints `POST /api/admin/prices/fetch`, `POST /api/cards/{id}/fetch-prices` (202; 422 bad target/source; 503 fetcher down; 409 running) |
@@ -48,6 +49,8 @@ Engine: real Google Chrome started by the fetcher with `--remote-debugging-port`
 - `sales`: sold records, manual (`POST /cards/{id}/sales`) and scraped (unique `(card_id, source, listing_id)` when `listing_id` is set); stats: last 10 within 90 days per source+grade.
 - `collection_snapshots`: unique per date; `totals_by_source`, `total_value`, `value_kind_breakdown`, `estimated_count`, cost, counts, unpriced counts, breakdowns (pre-Phase-4 docs lack the first three).
 - `product_matches`: `_id "{card_id}|{source}"`, `url`, `confirmed_by` auto|user|null, pending `candidates`; only `pricecharting`, `cardmarket_web`.
+- `alerts`: rule `{scope stack|card|total, item_id|card_id, op above|below|up_pct|down_pct, threshold (cents or %), days, kind, include_estimated, enabled, triggered, last_value, last_pct, last_eval, label}`.
+- `alert_events`: `type alert|system`, rule text, card, `value/prev/pct`, kind/match/thin/estimated, `fired_at`, `read`; system items carry a unique `key` (one per day per reason). Index `(read, fired_at)`.
 - `fx_rates`, `jobs`.
 
 Money: integer cents + currency everywhere. Missing price = `null`, never 0.
@@ -57,6 +60,7 @@ Money: integer cents + currency everywhere. Missing price = `null`, never 0.
 `GET /cards` (incl. `has_price`), `/cards/{id}`, `/cards/{id}/prices`, `POST /cards/{id}/sales`, `GET /cards/{id}/price-matrix` (grades/graders derived from stored rows), `GET /cards/{id}/fetch-status` (last scraped-fetch outcome per source), `GET /cards/{id}/match`, `POST|DELETE /cards/{id}/match/{source}` (confirm / reset product URL), `GET /sets` (`?with_stats=true`), `/filters`;
 `/collection` (POST add, GET list with per-item `value/price_kind/source/match/estimated/sources`, `/summary` with `value_by_kind`, PATCH/DELETE `/{id}`, POST `/{id}/remove`);
 `/dashboard/history|breakdown|movers`;
+`/alerts` (GET list, POST create, PATCH/DELETE `/{id}`), `/alerts/events` (`?unread=`), POST `/alerts/events/read` (`{ids}` or all), `/alerts/unread-count`, POST `/alerts/evaluate`;
 `/admin/catalog/import` (`?sets=` repeatable), `/admin/catalog/import/retry-failed`, `/admin/prices/refresh` (`?scope=&sets=`), `/admin/snapshot`, `/admin/jobs`, `/admin/status` (incl. `scheduler.jobs[].next_run`), `/admin/fetcher-status` (`{up, ...}`; 200 even when the fetcher is down), `/admin/prices/fetch`.
 Health: `/health`, `/health/ready` (pings Mongo).
 
