@@ -104,7 +104,8 @@ async def import_items(db, rows: list[dict], mode: str = "set") -> dict:
     res = {"created": 0, "updated": 0, "errors": []}
     now = datetime.now(timezone.utc)
     known = {c["_id"] async for c in db.cards.find(
-        {"_id": {"$in": list({r.get("card_id") for r in rows if isinstance(r, dict)})}}, {"_id": 1})}
+        {"_id": {"$in": list({r["card_id"] for r in rows if isinstance(r, dict)
+                              and isinstance(r.get("card_id"), str)})}}, {"_id": 1})}
     for n, r in enumerate(rows, 1):
         try:
             if not isinstance(r, dict):
@@ -113,6 +114,8 @@ async def import_items(db, rows: list[dict], mode: str = "set") -> dict:
             item = CollectionIn.model_validate({k: v for k, v in r.items() if k != "created_at"})
             if item.card_id not in known:
                 raise ValueError(f"card not found: {item.card_id}")
+            if created is not None and not isinstance(created, str):
+                raise ValueError("created_at must be an ISO date string")
             created = datetime.fromisoformat(created) if created else now
         except (ValidationError, ValueError) as e:
             msg = "; ".join(f"{'.'.join(map(str, x['loc']))}: {x['msg']}" for x in e.errors()) \
