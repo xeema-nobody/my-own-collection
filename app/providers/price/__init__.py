@@ -35,18 +35,32 @@ class SourceInfo:
     note: str = ""
 
 
+SCRAPED = ("pricecharting", "cardmarket_web", "altxyz")  # fetched on demand via the host fetcher
+
+
 def registry() -> list[SourceInfo]:
-    """Known price sources and whether they are usable now (config read at call time)."""
+    """Known price sources (ids = ids stored in `prices.source`) and whether they are usable now."""
     return [
-        SourceInfo("pokemontcg", "pokemontcg.io aggregate (TCGplayer USD + Cardmarket EUR)",
-                   ("market",), "raw only", True, "embedded in the catalog payload"),
-        SourceInfo("pricecharting", "PriceCharting", ("sold", "market"), "raw + graded (verify)",
-                   False, "browser fetcher, Phase 3"),
-        SourceInfo("cardmarket", "Cardmarket (direct)", ("sold", "market"), "raw (+ graded if listed)",
-                   False, "browser fetcher, Phase 3"),
-        SourceInfo("altxyz", "alt.xyz", ("sold",), "graded", False, "browser fetcher, Phase 3"),
+        SourceInfo("tcgplayer", "TCGplayer (via pokemontcg.io)", ("market",), "raw only", True,
+                   "embedded in the catalog payload, USD per variant"),
+        SourceInfo("cardmarket", "Cardmarket trend (via pokemontcg.io)", ("market",), "raw only", True,
+                   "embedded in the catalog payload; as_of can be stale"),
+        SourceInfo("pricecharting", "PriceCharting", ("sold", "market"),
+                   "raw + grade buckets G1..G9.5; 10s per company", True, "browser fetcher"),
+        SourceInfo("cardmarket_web", "Cardmarket (direct)", ("market", "ask"), "raw only", True,
+                   "browser fetcher (real Chrome)"),
+        SourceInfo("altxyz", "alt.xyz", ("sold",), "graded, per company", True, "browser fetcher"),
         SourceInfo("manual", "Manual sales", ("sold",), "any", True, "POST /api/cards/{id}/sales"),
     ]
+
+
+def get_provider(source: str):
+    """Scraped adapter for a source id (lazy import: adapters import this module)."""
+    from app.providers.price.altxyz import AltXyzProvider
+    from app.providers.price.cardmarket import CardmarketProvider
+    from app.providers.price.pricecharting import PriceChartingProvider
+    return {"pricecharting": PriceChartingProvider, "cardmarket_web": CardmarketProvider,
+            "altxyz": AltXyzProvider}[source]()
 
 
 def registry_json() -> list[dict]:
