@@ -4,6 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, money } from "../lib/api";
 import PriceChart from "../components/PriceChart";
 import PriceMatrix from "../components/PriceMatrix";
+import CardFetch from "../components/CardFetch";
+import SourceStatus from "../components/SourceStatus";
+import SalesList from "../components/SalesList";
 
 const CONDITIONS = ["NM", "LP", "MP", "HP", "DMG"];
 const LANGS = ["en", "ja", "es", "it", "fr", "de", "pt", "ko", "zh"];
@@ -45,8 +48,11 @@ export default function CardDetail() {
           {c.flavor_text && <p className="mt-1 text-sm italic">{c.flavor_text}</p>}</div>
 
         <section className="card"><h2 className="mb-2 font-semibold">Prices</h2>
+          <CardFetch cardId={id} />
+          <SourceStatus cardId={id} />
           <PriceMatrix cardId={id} />
           {(c.sales_stats ?? []).map((s: any, i: number) => <p key={i} className="mt-2 text-sm">Sold ({s.count} sales, {s.source}, {s.grade_key}): min {money(s.min, s.currency)} · avg {money(s.avg, s.currency)} · max {money(s.max, s.currency)}</p>)}
+          <SalesList sales={c.sales ?? []} />
         </section>
 
         <section className="card"><h2 className="mb-2 font-semibold">Price history</h2><PriceChart cardId={id} /></section>

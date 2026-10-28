@@ -4,13 +4,13 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, X
 import { api, money } from "../lib/api";
 import { SOURCE_COLOR } from "../lib/colors";
 
-const GRADERS = ["PSA", "BGS", "CGC"];
-const GRADES = ["raw", ...GRADERS.flatMap((g) => Array.from({ length: 10 }, (_, i) => `${g}${10 - i}`))];
 const DASH: Record<string, string | undefined> = { sold: undefined, market: "5 4", ask: "2 3" };
 
 export default function PriceChart({ cardId }: { cardId: string }) {
   const [grade, setGrade] = useState("raw");
   const [off, setOff] = useState<Set<string>>(new Set());
+  const matrix = useQuery({ queryKey: ["matrix", cardId], queryFn: () => api.priceMatrix(cardId) });
+  const grades: string[] = matrix.data?.grades ?? ["raw"];
   const hist = useQuery({ queryKey: ["hist", cardId, grade], queryFn: () => api.priceHistory(cardId, { grade_key: grade }) });
   const { data, series, cur } = useMemo(() => {
     const byDate: Record<string, any> = {};
@@ -32,7 +32,7 @@ export default function PriceChart({ cardId }: { cardId: string }) {
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-3 text-sm">
-        <label>Grade <select className="input" value={grade} onChange={(e) => setGrade(e.target.value)}>{GRADES.map((g) => <option key={g}>{g}</option>)}</select></label>
+        <label>Grade <select className="input" value={grade} onChange={(e) => setGrade(e.target.value)}>{grades.map((g) => <option key={g}>{g}</option>)}</select></label>
         {sources.map((s) => (
           <label key={s} className="flex items-center gap-1" style={{ color: SOURCE_COLOR[s] }}>
             <input type="checkbox" checked={!off.has(s)} onChange={() => toggle(s)} />{s}</label>))}

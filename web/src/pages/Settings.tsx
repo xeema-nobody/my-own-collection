@@ -1,11 +1,16 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { api, ApiError, FETCHER_START_CMD, SCRAPED_SOURCES } from "../lib/api";
+import FetcherBadge from "../components/FetcherBadge";
+import FetchProgress from "../components/FetchProgress";
 
 export default function Settings() {
   const qc = useQueryClient();
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
+  const [scope, setScope] = useState<"sets" | "owned">("sets");
+  const [fSources, setFSources] = useState<string[]>([...SCRAPED_SOURCES]);
+  const [force, setForce] = useState(false);
   const status = useQuery({ queryKey: ["status"], queryFn: api.status });
   const sets = useQuery({ queryKey: ["sets", "stats"], queryFn: () => api.sets(true) });
   const jobs = useQuery({ queryKey: ["jobs"], queryFn: api.jobs, refetchInterval: 3000 });
@@ -13,6 +18,10 @@ export default function Settings() {
   const imp = useMutation({ mutationFn: (ids?: string[]) => api.importCatalog(ids), onSettled: done });
   const retry = useMutation({ mutationFn: api.retryFailedImports, onSettled: done });
   const ref = useMutation({ mutationFn: (a: { scope: string; sets?: string[] }) => api.refreshPrices(a.scope, a.sets), onSettled: done });
+  const fetchAll = useMutation({
+    mutationFn: () => api.fetchPrices({ ...(scope === "owned" ? { owned: true } : { sets: [...picked] }), sources: fSources, force }),
+    onSettled: done,
+  });
   const running = (type: string) => jobs.data?.find((j: any) => j.type === type && j.status === "running");
   const importing = !!running("catalog_import"), refreshing = !!running("price_refresh");
   const lastFull = jobs.data?.find((j: any) => j.type === "catalog_import" && j.status !== "running" &&
@@ -22,6 +31,12 @@ export default function Settings() {
   const shown = (sets.data ?? []).filter((x: any) =>
     `${x.name} ${x.external_id}`.toLowerCase().includes(filter.toLowerCase()));
   const toggle = (id: string) => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const fetching = !!running("price_fetch");
+  const lastFetch = jobs.data?.find((j: any) => j.type === "price_fetch");
+  const fetchErr = fetchAll.error instanceof ApiError && fetchAll.error.status === 503
+    ? `Fetcher not reachable. Start it on the host: ${FETCHER_START_CMD}`
+    : fetchAll.error instanceof ApiError && fetchAll.error.status === 409 ? "A price fetch is already running."
+    : fetchAll.error ? String(fetchAll.error) : null;
   const err = imp.error || retry.error || ref.error;
   const s = status.data;
   return (
@@ -57,6 +72,21 @@ export default function Settings() {
             </label></li>))}
         </ul>
         <p className="mt-2 text-xs opacity-70">Imports run in the background; one job per type at a time. Progress below.</p></section>
+      <section className="card text-sm"><h2 className="mb-2 font-semibold">Fetch scraped prices</h2>
+        <p className="mb-2 opacity-70">Sold and graded prices from PriceCharting, Cardmarket and alt.xyz through the host fetcher (24 h cache). Runs on demand only.</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-1"><input type="radio" checked={scope === "sets"} onChange={() => setScope("sets")} />Selected sets ({ids.length})</label>
+          <label className="flex items-center gap-1"><input type="radio" checked={scope === "owned"} onChange={() => setScope("owned")} />Owned collection</label>
+          {SCRAPED_SOURCES.map((x) => (
+            <label key={x} className="flex items-center gap-1"><input type="checkbox" checked={fSources.includes(x)}
+              onChange={() => setFSources((v) => v.includes(x) ? v.filter((y) => y !== x) : [...v, x])} />{x}</label>))}
+          <label className="flex items-center gap-1" title="Ignore the 24 h cache"><input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />force</label>
+          <button className="btn" disabled={fetching || fetchAll.isPending || !fSources.length || (scope === "sets" && !ids.length)} onClick={() => fetchAll.mutate()}>Fetch prices</button>
+          <FetcherBadge />
+        </div>
+        {fetchErr && <p className="mt-2 text-red-500">{fetchErr}</p>}
+        <FetchProgress job={lastFetch} live={fetching} />
+      </section>
       {s && <section className="card text-sm"><h2 className="mb-2 font-semibold">Config</h2>
         <p>Base currency: {s.base_currency} · Scheduler: {s.scheduler_enabled ? `on (${s.price_refresh_cron})` : "off (manual)"}</p>
         <table className="mt-2 w-full"><thead><tr className="text-left opacity-70"><th>Price source</th><th>Kinds</th><th>Grades</th><th>Status</th></tr></thead><tbody>
