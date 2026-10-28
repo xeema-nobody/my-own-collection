@@ -26,7 +26,7 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 | `services/price_fetch.py` | on-demand scraped fetch job `price_fetch` (cards / sets / owned x sources): adapters -> `prices` + `latest_price`, records matches, `fetch_log` (`{card_id}\|{source}`: status, detail, url, fetched_at), snapshot at end. Endpoints `POST /api/admin/prices/fetch`, `POST /api/cards/{id}/fetch-prices` (202; 422 bad target/source; 503 fetcher down; 409 running) |
 | `services/sales.py` | `store_sales` (scraped sold listings, dedupe on listing id), `store_chart_seed` (PriceCharting monthly history as `seed` observations) |
 | `services/matching.py` | persisted card -> product URL per scraped source (`product_matches`), URL validation, user/auto precedence |
-| `jobs/scheduler.py` | APScheduler, only if `SCHEDULER_ENABLED`: tasks `daily_refresh`, `daily_fetch` (scraped, unattended, capped), `daily_snapshot`, `weekly_catalog`, each via `run_task` (failures and busy job types are logged, never propagate). Boot `catch_up` runs overdue tasks once, in the background. `jobs` rows carry `trigger` = `manual`\|`scheduler`\|`catchup`; a scheduled fetch with the fetcher down is a `skipped` row |
+| `jobs/scheduler.py` | APScheduler, only if `SCHEDULER_ENABLED`: tasks `daily_refresh`, `daily_fetch` (scraped, unattended, capped), `daily_snapshot`, `weekly_catalog`, `daily_prune` (deletes read alert events older than `ALERT_EVENTS_KEEP_DAYS`, 90; 0 = keep; housekeeping, never caught up), each via `run_task` (failures and busy job types are logged, never propagate). Boot `catch_up` runs overdue tasks once, in the background. `jobs` rows carry `trigger` = `manual`\|`scheduler`\|`catchup`; a scheduled fetch with the fetcher down is a `skipped` row |
 
 Long jobs run as asyncio tasks; state is persisted in the `jobs` collection (UI polls `/api/admin/jobs`). One `running` job per type: API returns 409, and a partial unique index on `jobs.type` (status=running) is the race-free backstop. Orphaned `running` jobs are marked `interrupted` on boot.
 
@@ -36,8 +36,9 @@ Separate small FastAPI service, not in docker-compose, bound to `127.0.0.1:8110`
 
 Engine: real Google Chrome started by the fetcher with `--remote-debugging-port` and a dedicated profile (`~/.moc-fetcher/profile`, never the user's main profile), driven by Playwright `connect_over_cdp`. Browser starts on first request and closes after an idle timeout or `POST /close`.
 
-- `POST /fetch/{site}` `{url, wait_selector?, click_text?, wait_ms?, timeout_s?}` -> `{status: ok|login_timeout|blocked|error, final_url, title, html, detail}`. Sites: `pricecharting`, `cardmarket`, `altxyz`; URL host must belong to the site (no open proxy).
+- `POST /fetch/{site}` `{url, wait_selector?, click_text?, click_labels?, wait_ms?, timeout_s?}` -> `{status: ok|login_timeout|blocked|error, final_url, title, html, detail}`. Sites: `pricecharting`, `cardmarket`, `altxyz`; URL host must belong to the site (no open proxy).
 - `click_text` (optional): clicked after load / `wait_selector` (alt.xyz "Sold listings" toggle), after a short hydrate delay.
+- `click_labels` (optional, max 10): elements clicked in order by exact `aria-label` after `click_text` and `wait_ms`, each followed by `wait_ms` (alt.xyz "Go to next page"). A DOM click event, because Playwright's scroll-into-view hangs on alt.xyz's inner scroller. Missing label = `error`.
 - `GET /status` -> browser up/down, per-site `idle|fetching|waiting_login`. `POST /close`, `GET /health`.
 - Per-site limiter: concurrency 1, min interval 3-5 s (+jitter).
 - Flow: always try anonymous first. On a login wall or Cloudflare challenge the tab is brought to front on the site's page, state `waiting_login`, polled until cleared or `LOGIN_TIMEOUT_S`; credentials are never read. Screenshot saved on failure.
@@ -52,7 +53,7 @@ Engine: real Google Chrome started by the fetcher with `--remote-debugging-port`
 - `collection_snapshots`: unique per date; `totals_by_source`, `total_value`, `value_kind_breakdown`, `estimated_count`, cost, counts, unpriced counts, breakdowns (pre-Phase-4 docs lack the first three).
 - `product_matches`: `_id "{card_id}|{source}"`, `url`, `confirmed_by` auto|user|null, pending `candidates`; only `pricecharting`, `cardmarket_web`.
 - `alerts`: rule `{scope stack|card|total, item_id|card_id, op above|below|up_pct|down_pct, threshold (cents or %), days, kind, include_estimated, enabled, triggered, last_value, last_pct, last_eval, label}`.
-- `alert_events`: `type alert|system`, rule text, card, `value/prev/pct`, kind/match/thin/estimated, `fired_at`, `read`; system items carry a unique `key` (one per day per reason). Index `(read, fired_at)`.
+- `alert_events`: `type alert|system`, rule text, card, `value/prev/pct`, kind/match/thin/estimated, `fired_at`, `read`; system items carry a unique `key` (one per day per reason). Index `(read, fired_at)`. Read events older than `ALERT_EVENTS_KEEP_DAYS` (90) are pruned by `daily_prune` (`alerts.prune_events`); unread ones never.
 - `fx_rates`, `jobs`.
 
 Money: integer cents + currency everywhere. Missing price = `null`, never 0.

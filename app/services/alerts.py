@@ -13,6 +13,7 @@ from bson import ObjectId
 from fastapi import HTTPException
 from pymongo.errors import DuplicateKeyError
 
+from app.config import settings
 from app.db.models import AlertIn, AlertPatch
 from app.services.collection import oid, valuate
 from app.services.movers import comparable
@@ -131,6 +132,15 @@ async def evaluate(db, vals: list[dict] | None = None) -> int:
         except Exception:  # noqa: BLE001 - one broken rule must not stop the others
             log.exception("alert %s failed", rule.get("_id"))
     return fired
+
+
+async def prune_events(db, now: datetime | None = None, keep_days: int | None = None) -> int:
+    """Deletes READ events fired before now - keep_days (unread ones stay until seen). 0 disables."""
+    days = settings.alert_events_keep_days if keep_days is None else keep_days
+    if days <= 0:
+        return 0
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=days)
+    return (await db.alert_events.delete_many({"read": True, "fired_at": {"$lt": cutoff}})).deleted_count
 
 
 async def notify_system(db, key: str, text: str) -> bool:

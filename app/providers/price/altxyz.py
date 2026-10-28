@@ -2,11 +2,12 @@
 the search page is filtered to tiles with the card's number, set and rarity.
 Last verified against tests/fixtures: 2026-10-27."""
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote
 
 from bs4 import BeautifulSoup
 
+from app.config import settings
 from app.providers.fetcher import FetcherClient
 from app.providers.price.base import (
     GRADER_RE, AdapterResult, Sale, grade_from_title, parse_money, sold_points)
@@ -16,6 +17,7 @@ from app.providers.price.resolve import safe_fetch
 SOURCE = "altxyz"
 BASE = "https://alt.xyz"
 SPA_WAIT_MS = 5000
+NEXT_PAGE = "Go to next page"   # the list pages client-side (no URL param), so page N = N-1 clicks
 
 
 def search_url(card: dict) -> str:
@@ -77,18 +79,38 @@ def parse_sold(html: str, card: dict) -> list[Sale]:
             for t in tiles if tile_matches(card, t, check)]
 
 
+def _stop_paging(tiles: list[dict], seen: set[str], cutoff: date) -> bool:
+    """Last page read when it brought nothing new or its oldest listing is outside the window
+    (the list is newest first)."""
+    new = [t for t in tiles if t["id"] not in seen]
+    return not new or min(t["sold_on"] for t in tiles) < cutoff
+
+
 class AltXyzProvider:
     source, site = SOURCE, "altxyz"
 
     async def fetch(self, card: dict, client: FetcherClient, known_url: str | None = None,
                     today: date | None = None) -> AdapterResult:
         url = known_url or search_url(card)
-        r = await safe_fetch(client, self.site, url, wait_selector='a[href^="/itm/"]',   # SPA hydrated
-                             click_text="Sold listings", wait_ms=SPA_WAIT_MS)
-        if isinstance(r, AdapterResult):
-            return r
-        sales = parse_sold(r.html, card)
         today = today or datetime.now(timezone.utc).date()
+        cutoff = today - timedelta(days=settings.altxyz_max_age_days)
+        sales: list[Sale] = []
+        seen: set[str] = set()
+        for page in range(1, max(settings.altxyz_max_pages, 1) + 1):
+            r = await safe_fetch(client, self.site, url, wait_selector='a[href^="/itm/"]',   # SPA hydrated
+                                 click_text="Sold listings", click_labels=[NEXT_PAGE] * (page - 1),
+                                 wait_ms=SPA_WAIT_MS)
+            if isinstance(r, AdapterResult):
+                if page == 1:
+                    return r
+                break     # later page failed: keep what the earlier pages gave
+            tiles = parse_tiles(r.html)
+            fresh = [s for s in parse_sold(r.html, card) if s.listing_id not in seen]
+            sales += [s for s in fresh if s.sold_on >= cutoff]
+            stop = _stop_paging(tiles, seen, cutoff)
+            seen |= {t["id"] for t in tiles}
+            if stop:
+                break
         points = sold_points(sales, SOURCE, today, url)
         if not points:
             return AdapterResult("not_found", sales=sales, url=url,

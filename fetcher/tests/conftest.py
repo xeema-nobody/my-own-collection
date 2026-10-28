@@ -39,6 +39,10 @@ class FakePage:
         self.clicked.append(text)
         return self.click_ok
 
+    async def click_label(self, label, timeout_s=2):
+        self.clicked.append(f"label:{label}")
+        return self.click_ok
+
     async def bring_to_front(self):
         self.fronted = True
 

@@ -178,3 +178,31 @@ async def test_api_crud_events_and_validation(db, client):
     assert (await client.get("/api/alerts")).json()[0]["id"] == rid
     assert (await client.delete(f"/api/alerts/{rid}")).status_code == 204
     assert (await client.delete(f"/api/alerts/{rid}")).status_code == 404
+
+
+async def _ev(db, age_days, read):
+    await db.alert_events.insert_one({"type": "alert", "rule": "r", "read": read,
+                                      "fired_at": datetime.now(UTC) - timedelta(days=age_days)})
+
+
+async def test_prune_deletes_only_old_read_events(db):
+    await _ev(db, 120, True)      # old + read: pruned
+    await _ev(db, 120, False)     # old + unread: kept
+    await _ev(db, 10, True)       # recent + read: kept
+    assert await alerts.prune_events(db, keep_days=90) == 1
+    left = [(e["read"]) async for e in db.alert_events.find()]
+    assert sorted(left) == [False, True]
+    assert await alerts.prune_events(db, keep_days=90) == 0     # idempotent
+
+
+async def test_prune_zero_days_disables(db):
+    await _ev(db, 999, True)
+    assert await alerts.prune_events(db, keep_days=0) == 0
+    assert await db.alert_events.count_documents({}) == 1
+
+
+async def test_prune_defaults_to_setting(db, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "alert_events_keep_days", 5)
+    await _ev(db, 6, True)
+    assert await alerts.prune_events(db) == 1

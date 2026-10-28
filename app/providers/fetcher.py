@@ -32,9 +32,9 @@ class FetcherClient:
         return httpx.AsyncClient(base_url=self.base_url, timeout=timeout, transport=self._transport)
 
     async def fetch(self, site: str, url: str, wait_selector: str | None = None, wait_ms: int = 0,
-                    click_text: str | None = None) -> FetchResponse:
+                    click_text: str | None = None, click_labels: list[str] | None = None) -> FetchResponse:
         body = {"url": url, "wait_selector": wait_selector, "wait_ms": wait_ms,
-                "click_text": click_text, "unattended": self.unattended}
+                "click_text": click_text, "click_labels": click_labels or [], "unattended": self.unattended}
         try:
             async with self._client(LOGIN_WAIT_S) as c:
                 r = await c.post(f"/fetch/{site}", json=body)

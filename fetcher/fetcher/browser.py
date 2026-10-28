@@ -23,6 +23,7 @@ class Page(Protocol):
     async def content(self) -> str: ...
     async def wait_for_selector(self, selector: str, timeout_s: float) -> None: ...
     async def click_text(self, text: str, timeout_s: float = 2) -> bool: ...
+    async def click_label(self, label: str, timeout_s: float = 2) -> bool: ...
     async def bring_to_front(self) -> None: ...
     async def screenshot(self, path: Path) -> None: ...
     async def close(self) -> None: ...
@@ -66,6 +67,15 @@ class ChromePage:
     async def click_text(self, text, timeout_s=2):
         try:
             await self._p.get_by_text(text, exact=True).first.click(timeout=timeout_s * 1000)
+            return True
+        except Exception:
+            return False
+
+    async def click_label(self, label, timeout_s=2):
+        """Click the element whose aria-label is exactly `label` (pagination buttons have no text).
+        DOM click event, not a mouse click: Playwright's scroll-into-view hangs on alt.xyz's inner scroller."""
+        try:
+            await self._p.get_by_label(label, exact=True).first.dispatch_event("click", timeout=timeout_s * 1000)
             return True
         except Exception:
             return False

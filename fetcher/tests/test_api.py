@@ -30,3 +30,4 @@ async def test_validation(tmp_path):
         assert (await c.post("/fetch/nope", json={"url": URL})).status_code == 422
         assert (await c.post("/fetch/altxyz", json={})).status_code == 422
         assert (await c.post("/fetch/altxyz", json={"url": "https://alt.xyz", "timeout_s": 9999})).status_code == 422
+        assert (await c.post("/fetch/altxyz", json={"url": "https://alt.xyz", "click_labels": ["x"] * 11})).status_code == 422
