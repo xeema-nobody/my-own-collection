@@ -3,12 +3,15 @@ from statistics import mean
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.api.deps import clean, get_db
+from app.api.deps import clean, ensure_idle, get_db, spawn
 from app.config import settings
-from app.db.models import SaleIn
+from app.db.models import CardFetchIn, MatchIn, SaleIn
+from app.providers.fetcher import FetcherClient, FetcherUnavailable
+from app.services import matching
 from app.services.collection import _out
+from app.services.price_fetch import fetch_prices, fetch_status
 from app.services.fx import convert, rates_to_base
-from app.services.price_matrix import build_matrix, grade_keys, value_of
+from app.services.price_matrix import build_matrix, value_of
 from app.services.search import build_query, find_page
 from app.services.sets import sets_with_stats
 
@@ -81,7 +84,7 @@ async def price_matrix(card_id: str):
     card = await db.cards.find_one({"_id": card_id}, {"variants": 1})
     if not card:
         raise HTTPException(404, "card not found")
-    rows = [p async for p in db.prices.find({"card_id": card_id, "grade_key": {"$in": grade_keys()}})]
+    rows = [p async for p in db.prices.find({"card_id": card_id})]
     rates = await rates_to_base(db, {p["currency"] for p in rows})
     return {**build_matrix(card, rows, rates), "base_currency": settings.base_currency}
 
@@ -95,6 +98,57 @@ async def add_sale(card_id: str, s: SaleIn):
     doc["sold_at"] = datetime.combine(s.sold_at, datetime.min.time(), tzinfo=timezone.utc)
     await db.sales.insert_one({**doc, "card_id": card_id, "kind": "sold", "created_by": "manual"})
     return {"ok": True}
+
+
+async def _require_card(card_id: str) -> None:
+    if not await get_db().cards.find_one({"_id": card_id}, {"_id": 1}):
+        raise HTTPException(404, "card not found")
+
+
+@router.post("/cards/{card_id}/fetch-prices", status_code=202)
+async def fetch_card_prices(card_id: str, body: CardFetchIn | None = None):
+    """Scraped price fetch for one card (same `price_fetch` job as the admin endpoint)."""
+    body = body or CardFetchIn()
+    await _require_card(card_id)
+    await ensure_idle("price_fetch")
+    try:
+        await FetcherClient().status()
+    except FetcherUnavailable as e:
+        raise HTTPException(503, str(e)) from None
+    spawn(fetch_prices([card_id], body.sources, body.force))
+    return {"started": True, "cards": 1}
+
+
+@router.get("/cards/{card_id}/fetch-status")
+async def card_fetch_status(card_id: str):
+    """Last scraped-fetch outcome per scraped source (null = never fetched)."""
+    await _require_card(card_id)
+    return await fetch_status(get_db(), card_id)
+
+
+@router.get("/cards/{card_id}/match")
+async def card_matches(card_id: str):
+    """Confirmed product URL and pending candidates per matchable source."""
+    await _require_card(card_id)
+    return await matching.get_matches(get_db(), card_id)
+
+
+@router.post("/cards/{card_id}/match/{source}")
+async def confirm_match(card_id: str, source: str, body: MatchIn):
+    await _require_card(card_id)
+    try:
+        return await matching.confirm(get_db(), card_id, source, body.url)
+    except matching.InvalidMatch as e:
+        raise HTTPException(422, str(e)) from None
+
+
+@router.delete("/cards/{card_id}/match/{source}", status_code=204)
+async def clear_match(card_id: str, source: str):
+    await _require_card(card_id)
+    try:
+        await matching.clear(get_db(), card_id, source)
+    except matching.InvalidMatch as e:
+        raise HTTPException(422, str(e)) from None
 
 
 @router.get("/sets")

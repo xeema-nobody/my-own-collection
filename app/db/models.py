@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.providers.price import SCRAPED
+
 Condition = Literal["NM", "LP", "MP", "HP", "DMG"]
 Language = Literal["en", "ja", "es", "it", "fr", "de", "pt", "ko", "zh"]
 Grader = Literal["PSA", "BGS", "CGC", "SGC", "ACE", "OTHER"]
@@ -63,3 +65,31 @@ class SaleIn(BaseModel):
     sold_at: dt.date
     url: str | None = None
     title: str | None = None
+
+
+class MatchIn(BaseModel):
+    url: str
+
+
+class CardFetchIn(BaseModel):
+    sources: list[str] | None = None
+    force: bool = False
+
+    @model_validator(mode="after")
+    def _sources(self):
+        bad = set(self.sources or []) - set(SCRAPED)
+        if bad:
+            raise ValueError(f"not scraped sources: {sorted(bad)}")
+        return self
+
+
+class FetchIn(CardFetchIn):
+    cards: list[str] | None = None
+    sets: list[str] | None = None
+    owned: bool = False
+
+    @model_validator(mode="after")
+    def _target(self):
+        if not (self.cards or self.sets or self.owned):
+            raise ValueError("give cards, sets or owned")
+        return self

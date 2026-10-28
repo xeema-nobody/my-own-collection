@@ -136,7 +136,7 @@ async def test_price_matrix_shape_and_nulls(client, db):
     m = r.json()
     assert m["grades"][:3] == ["raw", "PSA10", "PSA9"] and len(m["grades"]) == 31
     assert m["grades"][-1] == "CGC1" and m["base_currency"] == "EUR"
-    assert {"pokemontcg", "pricecharting", "cardmarket", "altxyz", "manual", "tcgplayer"} <= set(m["sources"])
+    assert {"pricecharting", "cardmarket", "cardmarket_web", "altxyz", "manual", "tcgplayer"} <= set(m["sources"])
     assert set(m["cells"]) == set(m["grades"]) and all(set(row) == set(m["sources"]) for row in m["cells"].values())
     cm = m["cells"]["raw"]["cardmarket"]  # newest day; sold beats market; median used when no market
     assert (cm["kind"], cm["price"], cm["observed_on"], cm["sample_size"]) == ("sold", 90, "2026-10-27", 5)
@@ -145,6 +145,39 @@ async def test_price_matrix_shape_and_nulls(client, db):
     assert m["cells"]["PSA10"]["pricecharting"]["price"] == 5000
     assert m["cells"]["PSA9"]["pricecharting"] is None and m["cells"]["raw"]["altxyz"] is None
     assert m["cells"]["raw"]["pricecharting"] is None
+
+
+async def test_price_matrix_dynamic_grades_and_ask(client, db):
+    await _seed_matrix(db)
+    base = {"card_id": "pokemon:m-1", "currency": "USD", "as_of": None, "variant": None, "observed_on": "2026-10-27"}
+    await db.prices.insert_many([
+        {**base, "source": "pricecharting", "kind": "market", "grade_key": "G9", "market": 3000},
+        {**base, "source": "pricecharting", "kind": "market", "grade_key": "G9.5", "market": 4000, "seed": True},
+        {**base, "source": "pricecharting", "kind": "market", "grade_key": "BGS10Black", "market": 9000},
+        {**base, "source": "altxyz", "kind": "sold", "grade_key": "ACE10", "median": 700},
+        {**base, "source": "cardmarket_web", "kind": "ask", "grade_key": "raw", "currency": "EUR", "low": 50},
+        {**base, "source": "cardmarket_web", "kind": "market", "grade_key": "CGC9", "low": 10}])  # low ignored: not ask
+    m = (await client.get("/api/cards/pokemon:m-1/price-matrix")).json()
+    g = m["grades"]
+    assert g[:4] == ["raw", "G9.5", "G9", "PSA10"] and g.index("BGS10") < g.index("BGS10Black") < g.index("BGS9")
+    assert g.index("CGC1") < g.index("ACE10") and g[-1] == "ACE10"
+    assert m["graders"] == ["PSA", "BGS", "CGC", "ACE"]
+    assert m["cells"]["raw"]["cardmarket_web"]["price"] == 50 and m["cells"]["raw"]["cardmarket_web"]["kind"] == "ask"
+    assert m["cells"]["CGC9"]["cardmarket_web"] is None
+    assert m["cells"]["G9.5"]["pricecharting"]["seed"] is True and m["cells"]["G9"]["pricecharting"]["seed"] is False
+    assert m["cells"]["BGS10Black"]["pricecharting"]["price"] == 9000
+
+
+async def test_price_matrix_ask_never_beats_market(client, db):
+    await _seed_matrix(db)
+    await db.prices.insert_one({"card_id": "pokemon:m-1", "currency": "EUR", "as_of": None, "variant": None,
+                                "observed_on": "2026-10-27", "source": "cardmarket_web", "kind": "market",
+                                "grade_key": "raw", "market": 80, "low": 5})
+    await db.prices.insert_one({"card_id": "pokemon:m-1", "currency": "EUR", "as_of": None, "variant": None,
+                                "observed_on": "2026-10-27", "source": "cardmarket_web", "kind": "ask",
+                                "grade_key": "raw", "low": 50})
+    c = (await client.get("/api/cards/pokemon:m-1/price-matrix")).json()["cells"]["raw"]["cardmarket_web"]
+    assert (c["kind"], c["price"]) == ("market", 80)
 
 
 async def test_price_matrix_unknown_card_404(client):

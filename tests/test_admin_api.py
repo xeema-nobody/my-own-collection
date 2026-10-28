@@ -15,10 +15,11 @@ async def client(db):
     ("/api/admin/catalog/import", "catalog_import"),
     ("/api/admin/catalog/import/retry-failed", "catalog_import"),
     ("/api/admin/prices/refresh", "price_refresh"),
+    ("/api/admin/prices/fetch", "price_fetch"),
 ])
 async def test_409_while_running(client, db, path, type_):
     await jobs.start(db, type_)
-    r = await client.post(path)
+    r = await client.post(path, json={"owned": True} if type_ == "price_fetch" else None)
     assert r.status_code == 409 and "already running" in r.json()["detail"]
 
 

@@ -52,6 +52,12 @@ async def init_indexes() -> None:
         unique=True, name="prices_observation_key",
     )
     await db.sales.create_index([("card_id", 1), ("grade_key", 1), ("source", 1), ("sold_at", -1)])
+    # Scraped sales dedupe on listing; manual sales carry no listing_id and stay unconstrained.
+    await db.sales.create_index(
+        [("card_id", 1), ("source", 1), ("listing_id", 1)], unique=True, name="sales_listing_key",
+        partialFilterExpression={"listing_id": {"$type": "string"}})
+    await db.product_matches.create_index([("card_id", 1)])
+    await db.fetch_log.create_index([("card_id", 1)])
     await db.collection_snapshots.create_index([("date", ASCENDING)], unique=True)
     await db.fx_rates.create_index([("date", 1), ("base", 1), ("quote", 1)], unique=True)
     await db.jobs.create_index([("started_at", DESCENDING)])
