@@ -78,7 +78,7 @@ Failure handling: every page query shows `QueryError` (`components/QueryState.ts
 
 ## Security posture
 
-Local single-user, no auth. API bound to 127.0.0.1, CORS limited to the web origin, Mongo not exposed on host, security headers set. Secrets only in `.env` (gitignored). Add auth before any deployment.
+Local single-user, no auth. API bound to 127.0.0.1, CORS limited to the web origin, cross-site writes rejected by an Origin guard, Host header allowlist (`ALLOWED_HOSTS`), Mongo not exposed on host, security headers set. Secrets only in `.env` (gitignored). Add auth before any deployment.
 
 ## Demo database
 
