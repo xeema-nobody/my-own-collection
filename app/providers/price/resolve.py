@@ -21,13 +21,15 @@ async def safe_fetch(client: FetcherClient, site: str, url: str, **kw) -> FetchR
 
 async def find_product(card: dict, client: FetcherClient, site: str, search_url: str,
                        parse_search: Callable[[str], list[Candidate]], known_url: str | None,
-                       **fetch_kw) -> tuple[str | None, AdapterResult | None]:
+                       product_marker: str | None = None, **fetch_kw) -> tuple[str | None, AdapterResult | None]:
     """(product_url, None) when resolved; (None, result) when the caller must return `result`."""
     if known_url:
         return known_url, None
     r = await safe_fetch(client, site, search_url, **fetch_kw)
     if isinstance(r, AdapterResult):
         return None, r
+    if product_marker and product_marker in (r.final_url or "").split("?")[0]:
+        return r.final_url, None     # single hit: the site redirected the search to the product page
     best, ranked = pick(card, parse_search(r.html))
     if best:
         return best.url, None

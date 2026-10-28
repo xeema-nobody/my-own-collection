@@ -56,7 +56,7 @@ def parse_tiles(html: str) -> list[dict]:
     return out
 
 
-def tile_matches(card: dict, t: dict) -> bool:
+def tile_matches(card: dict, t: dict, check_rarity: bool = True) -> bool:
     """Same card and print: number + base name, set tokens and rarity inside the tile title."""
     if norm_number(t["number"]) != norm_number(card["number"]):
         return False
@@ -65,12 +65,16 @@ def tile_matches(card: dict, t: dict) -> bool:
     if not _tokens((card.get("set") or {}).get("name") or "") <= _tokens(t["title"]):
         return False
     rarity = norm(card.get("rarity"))
-    return not rarity or rarity in norm(t["title"])
+    return not (check_rarity and rarity) or rarity in norm(t["title"])
 
 
 def parse_sold(html: str, card: dict) -> list[Sale]:
+    tiles = parse_tiles(html)
+    # alt titles name the rarity only for some prints ("Hyper Rare"); filter on it only when they do
+    rarity = norm(card.get("rarity"))
+    check = any(tile_matches(card, t, False) and rarity in norm(t["title"]) for t in tiles)
     return [Sale(SOURCE, t["id"], t["grade_key"], t["price"], "USD", t["sold_on"], t["title"])
-            for t in parse_tiles(html) if tile_matches(card, t)]
+            for t in tiles if tile_matches(card, t, check)]
 
 
 class AltXyzProvider:

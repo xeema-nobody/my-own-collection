@@ -192,3 +192,13 @@ async def test_client_sends_unattended_flag():
 def test_registry_ids_are_stored_ids():
     ids = {s.id for s in registry()}
     assert ids == {"tcgplayer", "cardmarket", "pricecharting", "cardmarket_web", "altxyz", "manual"}
+
+
+def test_alt_rarity_not_in_titles_is_not_filtered():
+    tile = lambda i, title: {"id": str(i), "title": title, "name": "Galarian Slowking V", "number": "179",
+                             "grade_key": "PSA10", "price": 30000, "sold_on": TODAY}
+    card = {"name": "Galarian Slowking V", "number": "179", "set": {"name": "Chilling Reign"},
+            "rarity": "Rare Ultra"}
+    t = tile(1, "2021 Pokemon Sword and Shield Chilling Reign")
+    assert altxyz.tile_matches(card, t, check_rarity=False)
+    assert not altxyz.tile_matches(card, t, check_rarity=True)

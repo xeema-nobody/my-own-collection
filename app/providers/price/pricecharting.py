@@ -108,7 +108,8 @@ class PriceChartingProvider:
 
     async def fetch(self, card: dict, client: FetcherClient, known_url: str | None = None,
                     today: date | None = None) -> AdapterResult:
-        url, fail = await find_product(card, client, self.site, search_url(card), parse_search, known_url)
+        url, fail = await find_product(card, client, self.site, search_url(card), parse_search, known_url,
+                                       product_marker="/game/")
         if fail:
             return fail
         r = await safe_fetch(client, self.site, url)
