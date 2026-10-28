@@ -1,6 +1,6 @@
 # Architecture
 
-Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network only, auth on). External: pokemontcg.io (catalog + prices), frankfurter.dev (FX).
+Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network only, auth on). External: pokemontcg.io (catalog + prices), frankfurter.dev (FX). Scraped price sites are reached only through the host-Mac **fetcher** (below).
 
 ## Backend layering
 
@@ -17,9 +17,25 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 | `services/fx.py` | daily FX cache in `fx_rates`, fallback to last stored rate |
 | `services/snapshots.py` | daily collection snapshot (idempotent per UTC date) |
 | `services/refresh.py` | price refresh job (collection, all, or chosen sets) then snapshot |
+| `providers/fetcher.py`, `providers/price/{pricecharting,cardmarket,altxyz,match,resolve}.py` | fetcher HTTP client; scraped-site adapters + matcher (see pricing.md) |
+| `services/price_fetch.py` | on-demand scraped fetch job `price_fetch` (cards / sets / owned x sources): adapters -> `prices` + `latest_price`, records matches, `fetch_log` (`{card_id}\|{source}`: status, detail, url, fetched_at), snapshot at end. Endpoints `POST /api/admin/prices/fetch`, `POST /api/cards/{id}/fetch-prices` (202; 422 bad target/source; 503 fetcher down; 409 running) |
+| `services/sales.py` | `store_sales` (scraped sold listings, dedupe on listing id), `store_chart_seed` (PriceCharting monthly history as `seed` observations) |
+| `services/matching.py` | persisted card -> product URL per scraped source (`product_matches`), URL validation, user/auto precedence |
 | `jobs/scheduler.py` | APScheduler daily cron, only if `SCHEDULER_ENABLED` |
 
 Long jobs run as asyncio tasks; state is persisted in the `jobs` collection (UI polls `/api/admin/jobs`). One `running` job per type: API returns 409, and a partial unique index on `jobs.type` (status=running) is the race-free backstop. Orphaned `running` jobs are marked `interrupted` on boot.
+
+## Fetcher (host Mac, `fetcher/`)
+
+Separate small FastAPI service, not in docker-compose, bound to `127.0.0.1:8110`. The app reaches it at `FETCHER_URL` (default `http://host.docker.internal:8110`). The app never launches browsers; the fetcher never touches Mongo.
+
+Engine: real Google Chrome started by the fetcher with `--remote-debugging-port` and a dedicated profile (`~/.moc-fetcher/profile`, never the user's main profile), driven by Playwright `connect_over_cdp`. Browser starts on first request and closes after an idle timeout or `POST /close`.
+
+- `POST /fetch/{site}` `{url, wait_selector?, click_text?, wait_ms?, timeout_s?}` -> `{status: ok|login_timeout|blocked|error, final_url, title, html, detail}`. Sites: `pricecharting`, `cardmarket`, `altxyz`; URL host must belong to the site (no open proxy).
+- `click_text` (optional): clicked after load / `wait_selector` (alt.xyz "Sold listings" toggle), after a short hydrate delay.
+- `GET /status` -> browser up/down, per-site `idle|fetching|waiting_login`. `POST /close`, `GET /health`.
+- Per-site limiter: concurrency 1, min interval 3-5 s (+jitter).
+- Flow: always try anonymous first. On a login wall or Cloudflare challenge the tab is brought to front on the site's page, state `waiting_login`, polled until cleared or `LOGIN_TIMEOUT_S`; credentials are never read. Screenshot saved on failure.
 
 ## Data model (collections)
 
@@ -27,23 +43,24 @@ Long jobs run as asyncio tasks; state is persisted in the `jobs` collection (UI 
 - `sets`: one per set.
 - `collection_items`: one doc per stack, unique `stack_key` = card|variant|language|condition|grader|grade|cert. Add = `$inc quantity`; remove to 0 deletes.
 - `prices`: unique (card, variant, source, kind, grade_key, as_of); `kind` market | sold | listing_low. Re-refresh same day = same doc.
-- `sales`: manual sold records (stats: last 10 within 90 days per source+grade).
+- `sales`: sold records, manual (`POST /cards/{id}/sales`) and scraped (unique `(card_id, source, listing_id)` when `listing_id` is set); stats: last 10 within 90 days per source+grade.
 - `collection_snapshots`: unique per date; totals per source, cost, counts, unpriced counts, breakdowns.
+- `product_matches`: `_id "{card_id}|{source}"`, `url`, `confirmed_by` auto|user|null, pending `candidates`; only `pricecharting`, `cardmarket_web`.
 - `fx_rates`, `jobs`.
 
 Money: integer cents + currency everywhere. Missing price = `null`, never 0.
 
 ## API (prefix `/api`; Swagger at `/docs`)
 
-`GET /cards` (incl. `has_price`), `/cards/{id}`, `/cards/{id}/prices`, `POST /cards/{id}/sales`, `GET /sets` (`?with_stats=true`), `/filters`;
+`GET /cards` (incl. `has_price`), `/cards/{id}`, `/cards/{id}/prices`, `POST /cards/{id}/sales`, `GET /cards/{id}/price-matrix` (grades/graders derived from stored rows), `GET /cards/{id}/fetch-status` (last scraped-fetch outcome per source), `GET /cards/{id}/match`, `POST|DELETE /cards/{id}/match/{source}` (confirm / reset product URL), `GET /sets` (`?with_stats=true`), `/filters`;
 `/collection` (POST add, GET list, `/summary`, PATCH/DELETE `/{id}`, POST `/{id}/remove`);
 `/dashboard/history|breakdown|movers`;
-`/admin/catalog/import` (`?sets=` repeatable), `/admin/catalog/import/retry-failed`, `/admin/prices/refresh` (`?scope=&sets=`), `/admin/snapshot`, `/admin/jobs`, `/admin/status`.
+`/admin/catalog/import` (`?sets=` repeatable), `/admin/catalog/import/retry-failed`, `/admin/prices/refresh` (`?scope=&sets=`), `/admin/snapshot`, `/admin/jobs`, `/admin/status`, `/admin/fetcher-status` (`{up, ...}`; 200 even when the fetcher is down), `/admin/prices/fetch`.
 Health: `/health`, `/health/ready` (pings Mongo).
 
 ## Config (`.env`, see `.env.example`)
 
-`MONGO_ROOT_USER/PASSWORD`, `BASE_CURRENCY`, `POKEMONTCG_API_KEY` (optional), `PRICECHARTING_TOKEN` (provider disabled when empty), `SCHEDULER_ENABLED`, `PRICE_REFRESH_CRON`.
+`MONGO_ROOT_USER/PASSWORD`, `BASE_CURRENCY`, `POKEMONTCG_API_KEY` (optional), `SCHEDULER_ENABLED`, `PRICE_REFRESH_CRON`, `FETCHER_URL`. `PRICECHARTING_TOKEN` is unused (no paid API).
 
 ## Frontend
 

@@ -12,6 +12,9 @@ Personal, local, single-user web app to administer trading-card collections. Pok
 - **Dashboard**: value KPIs, value-over-time line per source (daily snapshots), breakdown by set / rarity / condition / language / TCG, top movers.
 - **Settings**: set picker (per-set priced/total) to import or refresh prices for chosen sets, "Retry failed imports" for sets that failed the last full import, provider status, job log. One job per type at a time (second start returns 409; buttons disable while running).
 
+- **Scraped fetch UI** (needs the host fetcher running: `cd fetcher && .venv/bin/python -m fetcher`; a badge shows up / not running): card detail -> "Fetch prices" (pick sources, `force` ignores the 24 h cache); per-source status line with last result, link, and a candidate picker when a match is ambiguous ("Use this" confirms and re-fetches that source, "Reset match" undoes it); Settings -> "Fetch scraped prices" (selected sets or owned collection, with progress and failure / needs-match lists); Search -> tick cards -> "Fetch prices for N selected". If a site needs a login the run pauses with "Waiting for login (<site>)": log in in the Chrome window that opened, the fetch continues.
+- **Scraped fetch API**: `curl -X POST localhost:8100/api/admin/prices/fetch -H 'content-type: application/json' -d '{"cards":["pokemon:sv3pt5-205"],"sources":["altxyz"],"force":true}'`; targets: `cards`, `sets`, `owned`. Progress in `GET /api/admin/jobs` (`stats.waiting_login`, `needs_match_list`, `failures`). One card: `POST /api/cards/{id}/fetch-prices`.
+
 ## Usage
 
 ```bash
@@ -29,6 +32,10 @@ docker compose up -d --build    # mongo + api + web
 3. Dashboard -> Refresh prices (re-fetches owned cards' sets, then takes today's snapshot). History needs 2+ snapshots to draw.
 
 Data lives in docker volume `moc_mongo_data`. Never `docker compose down -v`. The backend has no auto-reload: `docker compose restart app` after edits.
+
+### Price fetcher (host Mac, optional until Phase 3 lands)
+
+Needs Google Chrome installed. Setup and run: `fetcher/README.md` (`python3 -m venv .venv && pip install -e .[dev]`, then `python -m fetcher`). It only opens Chrome while a fetch runs.
 
 Tests: see `CLAUDE.md` for the command.
 

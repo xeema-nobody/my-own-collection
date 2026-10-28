@@ -23,6 +23,8 @@ services:
       MONGO_URL: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin
       MONGO_DB: owncollection
       CORS_ORIGINS: http://localhost:5180
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       mongo: { condition: service_healthy }
     ports:

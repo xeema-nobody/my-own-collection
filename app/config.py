@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     pokemontcg_api_key: str = ""
     pokemontcg_base_url: str = "https://api.pokemontcg.io/v2"
     pricecharting_token: str = ""
+    fetcher_url: str = "http://host.docker.internal:8110"
     scheduler_enabled: bool = False
     price_refresh_cron: str = "0 4 * * *"
 
