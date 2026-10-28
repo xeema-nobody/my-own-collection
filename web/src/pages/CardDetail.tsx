@@ -7,6 +7,7 @@ import PriceMatrix from "../components/PriceMatrix";
 import CardFetch from "../components/CardFetch";
 import SourceStatus from "../components/SourceStatus";
 import SalesList from "../components/SalesList";
+import SourceCompare from "../components/SourceCompare";
 
 const CONDITIONS = ["NM", "LP", "MP", "HP", "DMG"];
 const LANGS = ["en", "ja", "es", "it", "fr", "de", "pt", "ko", "zh"];
@@ -16,6 +17,9 @@ export default function CardDetail() {
   const id = decodeURIComponent(useParams().id!);
   const qc = useQueryClient();
   const card = useQuery({ queryKey: ["card", id], queryFn: () => api.card(id) });
+  const matches = useQuery({ queryKey: ["match", id], queryFn: () => api.cardMatches(id) });
+  const owned = useQuery({ queryKey: ["owned-values", id], queryFn: () => api.ownedItems(id) });
+  const rawCompare = useQuery({ queryKey: ["compare", id], queryFn: () => api.cardCompare(id) });
   const [f, setF] = useState({ variant: "", language: "en", graded: false, condition: "NM", company: "PSA", grade: "9", cert: "", qty: "1", price: "", notes: "" });
   const add = useMutation({
     mutationFn: () => api.addToCollection({
@@ -49,6 +53,12 @@ export default function CardDetail() {
 
         <section className="card"><h2 className="mb-2 font-semibold">Prices</h2>
           <CardFetch cardId={id} />
+          <h3 className="mb-1 text-sm font-semibold">Compare sources</h3>
+          <div className="mb-3 space-y-3">
+            <div><div className="mb-1 text-xs opacity-70">Raw copy (one)</div>{rawCompare.data ? <SourceCompare row={rawCompare.data} matches={matches.data} /> : <p className="text-sm opacity-70">Loading…</p>}</div>
+            {(owned.data?.items ?? []).filter((i: any) => i.grading).map((i: any) => (
+              <div key={i.id}><div className="mb-1 text-xs opacity-70">Owned: {i.grading.company} {i.grading.grade} × {i.quantity} (stack value)</div><SourceCompare row={i} matches={matches.data} /></div>))}
+          </div>
           <SourceStatus cardId={id} />
           <PriceMatrix cardId={id} />
           {(c.sales_stats ?? []).map((s: any, i: number) => <p key={i} className="mt-2 text-sm">Sold ({s.count} sales, {s.source}, {s.grade_key}): min {money(s.min, s.currency)} · avg {money(s.avg, s.currency)} · max {money(s.max, s.currency)}</p>)}

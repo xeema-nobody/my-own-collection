@@ -12,7 +12,7 @@ Personal, local, single-user web app to administer trading-card collections. Pok
 - **Dashboard**: value KPIs (with count of estimated values), value-over-time line for the best value plus one per source (daily snapshots; change % compares only snapshots taken since graded valuation), breakdown by set / rarity / condition / language / TCG, top movers (sold-based, graded-aware; need the same kind of price now and N days ago), a reliability card (% of value that is sold-based), € labels on all charts. Hollow dots on the per-source lines = that source valued something thin or not exact.
 - **Settings**: set picker (per-set priced/total) to import or refresh prices for chosen sets, "Retry failed imports" for sets that failed the last full import, provider status, job log. One job per type at a time (second start returns 409; buttons disable while running).
 
-- **Scraped fetch UI** (needs the host fetcher running: `cd fetcher && .venv/bin/python -m fetcher`; a badge shows up / not running): card detail -> "Fetch prices" (pick sources, `force` ignores the 24 h cache); per-source status line with last result, link, and a candidate picker when a match is ambiguous ("Use this" confirms and re-fetches that source, "Reset match" undoes it); Settings -> "Fetch scraped prices" (selected sets or owned collection, with progress and failure / needs-match lists); Search -> tick cards -> "Fetch prices for N selected". If a site needs a login the run pauses with "Waiting for login (<site>)": log in in the Chrome window that opened, the fetch continues.
+- **Scraped fetch UI** (needs the host fetcher running: `scripts/fetcher.sh start` (also `stop|status|logs`); a badge shows up / not running): card detail -> "Fetch prices" (pick sources, `force` ignores the 24 h cache); per-source status line with last result, link, and a candidate picker when a match is ambiguous ("Use this" confirms and re-fetches that source, "Reset match" undoes it); Settings -> "Fetch scraped prices" (selected sets or owned collection, with progress and failure / needs-match lists); Search -> tick cards -> "Fetch prices for N selected". If a site needs a login the run pauses with "Waiting for login (<site>)": log in in the Chrome window that opened, the fetch continues.
 - **Scraped fetch API**: `curl -X POST localhost:8100/api/admin/prices/fetch -H 'content-type: application/json' -d '{"cards":["pokemon:sv3pt5-205"],"sources":["altxyz"],"force":true}'`; targets: `cards`, `sets`, `owned`. Progress in `GET /api/admin/jobs` (`stats.waiting_login`, `needs_match_list`, `failures`). One card: `POST /api/cards/{id}/fetch-prices`.
 
 ## Usage
@@ -35,7 +35,7 @@ Data lives in docker volume `moc_mongo_data`. Never `docker compose down -v`. Th
 
 ### Price fetcher (host Mac, optional until Phase 3 lands)
 
-Needs Google Chrome installed. Setup and run: `fetcher/README.md` (`python3 -m venv .venv && pip install -e .[dev]`, then `python -m fetcher`). It only opens Chrome while a fetch runs.
+Needs Google Chrome installed. One command: `scripts/fetcher.sh start` (check `curl localhost:8110/health`); nothing else is needed from you unless a Chrome window opens with a Cloudflare / login page: solve it there, the fetch continues. Chrome closes after 120 s idle. Setup (first time) and details: `fetcher/README.md` (`python3 -m venv .venv && pip install -e .[dev]`, then `python -m fetcher`). It only opens Chrome while a fetch runs.
 
 Tests: see `CLAUDE.md` for the command.
 

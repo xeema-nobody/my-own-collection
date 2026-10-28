@@ -13,6 +13,8 @@ pip install -e '.[dev]'     # no `playwright install`: system Chrome is used
 python -m fetcher           # 127.0.0.1:8110
 ```
 
+Or from the repo root: `scripts/fetcher.sh start|stop|status|logs` (log in `~/.moc-fetcher/fetcher.log`).
+
 Env (prefix `FETCHER_`): `FETCHER_PORT`, `CHROME_PATH`, `PROFILE_DIR`, `CDP_PORT`, `IDLE_TIMEOUT_S`, `LOGIN_TIMEOUT_S`.
 
 ## API

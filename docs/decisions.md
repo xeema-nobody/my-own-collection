@@ -43,3 +43,9 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - Movers = same valuation now vs N days ago; only comparable (same kind / grade match) items.
 - Demo data lives in a separate database `owncollection_demo` (user choice), not tagged items in the real one.
 - Cards with several prints/versions sharing a number (Cardmarket V3/V4/V5, `[Metal]`) have different prices: the UI shows the matched product slug and warns when picking among candidates.
+
+## Phase 5b: compare sources (2026-10-28, defaults by me, change on objection)
+- The Cardmarket "confirmed V5" for Mew ex 151 #205 was wrong: V5 is the **oversized** (jumbo, "Not Tournament Legal", 2 listings, trend 49.66), V4 is the Metal Card (Ultra-Premium Collection), V3 is the standard Hyper Rare (trend 24.15, in line with PriceCharting / tcgplayer). Match switched to V3 and re-fetched. `PREFERRED_SOURCES` order left as is.
+- Every source's value is shown next to the headline with kind, match, thin, data age and matched print. The headline rule is unchanged, only explained (`headline_rule`).
+- Outlier flag: a source is flagged when it is more than `OUTLIER_PCT` (40) % from the median of the sources that priced the item the same way as the headline (same match type; a raw fallback next to a graded price is not compared) and at least 3 sources have a value. With 2 sources only the gap is shown.
+- Matched print comes from the stored product url (slug, Cardmarket `V<n>`), titles are kept when the user picked among candidates. The matcher still cannot tell V3/V4/V5 apart on its own: it needs a user pick (`needs_match`).

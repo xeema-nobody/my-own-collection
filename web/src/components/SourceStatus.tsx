@@ -38,7 +38,8 @@ export default function SourceStatus({ cardId }: { cardId: string }) {
                 : <span className="opacity-50">not fetched</span>}
               {l && <span className="opacity-70">{ago(l.fetched_at)}{l.detail ? ` · ${l.detail}` : ""}</span>}
               {l?.url && <a className="underline" href={l.url} target="_blank" rel="noreferrer">open</a>}
-              {m?.url && <span className="font-mono text-xs opacity-60" title="Matched product: different versions / prints of the same card have different prices">{decodeURIComponent(m.url.split("?")[0].split("/").pop() ?? "")}</span>}
+              {m?.url && <span className="text-xs" title="Matched product: different versions / prints of the same card have different prices">
+                matched print: <b>{m.product?.version ?? "—"}</b> <span className="font-mono opacity-60">{m.product?.slug}</span></span>}
               {m?.url && m.confirmed_by && <button className="btn-ghost" disabled={reset.isPending} onClick={() => reset.mutate(s)}>Reset match ({m.confirmed_by})</button>}
             </div>
             {m?.candidates?.length > 0 && !(m.url && m.confirmed_by === "user") && (
@@ -48,7 +49,7 @@ export default function SourceStatus({ cardId }: { cardId: string }) {
                   <li key={c.url} className="flex items-center gap-2">
                     <a className="underline" href={c.url} target="_blank" rel="noreferrer">{c.title}</a>
                     {c.set_name && <span className="opacity-60">{c.set_name}</span>}
-                    <span className="font-mono text-xs opacity-60">{decodeURIComponent(c.url.split("?")[0].split("/").pop() ?? "")}</span>
+                    <span className="font-mono text-xs opacity-60">{c.product?.version ? `${c.product.version} · ` : ""}{c.product?.slug}</span>
                     <button className="btn-ghost" disabled={use.isPending} onClick={() => use.mutate({ source: s, url: c.url })}>Use this</button>
                   </li>))}
               </ul>)}

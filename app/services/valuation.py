@@ -87,8 +87,9 @@ def _market_hit(card, item, grade, rates, cfg, only, now):
         if v is None:
             continue
         hit = {"value": v, "kind": "market", "thin": False, "source": src, "sample_size": None,
-               "variant_est": est}
-        if not _stale(entry, cfg, now):
+               "variant_est": est, "as_of": entry.get("as_of"), "observed_on": entry.get("observed_on"),
+               "stale": _stale(entry, cfg, now)}
+        if not hit["stale"]:
             return hit
         stale = stale or hit
     return stale
@@ -102,7 +103,7 @@ def _price_at(card, item, grade, rates, sales, cfg, only, now=None):
         last = pool[: cfg.sold_sample]
         return {"value": round(median(c for _, c, _ in last)), "kind": "sold", "thin": False,
                 "source": "+".join(sorted({s for *_, s in last})), "sample_size": len(last),
-                "variant_est": False}
+                "variant_est": False, "as_of": last[0][0], "observed_on": None, "stale": False}
     variant = item.get("variant")
     hit = _market_hit(card, item, grade, rates, cfg, only, now or datetime.now(timezone.utc))
     if hit:
@@ -111,12 +112,14 @@ def _price_at(card, item, grade, rates, sales, cfg, only, now=None):
         last = pool[: cfg.sold_sample]
         return {"value": round(median(c for _, c, _ in last)), "kind": "sold", "thin": True,
                 "source": "+".join(sorted({s for *_, s in last})), "sample_size": len(last),
-                "variant_est": False}
+                "variant_est": False, "as_of": last[0][0], "observed_on": None, "stale": False}
     for src in ([only] if only else _sources(card, cfg)):
         v, est = price_for(card, src, variant, rates, grade, "sold")
         if v is not None:
+            entry, _ = price_entry(card, src, variant, grade, "sold")
             return {"value": v, "kind": "sold", "thin": True, "source": src, "sample_size": None,
-                    "variant_est": est}
+                    "variant_est": est, "as_of": entry.get("as_of"), "observed_on": entry.get("observed_on"),
+                    "stale": False}
     return None
 
 
@@ -138,7 +141,8 @@ def resolve_item(card: dict | None, item: dict, rates: dict, sales: list[dict], 
     `now` is the valuation date (staleness cut-off), default today."""
     gk = grade_key(item)
     none = {"value": None, "price_kind": None, "source": None, "match": "none", "grade_key_used": None,
-            "estimated": False, "thin": False, "sample_size": None}
+            "estimated": False, "thin": False, "sample_size": None, "as_of": None, "observed_on": None,
+            "stale": False, "headline_rule": None}
     if not card:
         return none
     # raw_fallback passes no sales: scraped raw sales have unknown condition
@@ -148,5 +152,35 @@ def resolve_item(card: dict | None, item: dict, rates: dict, sales: list[dict], 
             return {"value": hit["value"] * item["quantity"], "price_kind": hit["kind"],
                     "source": hit["source"], "match": match, "grade_key_used": g,
                     "estimated": match != "exact" or hit["variant_est"],
-                    "thin": hit["thin"], "sample_size": hit["sample_size"]}
+                    "thin": hit["thin"], "sample_size": hit["sample_size"], "as_of": hit["as_of"],
+                    "observed_on": hit["observed_on"], "stale": hit["stale"],
+                    "headline_rule": headline_rule(hit, only, cfg)}
     return none
+
+
+def headline_rule(hit: dict, only: str | None, cfg=settings) -> str:
+    """Why this price won (shown next to the headline value)."""
+    if only:
+        return f"only {only}"
+    n = hit["sample_size"]
+    if hit["kind"] == "sold":
+        if hit["thin"]:
+            return f"thin sold: {n} sale{'s' if n != 1 else ''}, no market price" if n else "thin sold point, no market price"
+        return f"sold median of last {n} (>= {cfg.sold_min_sales} sales in {cfg.sold_window_days} d)"
+    pref = preferred(cfg)
+    rank = f"#{pref.index(hit['source']) + 1} in preference order" if hit["source"] in pref else "not in preference order"
+    stale = "; fresher sources lacked this grade" if hit.get("stale") else ""
+    return f"market price: {hit['source']} ({rank}){stale}"
+
+
+def spread(values: dict[str, int | None], cfg=settings) -> dict:
+    """Median/min/max over sources with a value; a source is an outlier when it is more than
+    `outlier_pct` % from the median and at least 3 sources have a value."""
+    have = {s: v for s, v in values.items() if v is not None}
+    if not have:
+        return {"median": None, "min": None, "max": None, "outliers": [], "pct": {}}
+    med = median(have.values())
+    pct = {s: round((v - med) / med * 100) for s, v in have.items()} if med else {}
+    out = [s for s, p in pct.items() if len(have) >= 3 and abs(p) > cfg.outlier_pct]
+    return {"median": round(med), "min": min(have.values()), "max": max(have.values()),
+            "outliers": sorted(out), "pct": pct}
