@@ -55,5 +55,8 @@ docker compose up -d app                                            # back to th
 docker compose run --rm app python -m app.scripts.demo_db drop     # delete the demo DB
 ```
 
+## Alerts
+Alerts page (nav badge = unread): add a rule on a stack, a card or the collection total (above/below a EUR amount, or up/down N% over D days; sold/market/any; optionally include estimated values). Rules are checked after every price fetch, refresh and snapshot ("Check now" re-checks). Each crossing gives one inbox item; the rule re-arms when the condition clears. A rule that is already true fires on the next check. The inbox also warns when a scheduled fetch was skipped (fetcher down / login needed).
+
 ## Scheduler
 Off by default. Set `SCHEDULER_ENABLED=true` in `.env` and `docker compose restart app`. Daily catalog-API refresh, scraped fetch of owned cards (needs `scripts/fetcher.sh start`, else the run shows as `skipped`; sites needing login are skipped, so log in via a manual fetch now and then), snapshot, weekly catalog import; missed runs are caught up at boot. Settings shows next runs and a trigger column in the Jobs table. Cron/cap settings: `docs/architecture.md`. Restart the host fetcher after updating (`scripts/fetcher.sh stop && scripts/fetcher.sh start`) so it knows the unattended flag.

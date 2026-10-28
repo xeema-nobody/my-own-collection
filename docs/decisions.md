@@ -50,6 +50,13 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - Outlier flag: a source is flagged when it is more than `OUTLIER_PCT` (40) % from the median of the sources that priced the item the same way as the headline (same match type; a raw fallback next to a graded price is not compared) and at least 3 sources have a value. With 2 sources only the gap is shown.
 - Matched print comes from the stored product url (slug, Cardmarket `V<n>`), titles are kept when the user picked among candidates. The matcher still cannot tell V3/V4/V5 apart on its own: it needs a user pick (`needs_match`).
 
+## Phase 7: alerts (2026-10-28, defaults by me, change on objection)
+- Evaluated at the end of `take_snapshot` (covers manual and scheduled fetch, refresh, snapshot). One event per crossing, re-armed when the condition clears; unknown values never change state.
+- Estimated / fallback values do not alert unless the rule opts in. Thin sold values alert, flagged.
+- Stack scope is the default target (the stack is what is valued); card scope sums all stacks of a card.
+- No macOS notification: the API runs in Docker. Idea: the host fetcher polls `/api/alerts/events?unread=true`.
+- Fix found while testing Phase 6 live: single-hit search redirects (PriceCharting, Cardmarket) and alt.xyz rarity filter caused `not_found` (see pricing.md).
+
 ## Phase 6: scheduler (2026-10-28, defaults by me, change on objection)
 - Scheduler stays opt-in (`SCHEDULER_ENABLED=false`). Four independent tasks: catalog-API refresh of owned cards (04:00), scraped fetch of owned cards (04:30), snapshot (06:00), full catalog import (Sun 03:00). Times are container time (UTC).
 - Scheduled fetches are **unattended**: the fetcher fails a login/challenge page at once (`login_timeout` / `blocked`, "unattended: ...") instead of opening Chrome and waiting; the run then skips that site. Log in manually (Settings fetch) to restore the session; the next scheduled run uses it. If the fetcher is not running the run is recorded as a `skipped` job. No notification yet.

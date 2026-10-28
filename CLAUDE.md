@@ -13,8 +13,8 @@ app/                 Python backend
   main.py            FastAPI app, lifespan (indexes, scheduler), CORS, /health, /health/ready
   config.py          pydantic-settings (.env)
   db/                mongo.py (client, init_indexes), models.py (request models)
-  api/               routers per domain: cards, collection, dashboard, admin
-  services/          catalog_import, search, collection (valuation), pricing, fx, snapshots, refresh, jobs
+  api/               routers per domain: cards, collection, dashboard, alerts, admin
+  services/          catalog_import, search, collection (valuation), pricing, fx, snapshots, alerts, refresh, jobs
   providers/         catalog/ (CatalogProvider, pokemontcg), price/ (fx)
   jobs/scheduler.py  APScheduler, only if SCHEDULER_ENABLED
 web/                 Vite React SPA (src/pages, src/lib/api.ts = single API client)

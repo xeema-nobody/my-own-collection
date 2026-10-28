@@ -123,6 +123,16 @@ async def test_login_timeout_skips_site_only(db):
     assert len(pc.calls) == 1 and len(alt.calls) == 2
     assert stats["skipped_site"] == 1 and stats["failed"] == 1 and stats["ok"] == 2
     assert stats["done"] == stats["total"] == 4
+    assert await db.alert_events.count_documents({"type": "system"}) == 0     # manual run: no inbox item
+
+
+async def test_scheduled_login_needed_raises_one_inbox_item(db):
+    a, b = await seed(db, "1", "2")
+    pc = FakeProvider("pricecharting", default=AdapterResult("login_timeout", detail="no login"))
+    await pf.fetch_prices([a, b], ["pricecharting"], provider_for=providers(pricecharting=pc),
+                          client=FakeClient(), trigger="scheduler")
+    [e] = await db.alert_events.find({"type": "system"}).to_list(None)
+    assert "pricecharting" in e["rule"] and "login" in e["rule"] and e["read"] is False
 
 
 async def test_fetcher_down_aborts_job(db):

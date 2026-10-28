@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from app.db.mongo import get_db
 from app.providers.fetcher import FetcherClient, FetcherUnavailable
 from app.providers.price import SCRAPED, get_provider
-from app.services import jobs, matching
+from app.services import alerts, jobs, matching
 from app.services.pricing import store_scraped_points
 from app.services.sales import store_chart_seed, store_sales
 from app.services.snapshots import take_snapshot
@@ -111,6 +111,11 @@ async def fetch_prices(card_ids: list[str], sources: list[str] | None = None, fo
                     res = await _fetch_one(db, client, provider_for(source), card, source, stats)
                     if res in ("login_timeout", "blocked"):
                         skip_sites.add(source)
+                        if trigger != "manual":
+                            await alerts.notify_system(
+                                db, f"login_needed:{source}:{datetime.now(timezone.utc):%Y-%m-%d}",
+                                f"Scheduled fetch skipped {source}: login or challenge needed "
+                                f"(log in via Settings > Fetch)")
                     elif res == "unreachable":
                         error, aborted = "fetcher unreachable", True
                         stats["skipped_site"] += stats["total"] - stats["done"] - 1

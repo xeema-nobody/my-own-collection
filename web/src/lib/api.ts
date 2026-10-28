@@ -30,6 +30,21 @@ const post = (b: unknown): RequestInit => ({ method: "POST", body: JSON.stringif
 export type FetchLog = { status: string; detail: string | null; url: string | null; fetched_at: string | null };
 export type FetcherStatus = { up: boolean; browser?: string; sites?: Record<string, string>; last_error?: string | null; detail?: string };
 
+export type AlertRule = {
+  id: string; description: string; scope: "stack" | "card" | "total"; op: "above" | "below" | "up_pct" | "down_pct";
+  threshold: number; days: number | null; kind: "any" | "sold" | "market"; include_estimated: boolean;
+  enabled: boolean; triggered: boolean; last_value: number | null; last_pct: number | null; last_eval: string | null;
+};
+export type AlertEvent = {
+  id: string; type: "alert" | "system"; rule: string; card_id: string | null; name: string | null;
+  value?: number; prev?: number | null; pct?: number | null; price_kind?: string | null; thin?: boolean;
+  estimated?: boolean; source?: string | null; fired_at: string; read: boolean;
+};
+export type AlertIn = {
+  scope: string; item_id?: string; card_id?: string; op: string; threshold: number; days?: number;
+  kind: string; include_estimated: boolean;
+};
+
 export const api = {
   cards: (p: Record<string, unknown>) => req<any>("/api/cards" + qs(p)),
   card: (id: string) => req<any>(`/api/cards/${encodeURIComponent(id)}`),
@@ -68,6 +83,15 @@ export const api = {
     req<{ started: boolean; cards: number }>("/api/admin/prices/fetch", post(b)),
   fetchCardPrices: (id: string, b: { sources?: string[]; force?: boolean } = {}) =>
     req<{ started: boolean; cards: number }>(`/api/cards/${encodeURIComponent(id)}/fetch-prices`, post(b)),
+  alerts: () => req<AlertRule[]>("/api/alerts"),
+  createAlert: (b: AlertIn) => req<AlertRule>("/api/alerts", post(b)),
+  patchAlert: (id: string, b: Partial<Pick<AlertRule, "enabled" | "include_estimated" | "kind" | "threshold">>) =>
+    req<AlertRule>(`/api/alerts/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+  deleteAlert: (id: string) => req<void>(`/api/alerts/${id}`, { method: "DELETE" }),
+  alertEvents: (unread = false) => req<AlertEvent[]>("/api/alerts/events" + qs({ unread: unread || undefined })),
+  markAlertsRead: (ids?: string[]) => req<{ marked: number }>("/api/alerts/events/read", post({ ids })),
+  alertUnread: () => req<{ count: number }>("/api/alerts/unread-count"),
+  evaluateAlerts: () => req<{ fired: number }>("/api/alerts/evaluate", { method: "POST" }),
   snapshot: () => req<any>("/api/admin/snapshot", { method: "POST" }),
 };
 

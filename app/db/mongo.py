@@ -59,6 +59,11 @@ async def init_indexes() -> None:
     await db.product_matches.create_index([("card_id", 1)])
     await db.fetch_log.create_index([("card_id", 1)])
     await db.collection_snapshots.create_index([("date", ASCENDING)], unique=True)
+    await db.alerts.create_index([("enabled", 1)])
+    await db.alert_events.create_index([("read", 1), ("fired_at", -1)])
+    # System items dedupe on `key` (e.g. one 'fetch skipped' per day); rule events carry no key.
+    await db.alert_events.create_index([("key", 1)], unique=True, name="alert_events_key",
+                                       partialFilterExpression={"key": {"$type": "string"}})
     await db.fx_rates.create_index([("date", 1), ("base", 1), ("quote", 1)], unique=True)
     await db.jobs.create_index([("started_at", DESCENDING)])
     # Orphans must be closed before the unique index can build over existing `running` rows.

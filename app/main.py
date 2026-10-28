@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import admin, cards, collection, dashboard
+from app.api import admin, alerts, cards, collection, dashboard
 from app.config import settings
 from app.db.mongo import get_db, init_indexes
 from app.jobs.scheduler import start_scheduler
@@ -34,7 +34,7 @@ async def security_headers(request, call_next):
     return resp
 
 
-for r in (cards.router, collection.router, dashboard.router, admin.router):
+for r in (cards.router, collection.router, dashboard.router, alerts.router, admin.router):
     app.include_router(r)
 
 
