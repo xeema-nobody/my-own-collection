@@ -63,3 +63,8 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - Cap 300 cards per scheduled fetch, stalest first (by last attempt in `fetch_log`, never-tried first). No resume state: fetched cards become fresh, so the next run takes the rest.
 - Boot catch-up: each task whose last `ok|partial` run is older than 24 h (7 d for the catalog; snapshot by `taken_at`) runs once, in order, in the background. Catalog catch-up is skipped until a first import exists. Catch-up uses the same cache-skip, so a manual fetch earlier the same day is not repeated.
 - `jobs.trigger`: `manual` (default for API calls), `scheduler`, `catchup`. Older rows lack it (UI shows manual).
+
+## Phase 8: export / import (2026-10-28, defaults by me, change on objection)
+- JSON (`{"format":"moc-collection","version":1,"items":[...]}`) is the lossless format; CSV is flat for spreadsheets (money in integer cents, tags `;`-joined, `name/set/number` columns are read-only context). Import of an unknown `version` is refused.
+- Import upserts on `stack_key`. Default mode `set` overwrites quantity and the editable fields (acquired, notes, tags), so re-importing a file is a no-op and an export doubles as a restore; mode `add` increments quantity instead. Rows that fail validation or reference an unknown card are reported by row number and skipped; the rest are applied (no all-or-nothing).
+- Upload is the raw request body (no `python-multipart` dependency); 5 MB and 20k-row caps.

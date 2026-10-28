@@ -37,6 +37,12 @@ export default function Settings() {
     ? `Fetcher not reachable. Start it on the host: ${FETCHER_START_CMD}`
     : fetchAll.error instanceof ApiError && fetchAll.error.status === 409 ? "A price fetch is already running."
     : fetchAll.error ? String(fetchAll.error) : null;
+  const [file, setFile] = useState<File | null>(null);
+  const [impMode, setImpMode] = useState<"set" | "add">("set");
+  const xfer = useMutation({
+    mutationFn: () => api.importCollection(file!, file!.name.toLowerCase().endsWith(".csv") ? "csv" : "json", impMode),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["collection"] }),
+  });
   const err = imp.error || retry.error || ref.error;
   const s = status.data;
   return (
@@ -93,6 +99,23 @@ export default function Settings() {
         <table className="mt-2 w-full"><thead><tr className="text-left opacity-70"><th>Price source</th><th>Kinds</th><th>Grades</th><th>Status</th></tr></thead><tbody>
           {s.price_sources.map((p: any) => <tr key={p.id} className="border-t dark:border-slate-700" title={p.note}><td>{p.label}</td><td>{p.kinds.join(", ")}</td><td>{p.grades}</td>
             <td className={p.enabled ? "text-emerald-600" : "opacity-60"}>{p.enabled ? "enabled" : "not available yet"}</td></tr>)}</tbody></table></section>}
+      <section className="card text-sm"><h2 className="mb-2 font-semibold">Export / import collection</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <a className="btn" href={api.exportCollectionUrl("json")}>Export JSON</a>
+          <a className="btn" href={api.exportCollectionUrl("csv")}>Export CSV</a>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <input type="file" accept=".json,.csv" onChange={(e) => { setFile(e.target.files?.[0] ?? null); xfer.reset(); }} />
+          <select className="input" value={impMode} onChange={(e) => setImpMode(e.target.value as "set" | "add")}>
+            <option value="set">set quantities (re-import is a no-op)</option>
+            <option value="add">add to quantities</option>
+          </select>
+          <button className="btn" disabled={!file || xfer.isPending} onClick={() => xfer.mutate()}>Import</button>
+        </div>
+        {xfer.data && <div className="mt-2">Created {xfer.data.created}, updated {xfer.data.updated}, {xfer.data.errors.length} rejected.
+          <ul className="text-xs text-red-500">{xfer.data.errors.slice(0, 10).map((e) => <li key={e.row}>row {e.row}: {e.error}</li>)}</ul></div>}
+        {xfer.error && <p className="mt-2 text-red-500">{String(xfer.error.message ?? xfer.error)}</p>}
+      </section>
       <section className="card"><h2 className="mb-2 font-semibold">Jobs</h2>
         <table className="w-full text-sm"><tbody>{jobs.data?.map((j: any) => (
           <tr key={j.id} className="border-t dark:border-slate-700"><td>{j.type}</td><td>{j.status}</td><td className="opacity-70" title={j.error ?? ""}>{j.trigger ?? "manual"}</td><td>{j.started_at.slice(0, 19)}</td><td>{JSON.stringify(j.stats)}</td><td className="text-red-500">{j.error}</td></tr>))}</tbody></table></section>
