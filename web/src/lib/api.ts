@@ -1,6 +1,10 @@
 // Single API client: all backend calls go through here.
 const BASE = (import.meta.env.VITE_API_URL as string) || "http://localhost:8100";
 
+/** Scraped/upstream urls end up in href: only http(s) may become a link (blocks javascript:). */
+export const safeUrl = (u: string | null | undefined): string | undefined =>
+  u && /^https?:\/\//i.test(u) ? u : undefined;
+
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }

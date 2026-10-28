@@ -63,7 +63,7 @@ class SaleIn(BaseModel):
     price: int = Field(ge=0, description="cents")
     currency: str = "EUR"
     sold_at: dt.date
-    url: str | None = None
+    url: str | None = Field(default=None, pattern=r"^https?://")  # rendered as a link: no javascript:
     title: str | None = None
 
 

@@ -7,7 +7,7 @@ from app.services import jobs
 
 @pytest.fixture
 async def client(db):
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://localhost") as c:
         yield c
 
 

@@ -19,7 +19,7 @@ PC_URL = "https://www.pricecharting.com/game/pokemon-scarlet-&-violet-151/mew-ex
 
 @pytest.fixture
 async def client(db):
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://localhost") as c:
         yield c
 
 

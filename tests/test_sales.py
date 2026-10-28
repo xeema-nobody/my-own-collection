@@ -48,7 +48,7 @@ async def test_card_detail_stats_include_scraped(db):
     [c] = await seed(db, "1")
     await store_sales(db, c, [sale("a", price=4000, on=datetime.now(timezone.utc).date()),
                               sale("b", price=6000, on=datetime.now(timezone.utc).date())])
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as http:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://localhost") as http:
         d = (await http.get(f"/api/cards/{c}")).json()
     assert len(d["sales"]) == 2
     [st] = d["sales_stats"]
@@ -82,7 +82,7 @@ async def test_seed_never_overwrites_real_and_real_clears_seed(db):
 async def test_seed_visible_in_price_history_not_latest(db):
     [c] = await seed(db, "1")
     await store_chart_seed(db, c, "pricecharting", [(date(2026, 8, 1), 2409)])
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as http:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://localhost") as http:
         rows = (await http.get(f"/api/cards/{c}/prices", params={"source": "pricecharting", "days": 3650})).json()
     assert [r["market"] for r in rows] == [2409] and rows[0]["seed"] is True
     assert "pricecharting" not in ((await db.cards.find_one({"_id": c})).get("latest_price") or {})
