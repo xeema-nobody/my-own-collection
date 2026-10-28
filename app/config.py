@@ -19,8 +19,15 @@ class Settings(BaseSettings):
     price_fetch_cron: str = "30 4 * * *"
     snapshot_cron: str = "0 6 * * *"
     catalog_import_cron: str = "0 3 * * 0"
+    alert_prune_cron: str = "30 6 * * *"
     # max cards per scheduled scraped fetch; stalest first, the rest resumes next run
     scheduler_fetch_cap: int = 300
+    # read alert events older than this many days are deleted by the scheduler; 0 keeps them all
+    alert_events_keep_days: int = 90
+    # alt.xyz sold-list pages read per card (page 1 + more while listings stay inside the sold window)
+    altxyz_max_pages: int = 3
+    # ...and no sale older than this many days is kept: stale sales skew toward lower values
+    altxyz_max_age_days: int = 180
     # valuation (D-A): sold beats aggregate when >= sold_min_sales sales in the window
     sold_min_sales: int = 3
     sold_window_days: int = 90

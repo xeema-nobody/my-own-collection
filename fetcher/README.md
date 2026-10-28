@@ -19,6 +19,6 @@ Env (prefix `FETCHER_`): `FETCHER_PORT`, `CHROME_PATH`, `PROFILE_DIR`, `CDP_PORT
 
 ## API
 
-`POST /fetch/{pricecharting|cardmarket|altxyz}` `{"url": "...", "wait_selector": null, "wait_ms": 0}` -> `{status, final_url, title, html, detail}`; `GET /status`; `POST /close`; `GET /health`.
+`POST /fetch/{pricecharting|cardmarket|altxyz}` `{"url": "...", "wait_selector": null, "click_text": null, "click_labels": [], "wait_ms": 0}` -> `{status, final_url, title, html, detail}`; `GET /status`; `POST /close`; `GET /health`.
 
 Tests: `pytest` (fake browser, no network).

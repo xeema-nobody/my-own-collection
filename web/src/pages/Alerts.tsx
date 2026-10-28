@@ -99,11 +99,14 @@ function Rules() {
   const toggle = useMutation({ mutationFn: (r: AlertRule) => api.patchAlert(r.id, { enabled: !r.enabled }), onSuccess: inval });
   const del = useMutation({ mutationFn: (id: string) => api.deleteAlert(id), onSuccess: inval });
   const check = useMutation({ mutationFn: api.evaluateAlerts, onSuccess: inval });
+  // same query as the nav badge: Mark read in the Inbox refetches it, which clears the label
+  const unread = useQuery({ queryKey: ["alerts", "unread"], queryFn: api.alertUnread });
+  const fresh = Math.min(check.data?.fired ?? 0, unread.data?.count ?? 0);
   return (
     <section className="space-y-2">
       <div className="flex items-center gap-3"><h2 className="text-lg font-semibold">Rules</h2>
         <button className="btn-ghost" disabled={check.isPending} onClick={() => check.mutate()}>Check now</button>
-        {check.data && !!check.data.fired && <span className="text-sm opacity-70">{check.data.fired} new</span>}</div>
+        {fresh > 0 && <span className="text-sm opacity-70">{fresh} new</span>}</div>
       <QueryError q={rules} label="Rules" />
       {rules.isLoading && <p className="opacity-70">Loading…</p>}
       {rules.data?.length === 0 && <p className="opacity-70">No rules yet.</p>}

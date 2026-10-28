@@ -109,3 +109,8 @@ async def test_fetch_task_caps_and_passes_trigger(db, monkeypatch):
     monkeypatch.setattr(settings, "scheduler_fetch_cap", 2)
     await sch._fetch("scheduler")
     assert len(seen["cards"]) == 2 and seen["trigger"] == "scheduler"
+
+
+async def test_prune_task_registered_without_catch_up(db):
+    assert "daily_prune" in sch.TASKS
+    assert "daily_prune" not in await sch.overdue(db, NOW)

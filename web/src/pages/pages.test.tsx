@@ -65,6 +65,25 @@ describe("Alerts", () => {
   });
 });
 
+describe("Alerts 'N new' label", () => {
+  it("clears after Mark all read", async () => {
+    let unread = 0;
+    const ev = { id: "e1", type: "alert", name: "Mew", rule: "Stack above 10", value: 2000, read: false, fired_at: new Date().toISOString() };
+    mockApi({
+      "/api/alerts/events": () => [ev],
+      "/api/alerts/unread-count": () => ({ count: unread }),
+      "POST /api/alerts/evaluate": () => { unread = 1; return { fired: 1 }; },
+      "POST /api/alerts/events/read": () => { unread = 0; ev.read = true; return { marked: 1 }; },
+      "/api/alerts": [], "/api/collection": { items: [] },
+    });
+    renderPage(<Alerts />);
+    await userEvent.click(await screen.findByRole("button", { name: "Check now" }));
+    expect(await screen.findByText("1 new")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Mark all read" }));
+    await waitFor(() => expect(screen.queryByText("1 new")).not.toBeInTheDocument());
+  });
+});
+
 describe("Settings import", () => {
   const routes = { "/api/admin/status": { base_currency: "EUR", scheduler_enabled: false, price_sources: [] }, "/api/sets": [], "/api/admin/jobs": [], "/api/admin/fetcher-status": { up: false } };
   const pick = async () => {

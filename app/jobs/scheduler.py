@@ -49,12 +49,18 @@ async def _catalog(trigger: str):
     await import_catalog(trigger=trigger)
 
 
+async def _prune(trigger: str):
+    n = await alerts.prune_events(get_db())
+    log.info("scheduler: pruned %d read alert events", n)
+
+
 # id -> (runner, cron setting, job type for catch-up age check, max age)
-TASKS: dict[str, tuple[Callable[[str], Awaitable[None]], str, str | None, timedelta]] = {
+TASKS: dict[str, tuple[Callable[[str], Awaitable[None]], str, str | None, timedelta | None]] = {
     "daily_refresh": (_refresh, "price_refresh_cron", "price_refresh", DAY),
     "daily_fetch": (_fetch, "price_fetch_cron", "price_fetch", DAY),
     "daily_snapshot": (_snapshot, "snapshot_cron", None, DAY),   # None: age from collection_snapshots
     "weekly_catalog": (_catalog, "catalog_import_cron", "catalog_import", WEEK),
+    "daily_prune": (_prune, "alert_prune_cron", None, None),   # max age None: housekeeping, no catch-up
 }
 
 
@@ -83,6 +89,8 @@ async def overdue(db, now: datetime) -> list[str]:
     """Tasks whose last success is older than their max age (or missing), in TASKS order."""
     out = []
     for name, (_, _, _, max_age) in TASKS.items():
+        if max_age is None:
+            continue
         last = await _last_run(db, name)
         if last is not None and last.tzinfo is None:
             last = last.replace(tzinfo=timezone.utc)
