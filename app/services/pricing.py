@@ -64,6 +64,17 @@ def _obs_op(card_id: str, p: dict, observed_on: str) -> UpdateOne:
                      upsert=True)
 
 
+async def latest_as_of(db, card_ids: list[str], day: str) -> dict[str, dict]:
+    """`latest_price` trees rebuilt from the observation log: newest observation per slot on or before `day`."""
+    newest: dict[tuple, dict] = {}
+    async for p in db.prices.find({"card_id": {"$in": card_ids}, "observed_on": {"$lte": day}}).sort("observed_on", 1):
+        newest[(p["card_id"], p["source"], p["kind"], p["grade_key"], p.get("variant"))] = p  # later days overwrite
+    by_card: dict[str, list[dict]] = {}
+    for (cid, *_), p in newest.items():
+        by_card.setdefault(cid, []).append(p)
+    return {cid: build_latest(pts) for cid, pts in by_card.items()}
+
+
 async def store_card_prices(db, card_doc: dict, rates: dict, observed_on: str | None = None) -> int:
     """Upsert today's price points for one catalog card doc and denormalise latest_price onto the card.
 
@@ -102,9 +113,9 @@ async def store_scraped_points(db, card_id: str, points: list[dict], observed_on
     return len(pts)
 
 
-def price_for(card: dict, source: str, variant: str | None, rates: dict, grade_key: str = "raw",
-              kind: str = "market") -> tuple[int | None, bool]:
-    """Value (base-currency cents) of one copy via a source; bool = estimated (variant fallback)."""
+def price_entry(card: dict, source: str, variant: str | None, grade_key: str = "raw",
+                kind: str = "market") -> tuple[dict | None, bool]:
+    """Stored latest_price entry for one slot; bool = variant fallback (estimated)."""
     variants = ((((card.get("latest_price") or {}).get(source) or {}).get(kind) or {})
                 .get(grade_slot(grade_key)) or {})
     if not variants:
@@ -116,6 +127,15 @@ def price_for(card: dict, source: str, variant: str | None, rates: dict, grade_k
             v = variants[NO_VARIANT]
         else:
             v, est = next(iter(variants.values())), True
+    return v, est
+
+
+def price_for(card: dict, source: str, variant: str | None, rates: dict, grade_key: str = "raw",
+              kind: str = "market") -> tuple[int | None, bool]:
+    """Value (base-currency cents) of one copy via a source; bool = estimated (variant fallback)."""
+    v, est = price_entry(card, source, variant, grade_key, kind)
+    if v is None:
+        return None, False
     return convert(v.get("market"), v["currency"], rates), est
 
 

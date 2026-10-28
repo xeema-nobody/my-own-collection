@@ -36,3 +36,10 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - A company-agnostic bucket match (`G9` for a PSA 9) is NOT exact: shown with `≈` and a reason.
 - Sold rule (>=3 in 90 d, median of last 10), `PREFERRED_SOURCES` order are settings in `app/config.py`; no Settings UI. Sold sales are pooled across sources.
 - Scraped raw sales never value raw items (condition unknown); manual ones do.
+
+## Phase 5: dashboard (2026-10-28, defaults by me, change on objection)
+- `PREFERRED_SOURCES` = `pricecharting,tcgplayer,cardmarket_web,cardmarket,altxyz`: cardmarket_web gave ~2-3x the other raw prices for Mew ex 205 (confirmed match V5); stale catalog cardmarket (as_of Nov 2025) last. Revisit after the product version is verified.
+- Market points older than 180 days lose to any fresher source (setting `MARKET_MAX_AGE_DAYS`).
+- Movers = same valuation now vs N days ago; only comparable (same kind / grade match) items.
+- Demo data lives in a separate database `owncollection_demo` (user choice), not tagged items in the real one.
+- Cards with several prints/versions sharing a number (Cardmarket V3/V4/V5, `[Metal]`) have different prices: the UI shows the matched product slug and warns when picking among candidates.

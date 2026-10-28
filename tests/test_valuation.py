@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from app.services import collection as coll
@@ -33,7 +34,7 @@ async def card(db, *points):
 async def sale(db, grade, cents, days_ago=1, source="altxyz", cur="USD"):
     await db.sales.insert_one({"card_id": CID, "source": source, "grade_key": grade, "price": cents,
                                "currency": cur, "sold_at": datetime.now(UTC) - timedelta(days=days_ago),
-                               "listing_id": f"{grade}{cents}{days_ago}{source}"})
+                               "listing_id": uuid.uuid4().hex})
 
 
 async def value(db, it):
@@ -95,7 +96,7 @@ async def test_raw_fallback_is_estimated_and_ignores_raw_sales(db):
     for c in (100, 200, 300):
         await sale(db, "raw", c, source="pricecharting")
     v = await value(db, item(9))
-    assert (v["match"], v["grade_key_used"], v["estimated"], v["value"]) == ("raw_fallback", "raw", True, 18000)
+    assert (v["match"], v["grade_key_used"], v["estimated"], v["value"]) == ("raw_fallback", "raw", True, 22509)  # tcgplayer 250.10 USD before catalog cardmarket
 
 
 async def test_raw_item_uses_raw_price_exact_and_skips_scraped_raw_sales(db):
@@ -103,7 +104,7 @@ async def test_raw_item_uses_raw_price_exact_and_skips_scraped_raw_sales(db):
     for c in (100, 200, 300):
         await sale(db, "raw", c, source="pricecharting")
     v = await value(db, item())
-    assert (v["value"], v["match"], v["estimated"], v["source"]) == (18000, "exact", False, "cardmarket")
+    assert (v["value"], v["match"], v["estimated"], v["source"]) == (22509, "exact", False, "tcgplayer")
 
 
 async def test_unpriced_is_none_never_zero(db):
@@ -140,8 +141,47 @@ async def test_snapshot_matches_valuate(db):
     await db.collection_items.insert_one(item(None, qty=2))
     vals = await coll.valuate(db)
     snap = await take_snapshot(db)
-    assert snap["total_value"] == sum(v["value"] for v in vals) == 4500 + 2 * 18000
-    assert snap["value_kind_breakdown"] == {"market": 4500 + 36000}
+    assert snap["total_value"] == sum(v["value"] for v in vals) == 4500 + 2 * 22509
+    assert snap["value_kind_breakdown"] == {"market": 4500 + 2 * 22509}
     assert snap["estimated_count"] == 0
     assert snap["totals_by_source"]["altxyz"] == 4500  # only the slab has an altxyz price
     assert snap["unpriced_count"]["altxyz"] == 1
+
+
+async def test_stale_catalog_price_loses_to_fresh_source(db):
+    old = datetime.now(UTC) - timedelta(days=400)
+    await card(db, {**pt("cardmarket_web", "raw", 3000, cur="EUR"), "as_of": None})
+    await db.cards.update_one({"_id": CID}, {"$set": {"latest_price.cardmarket.market.raw._.as_of": old,
+                                                       "latest_price.tcgplayer.market": {}}})
+    v = await value(db, item())
+    assert (v["source"], v["value"]) == ("cardmarket_web", 3000)
+
+
+async def test_stale_price_used_when_it_is_the_only_one(db):
+    old = datetime.now(UTC) - timedelta(days=400)
+    await card(db)
+    await db.cards.update_one({"_id": CID}, {"$set": {"latest_price.cardmarket.market.raw._.as_of": old},
+                                             "$unset": {"latest_price.tcgplayer": ""}})
+    v = await value(db, item())
+    assert (v["source"], v["value"]) == ("cardmarket", 18000)
+
+
+async def test_preferred_order_scraped_before_catalog_cardmarket(db):
+    await card(db, pt("pricecharting", "raw", 2567))
+    v = await value(db, item())
+    assert (v["source"], v["value"]) == ("pricecharting", 2310)  # 25.67 USD * 0.9
+
+
+async def test_per_source_entries_carry_thin_and_sample_size(db):
+    await card(db)
+    await sale(db, "PSA9", 5000)
+    v = await value(db, item(9))
+    assert v["sources"]["altxyz"]["thin"] is True and v["sources"]["altxyz"]["sample_size"] == 1
+
+
+async def test_snapshot_marks_weak_sources(db):
+    await card(db, pt("pricecharting", "PSA9", 4750))
+    await db.collection_items.insert_one(item(9))
+    snap = await take_snapshot(db)
+    assert snap["weak_by_source"]["pricecharting"] is False
+    assert snap["weak_by_source"]["tcgplayer"] is True  # raw fallback

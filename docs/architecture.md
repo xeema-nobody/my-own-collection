@@ -16,6 +16,7 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 | `services/valuation.py` | pure per-item price resolver: grade chain exact > bucket > lower > raw fallback, sold (D-A) > market > thin sold |
 | `services/pricing.py` | stores price points, denormalises `latest_price` / `price_base` on cards |
 | `services/fx.py` | daily FX cache in `fx_rates`, fallback to last stored rate |
+| `services/movers.py` | top movers: `valuate` now vs `as_of` N days ago, comparable items only |
 | `services/snapshots.py` | daily collection snapshot (idempotent per UTC date) |
 | `services/refresh.py` | price refresh job (collection, all, or chosen sets) then snapshot |
 | `providers/fetcher.py`, `providers/price/{pricecharting,cardmarket,altxyz,match,resolve}.py` | fetcher HTTP client; scraped-site adapters + matcher (see pricing.md) |
@@ -61,7 +62,7 @@ Health: `/health`, `/health/ready` (pings Mongo).
 
 ## Config (`.env`, see `.env.example`)
 
-`MONGO_ROOT_USER/PASSWORD`, `BASE_CURRENCY`, `POKEMONTCG_API_KEY` (optional), `SCHEDULER_ENABLED`, `PRICE_REFRESH_CRON`, `FETCHER_URL`, valuation rules `SOLD_MIN_SALES` (3), `SOLD_WINDOW_DAYS` (90), `SOLD_SAMPLE` (10), `PREFERRED_SOURCES` (comma list). `PRICECHARTING_TOKEN` is unused (no paid API).
+`MONGO_ROOT_USER/PASSWORD`, `BASE_CURRENCY`, `POKEMONTCG_API_KEY` (optional), `SCHEDULER_ENABLED`, `PRICE_REFRESH_CRON`, `FETCHER_URL`, valuation rules `SOLD_MIN_SALES` (3), `SOLD_WINDOW_DAYS` (90), `SOLD_SAMPLE` (10), `PREFERRED_SOURCES` (comma list), `MARKET_MAX_AGE_DAYS` (180). `PRICECHARTING_TOKEN` is unused (no paid API).
 
 ## Frontend
 
@@ -70,6 +71,10 @@ Vite + React 18 + TS + react-router 6 + TanStack Query + Tailwind (dark via OS) 
 ## Security posture
 
 Local single-user, no auth. API bound to 127.0.0.1, CORS limited to the web origin, Mongo not exposed on host, security headers set. Secrets only in `.env` (gitignored). Add auth before any deployment.
+
+## Demo database
+
+`owncollection_demo` on the same Mongo server holds seeded items for UI checks; the real `owncollection` is only read. `docker compose run --rm app python -m app.scripts.demo_db create|status|drop`; run the app on it with `docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d app`, back with `docker compose up -d app`. Tests never use it (throwaway `moc_test_*` DBs).
 
 ## Docker
 

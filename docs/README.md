@@ -9,7 +9,7 @@ Personal, local, single-user web app to administer trading-card collections. Pok
 - **Card detail**: image, metadata, prices per source, price history chart, sold-sales stats, owned stacks (+/−/remove), add-to-collection form.
 - **Collection**: stacks of identical copies (card + variant + language + condition or grading). Raw copies need a condition; graded copies need grader + grade (optional cert, which makes the slab unique). Purchase price/date/notes. Browser with filters, sort, value, cost, P/L. Graded copies are valued at their own grade's price (sold median when >=3 sales in 90 d, else market); each value shows a `sold`/`market` badge and source, and `≈` with a reason when it is a fallback (grade bucket, lower grade, raw price) - see `pricing.md`.
 - **Prices**: aggregate market prices from TCGplayer (USD) and Cardmarket (EUR), converted to the base currency (default EUR). Manual sale entry for sources without an API (e.g. alt.xyz).
-- **Dashboard**: value KPIs (with count of estimated values), value-over-time line for the best value plus one per source (daily snapshots; change % compares only snapshots taken since graded valuation), breakdown by set / rarity / condition / language / TCG, top movers.
+- **Dashboard**: value KPIs (with count of estimated values), value-over-time line for the best value plus one per source (daily snapshots; change % compares only snapshots taken since graded valuation), breakdown by set / rarity / condition / language / TCG, top movers (sold-based, graded-aware; need the same kind of price now and N days ago), a reliability card (% of value that is sold-based), € labels on all charts. Hollow dots on the per-source lines = that source valued something thin or not exact.
 - **Settings**: set picker (per-set priced/total) to import or refresh prices for chosen sets, "Retry failed imports" for sets that failed the last full import, provider status, job log. One job per type at a time (second start returns 409; buttons disable while running).
 
 - **Scraped fetch UI** (needs the host fetcher running: `cd fetcher && .venv/bin/python -m fetcher`; a badge shows up / not running): card detail -> "Fetch prices" (pick sources, `force` ignores the 24 h cache); per-source status line with last result, link, and a candidate picker when a match is ambiguous ("Use this" confirms and re-fetches that source, "Reset match" undoes it); Settings -> "Fetch scraped prices" (selected sets or owned collection, with progress and failure / needs-match lists); Search -> tick cards -> "Fetch prices for N selected". If a site needs a login the run pauses with "Waiting for login (<site>)": log in in the Chrome window that opened, the fetch continues.
@@ -45,3 +45,12 @@ Tests: see `CLAUDE.md` for the command.
 - `pricing.md` - price semantics, valuation rules, sources
 - `decisions.md` - discovery answers and source findings
 - `roadmap.md` - future work (to be filled)
+
+## Demo data (UI checks without touching your collection)
+
+```bash
+docker compose run --rm app python -m app.scripts.demo_db create   # seeds owncollection_demo (needs Mew ex 151 #205 data in the real DB)
+docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d app   # app on the demo DB
+docker compose up -d app                                            # back to the real DB
+docker compose run --rm app python -m app.scripts.demo_db drop     # delete the demo DB
+```

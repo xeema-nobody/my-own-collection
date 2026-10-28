@@ -63,17 +63,22 @@ Grade chain, first hit wins (raw items: step 1 only):
 
 Only `exact` is shown without `≈`. Every other match sets `estimated`; the UI says why (bucket / lower grade / raw fallback / variant fallback).
 
-Within one grade (D-A): **sold** if >= `SOLD_MIN_SALES` (3) sales in the last `SOLD_WINDOW_DAYS` (90): median of the last `SOLD_SAMPLE` (10), pooled across sources in `sales` and converted to base currency; else aggregate **market** by `PREFERRED_SOURCES` (default `cardmarket_web > cardmarket > pricecharting > altxyz > tcgplayer`, then any other source); else **thin sold** (1-2 sales, or a sold point in `latest_price`), flagged `thin` with the sale count. All three are env settings (`app/config.py`), no UI.
+Within one grade (D-A): **sold** if >= `SOLD_MIN_SALES` (3) sales in the last `SOLD_WINDOW_DAYS` (90): median of the last `SOLD_SAMPLE` (10), pooled across sources in `sales` and converted to base currency; else aggregate **market** by `PREFERRED_SOURCES` (default `pricecharting > tcgplayer > cardmarket_web > cardmarket > altxyz`, then any other source; Phase 5: scraped `cardmarket_web` is unverified per product version and the catalog `cardmarket` figure can be months stale, so they rank below pricecharting/tcgplayer); else **thin sold** (1-2 sales, or a sold point in `latest_price`), flagged `thin` with the sale count. All three are env settings (`app/config.py`), no UI.
+- Stale guard: a market point whose upstream `as_of` is older than `MARKET_MAX_AGE_DAYS` (180) only counts when no fresher source has that grade. Scraped points have no `as_of` (dated by our fetch) and count as fresh.
 - Ask prices (Cardmarket "From") are never used: a listing floor is not a value.
 - Scraped raw sales have unknown condition, so they never value a raw item or a raw fallback; only `manual` sales do.
 - Variant: item variant, else the source's no-variant price, else the first variant (flagged estimated).
-- Item value = quantity x price, converted to base currency (FX from frankfurter.dev, cached daily). Row fields: `value`, `price_kind`, `source`, `match`, `grade_key_used`, `estimated`, `thin`, `sample_size`; `values[source]` / `sources[source]` = result when only that source is used (own fallback chain).
+- Item value = quantity x price, converted to base currency (FX from frankfurter.dev, cached daily). Row fields: `value`, `price_kind`, `source`, `match`, `grade_key_used`, `estimated`, `thin`, `sample_size`; `values[source]` / `sources[source]` = result when only that source is used (own fallback chain; carries `thin` and `sample_size`). `valuate(db, as_of=date)` revalues the same items at a past date from `prices.observed_on <= date` (`pricing.latest_as_of`) and sales in the window before it.
 - Cost = acquired price converted at today's rate. P/L = value - cost (null when no cost recorded).
 - Raw headline `cards.price_base` is unchanged (cardmarket, else tcgplayer); valuation of raw items follows `PREFERRED_SOURCES`, so it can differ from it.
 
 ## Snapshots
 
-Taken after each refresh (or `POST /api/admin/snapshot`). One per UTC date. No backfill possible: history starts at the first snapshot. Fields: `totals_by_source` (value via that source alone), `total_value` (the headline valuation), `value_kind_breakdown` (sum per sold/market), `estimated_count`. Snapshots before Phase 4 valued slabs at raw price and lack `total_value`; the dashboard change % only compares snapshots that have it.
+Taken after each refresh (or `POST /api/admin/snapshot`). One per UTC date. No backfill possible: history starts at the first snapshot. Fields: `totals_by_source` (value via that source alone), `total_value` (the headline valuation), `value_kind_breakdown` (sum per sold/market), `estimated_count`, `weak_by_source` (any item valued thin or not exact via that source; the chart draws a hollow dot). Snapshots before Phase 5 lack `weak_by_source`.
+
+## Movers (`services/movers.py`)
+
+Each owned item valued now vs N days ago with the same resolver (graded-aware, sold-based). Only items priced the same way at both ends count (same price kind, grade match and grade key): a changed fallback is a data gap, not a move. Past values use only what the observation log and sales held at that date; scraped sales are dated by `sold_at`, so a sale we fetched later still counts in the past window. Snapshots before Phase 4 valued slabs at raw price and lack `total_value`; the dashboard change % only compares snapshots that have it.
 
 ## Unpriced cards
 Some sets/cards have no price block in the pokemontcg.io payload (e.g. `me55`, `me5`, `me2pt5`, `mcd*`, `tk*`), so they stay unpriced (`price_base = None`, shown as "no price"). That is a source gap, not an import failure; only another source can fill it. Settings shows priced/total per set.
