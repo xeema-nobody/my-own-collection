@@ -2,6 +2,16 @@
 
 Personal, local, single-user web app to administer trading-card collections. Pokémon TCG first; schema is generic (`tcg` field) so other TCGs plug in via a new catalog provider.
 
+## Overview
+
+**Objective**: know what a card collection is worth, from trustworthy data, without any cloud service. Own catalog and own price history in a local MongoDB; real sold prices (not asking prices) drive the value.
+
+**Shape**: Vite React SPA (:5180) -> FastAPI (:8100) -> MongoDB 7, all in docker compose, bound to 127.0.0.1, single user, no auth. One small extra service, the **fetcher**, runs on the host Mac and drives real Chrome to read PriceCharting, Cardmarket and alt.xyz (Cloudflare blocks anything else); the app only talks to it over localhost HTTP. Details: `architecture.md`.
+
+**Data flow**: catalog import (pokemontcg.io) -> cards/sets -> you add stacks to the collection -> price refresh (API aggregates) and scraped fetch (sold listings) -> valuation (sold-based when >=3 sales in 90 d, else market) -> daily snapshot -> dashboard, movers, alerts. Rules: `pricing.md`.
+
+**Status** (2026-10-28): phases 0-8 done (catalog, collection, price model, scraped fetch, graded valuation, dashboard, source compare, scheduler, alerts, hardening). Scheduler and backup schedule are built but not yet switched on. Next work: `roadmap.md`.
+
 ## Features
 
 - **Catalog**: cards and sets imported from an external API into own MongoDB. Idempotent (re-import is safe).
@@ -10,7 +20,7 @@ Personal, local, single-user web app to administer trading-card collections. Pok
 - **Collection**: stacks of identical copies (card + variant + language + condition or grading). Raw copies need a condition; graded copies need grader + grade (optional cert, which makes the slab unique). Purchase price/date/notes. Browser with filters, sort, value, cost, P/L. Graded copies are valued at their own grade's price (sold median when >=3 sales in 90 d, else market); each value shows a `sold`/`market` badge and source, and `≈` with a reason when it is a fallback (grade bucket, lower grade, raw price) - see `pricing.md`.
 - **Prices**: aggregate market prices from TCGplayer (USD) and Cardmarket (EUR), converted to the base currency (default EUR). Manual sale entry for sources without an API (e.g. alt.xyz).
 - **Dashboard**: value KPIs (with count of estimated values), value-over-time line for the best value plus one per source (daily snapshots; change % compares only snapshots taken since graded valuation), breakdown by set / rarity / condition / language / TCG, top movers (sold-based, graded-aware; need the same kind of price now and N days ago), a reliability card (% of value that is sold-based), € labels on all charts. Hollow dots on the per-source lines = that source valued something thin or not exact.
-- **Settings**: set picker (per-set priced/total) to import or refresh prices for chosen sets, "Retry failed imports" for sets that failed the last full import, provider status, job log. One job per type at a time (second start returns 409; buttons disable while running).
+- **Settings**: set picker (per-set priced/total) to import or refresh prices for chosen sets, "Retry incomplete" for sets with fewer cards than upstream `total` (shown red as "N missing") or that failed the last full import, provider status, job log. One job per type at a time (second start returns 409; buttons disable while running).
 
 - **Scraped fetch UI** (needs the host fetcher running: `scripts/fetcher.sh start` (also `stop|status|logs`); a badge shows up / not running): card detail -> "Fetch prices" (pick sources, `force` ignores the 24 h cache); per-source status line with last result, link, and a candidate picker when a match is ambiguous ("Use this" confirms and re-fetches that source, "Reset match" undoes it); Settings -> "Fetch scraped prices" (selected sets or owned collection, with progress and failure / needs-match lists); Search -> tick cards -> "Fetch prices for N selected". Scheduled runs never pause for login (see Scheduler). If a site needs a login a manual run pauses with "Waiting for login (<site>)": log in in the Chrome window that opened, the fetch continues.
 - **Scraped fetch API**: `curl -X POST localhost:8100/api/admin/prices/fetch -H 'content-type: application/json' -d '{"cards":["pokemon:sv3pt5-205"],"sources":["altxyz"],"force":true}'`; targets: `cards`, `sets`, `owned`. Progress in `GET /api/admin/jobs` (`stats.waiting_login`, `needs_match_list`, `failures`). One card: `POST /api/cards/{id}/fetch-prices`.
@@ -44,7 +54,8 @@ Tests: see `CLAUDE.md` for the commands. Backend: pytest against a throwaway mon
 - `architecture.md` - technical design, data model, API
 - `pricing.md` - price semantics, valuation rules, sources
 - `decisions.md` - discovery answers and source findings
-- `roadmap.md` - future work (to be filled)
+- `backup.md` - backup, verify, restore, scheduling
+- `roadmap.md` - status, your pending tasks, open decision, backlog
 
 ## Demo data (UI checks without touching your collection)
 

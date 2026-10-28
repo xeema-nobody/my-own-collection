@@ -6,12 +6,23 @@ from datetime import datetime, timezone
 from typing import AsyncIterator
 
 import httpx
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_random_exponential
+from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait_random_exponential
 
 from app.config import settings
 
 log = logging.getLogger(__name__)
 PAGE_SIZE = 100
+# Upstream 500s on some page windows at pageSize=100 (flaky, data dependent). Every size divides the one
+# before it, so a failed window can be re-fetched as aligned smaller pages with the same offsets.
+FALLBACK_SIZES = (50, 25, 5)
+
+
+class IncompletePage(Exception):
+    """Some card windows could not be fetched at any page size; `missing` = [(offset, size)]."""
+
+    def __init__(self, missing: list[tuple[int, int]]):
+        self.missing = missing
+        super().__init__(f"{len(missing)} card window(s) unavailable upstream: {missing}")
 
 
 def norm(s: str) -> str:
@@ -114,26 +125,55 @@ class PokemonTcgCatalog:
             base_url=settings.pokemontcg_base_url, headers=headers, timeout=60
         )
 
-    @retry(retry=retry_if_exception(_retryable), stop=stop_after_attempt(6),
-           wait=wait_random_exponential(multiplier=1, max=30), reraise=True)
-    async def _get(self, path: str, params: dict) -> dict:
-        r = await self._client.get(path, params=params)
-        r.raise_for_status()
-        return r.json()
+    async def _get(self, path: str, params: dict, attempts: int = 6) -> dict:
+        async for attempt in AsyncRetrying(retry=retry_if_exception(_retryable), stop=stop_after_attempt(attempts),
+                                           wait=wait_random_exponential(multiplier=1, max=30), reraise=True):
+            with attempt:
+                r = await self._client.get(path, params=params)
+                r.raise_for_status()
+                return r.json()
 
     async def list_sets(self) -> list[dict]:
         data = await self._get("/sets", {"orderBy": "releaseDate"})
         return [map_set(s) for s in data["data"]]
 
+    async def _window(self, base: dict, start: int, size: int, total: int, missing: list) -> list[dict]:
+        """Cards of [start, start+size) fetched as smaller aligned pages; unfetchable spans go to `missing`."""
+        smaller = [s for s in FALLBACK_SIZES if s < size]
+        if not smaller:
+            missing.append((start, size))
+            return []
+        sub, out = smaller[0], []
+        for off in range(start, min(start + size, total), sub):
+            try:
+                data = await self._get("/cards", {**base, "pageSize": sub, "page": off // sub + 1}, attempts=2)
+                out += data["data"]
+            except Exception as e:  # noqa: BLE001
+                if not _retryable(e):
+                    raise
+                out += await self._window(base, off, sub, total, missing)
+        return out
+
     async def iter_cards(self, set_id: str | None = None) -> AsyncIterator[dict]:
-        page = 1
-        params: dict = {"pageSize": PAGE_SIZE}
+        """Yield every card; raises IncompletePage after the last page if some windows stayed unavailable."""
+        base: dict = {"orderBy": "number"}  # stable order = stable offsets across page sizes
         if set_id:
-            params["q"] = f"set.id:{set_id}"
+            base["q"] = f"set.id:{set_id}"
+        missing: list[tuple[int, int]] = []
+        start, total = 0, None
         while True:
-            data = await self._get("/cards", {**params, "page": page})
-            for c in data["data"]:
+            try:
+                data = await self._get("/cards", {**base, "pageSize": PAGE_SIZE, "page": start // PAGE_SIZE + 1})
+                cards, total = data["data"], data.get("totalCount", 0)
+            except Exception as e:  # noqa: BLE001
+                if total is None or not _retryable(e):  # first page: size unknown, nothing to salvage
+                    raise
+                log.warning("cards %s offset %s failed (%s); retrying with smaller pages", set_id, start, e)
+                cards = await self._window(base, start, PAGE_SIZE, total, missing)
+            for c in cards:
                 yield map_card(c)
-            if page * PAGE_SIZE >= data.get("totalCount", 0) or not data["data"]:
-                return
-            page += 1
+            start += PAGE_SIZE
+            if start >= total or (not cards and not missing):
+                break
+        if missing:
+            raise IncompletePage(missing)

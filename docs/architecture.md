@@ -8,8 +8,8 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 
 | Module | Role |
 |---|---|
-| `providers/catalog/pokemontcg.py` | httpx + tenacity retry on 429/5xx, maps payload to card/set docs, extracts price points |
-| `services/catalog_import.py` | per-set import (all / chosen sets / retry of failed), upsert by `_id`, job logging, failed-set isolation |
+| `providers/catalog/pokemontcg.py` | httpx + tenacity retry on 429/5xx; a card page that still fails is re-fetched as smaller aligned pages (50/25/5, `orderBy=number`), windows dead at every size raise `IncompletePage` after the rest is yielded; maps payload to card/set docs, extracts price points |
+| `services/catalog_import.py` | per-set import (all / chosen sets / retry incomplete), upsert by `_id`, job logging, failed-set isolation; after each set stores `sets.imported_count` + `complete` (imported vs upstream `total`), a short set counts as failed (job `partial`), `incomplete_sets()` feeds the retry |
 | `scripts/backup.sh`, `scripts/restore.sh` | host-side `mongodump`/`mongorestore` through `docker compose exec` (creds from container env); see `backup.md` |
 | `services/portability.py` | collection export (JSON v1 lossless, CSV flat) and import (validates via `CollectionIn`, upsert on `stack_key`, per-row errors) |
 | `services/sets.py` | sets with imported / priced card counts |
@@ -64,7 +64,7 @@ Money: integer cents + currency everywhere. Missing price = `null`, never 0.
 `/collection` (POST add, GET list with per-item `value/price_kind/source/match/estimated/sources`, `/summary` with `value_by_kind`, PATCH/DELETE `/{id}`, POST `/{id}/remove`);
 `/dashboard/history|breakdown|movers`;
 `/alerts` (GET list, POST create, PATCH/DELETE `/{id}`), `/alerts/events` (`?unread=`), POST `/alerts/events/read` (`{ids}` or all), `/alerts/unread-count`, POST `/alerts/evaluate`;
-`/admin/catalog/import` (`?sets=` repeatable), `/admin/catalog/import/retry-failed`, `/admin/prices/refresh` (`?scope=&sets=`), `/admin/snapshot`, `/admin/jobs`, `/admin/status` (incl. `scheduler.jobs[].next_run`), `/admin/fetcher-status` (`{up, ...}`; 200 even when the fetcher is down), `/admin/prices/fetch`.
+`/admin/catalog/import` (`?sets=` repeatable), `/admin/catalog/import/retry-incomplete`, `/admin/prices/refresh` (`?scope=&sets=`), `/admin/snapshot`, `/admin/jobs`, `/admin/status` (incl. `scheduler.jobs[].next_run`), `/admin/fetcher-status` (`{up, ...}`; 200 even when the fetcher is down), `/admin/prices/fetch`.
 Health: `/health`, `/health/ready` (pings Mongo).
 
 ## Config (`.env`, see `.env.example`)

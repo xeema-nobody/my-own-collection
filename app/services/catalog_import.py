@@ -5,6 +5,7 @@ from pymongo import UpdateOne
 from app.db.mongo import get_db
 from app.providers.catalog.pokemontcg import PokemonTcgCatalog
 from app.services import jobs
+from app.services.sets import sets_with_stats
 from app.services.pricing import get_rates, store_card_prices
 
 log = logging.getLogger(__name__)
@@ -43,7 +44,13 @@ async def import_catalog(set_ids: list[str] | None = None, provider=None, retry:
             except Exception as e:  # noqa: BLE001
                 log.warning("set %s failed: %s", sid, e)
                 stats["failed_sets"].append(sid)
+            if not await _record_completeness(db, sid) and sid not in stats["failed_sets"]:
+                stats["failed_sets"].append(sid)  # upstream returned fewer cards than the set total, silently
             await jobs.progress(db, job, stats)
+        stats["incomplete_sets"] = await _incomplete_ids(db, targets)
+        if stats["incomplete_sets"]:
+            log.warning("catalog health: %d incomplete set(s): %s", len(stats["incomplete_sets"]),
+                        ", ".join(stats["incomplete_sets"]))
         await jobs.finish(db, job, "partial" if stats["failed_sets"] else "ok", stats)
     except Exception as e:  # noqa: BLE001
         log.exception("catalog import failed")
@@ -58,6 +65,28 @@ async def last_failed_sets(db) -> list[str]:
         {"stats.origin": {"$in": ["full", "retry"]}},
         {"stats.origin": {"$exists": False}, "stats.set": None}]}, sort=[("started_at", -1)])
     return list(((job or {}).get("stats") or {}).get("failed_sets") or [])
+
+
+async def _record_completeness(db, sid: str) -> bool:
+    """Store `imported_count` / `complete` on the set doc (imported vs upstream `total`); True when complete."""
+    doc = await db.sets.find_one({"_id": f"pokemon:{sid}"}) or {}
+    expected = doc.get("total") or doc.get("printed_total")
+    count = await db.cards.count_documents({"tcg": "pokemon", "set.id": sid})
+    complete = expected is None or count >= expected
+    await db.sets.update_one({"_id": f"pokemon:{sid}"}, {"$set": {"imported_count": count, "complete": complete}})
+    return complete
+
+
+async def _incomplete_ids(db, only: list[str] | None = None) -> list[str]:
+    """Sets with some cards imported but fewer than the upstream total (live counts, so old imports count too)."""
+    return [s["external_id"] for s in await sets_with_stats(db)
+            if s["cards_missing"] and (not only or s["external_id"] in only)]
+
+
+async def incomplete_sets(db) -> list[str]:
+    """What "Retry incomplete" re-imports: short sets plus sets that failed in the latest full import/retry."""
+    ids = await _incomplete_ids(db)
+    return ids + [s for s in await last_failed_sets(db) if s not in ids]
 
 
 def _without_raw(card: dict) -> dict:

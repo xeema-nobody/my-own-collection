@@ -24,12 +24,13 @@ def make_card(set_id: str, num: str, priced: bool = True) -> dict:
 class FakeCatalog:
     """Canned CatalogProvider; sets in `fail` raise like the flaky upstream."""
 
-    def __init__(self, cards_by_set: dict[str, list[dict]], fail: set[str] = frozenset()):
-        self.cards_by_set, self.fail, self.calls = cards_by_set, set(fail), []
+    def __init__(self, cards_by_set: dict[str, list[dict]], fail: set[str] = frozenset(),
+                 totals: dict[str, int] | None = None):
+        self.cards_by_set, self.fail, self.calls, self.totals = cards_by_set, set(fail), [], totals or {}
 
     async def list_sets(self):
         return [{"_id": f"pokemon:{s}", "tcg": "pokemon", "external_id": s, "name": s,
-                 "release_date": None} for s in self.cards_by_set]
+                 "release_date": None, "total": self.totals.get(s)} for s in self.cards_by_set]
 
     async def iter_cards(self, set_id=None):
         self.calls.append(set_id)

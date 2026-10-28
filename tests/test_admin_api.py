@@ -13,7 +13,7 @@ async def client(db):
 
 @pytest.mark.parametrize("path,type_", [
     ("/api/admin/catalog/import", "catalog_import"),
-    ("/api/admin/catalog/import/retry-failed", "catalog_import"),
+    ("/api/admin/catalog/import/retry-incomplete", "catalog_import"),
     ("/api/admin/prices/refresh", "price_refresh"),
     ("/api/admin/prices/fetch", "price_fetch"),
 ])
@@ -23,7 +23,7 @@ async def test_409_while_running(client, db, path, type_):
     assert r.status_code == 409 and "already running" in r.json()["detail"]
 
 
-async def test_retry_failed_without_failures_starts_nothing(client, db):
-    r = await client.post("/api/admin/catalog/import/retry-failed")
+async def test_retry_incomplete_without_gaps_starts_nothing(client, db):
+    r = await client.post("/api/admin/catalog/import/retry-incomplete")
     assert r.status_code == 202 and r.json() == {"started": False, "sets": []}
     assert await db.jobs.count_documents({}) == 0
