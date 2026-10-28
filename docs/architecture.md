@@ -85,3 +85,9 @@ Local single-user, no auth. API bound to 127.0.0.1, CORS limited to the web orig
 ## Docker
 
 `moc-mongo` (volume `moc_mongo_data`), `moc-app` (`./app` mounted, no reload), `moc-web` (node:20, vite dev, deps in volume).
+
+## Performance (measured 2026-10-28, 20,509 cards, local mongo 7)
+- Card search is a regex over `search_text` plus filters: a collection scan, 2-25 ms in mongo, 11-190 ms through the API (`q=char` 150-190 ms is mostly the page of 40 cards + owned-qty lookup). Not worth an index at this size. Revisit above ~100k cards or when any path passes 250 ms.
+- Collection valuation is in memory: `valuate()` at 2000 synthetic stacks = ~180 ms, 500 = ~65 ms, so no caching or pagination in the DB layer is needed below ~5k stacks.
+- Tools (read-only on live data): `scripts/perf_explain.js` (explain table; usage in its header) and `docker compose run --rm -v $PWD/scripts:/code/scripts app python -m scripts.perf_valuate [N ...]` (scratch db `owncollection_perf`, dropped after).
+- The text index `cards_text` (15 MB, never queried) is dropped by `init_indexes`.
