@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     preferred_sources: str = "pricecharting,tcgplayer,cardmarket_web,cardmarket,altxyz"
     # market points older than this are only used when no fresher source has the grade
     market_max_age_days: int = 180
+    # a source this many % away from the median of all sources is flagged (needs >= 3 sources)
+    outlier_pct: int = 40
 
 
 settings = Settings()

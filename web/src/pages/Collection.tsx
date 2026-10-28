@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, money } from "../lib/api";
 import { KIND_CLASS } from "../lib/colors";
+import SourceCompare from "../components/SourceCompare";
 
 // Why a value is not an exact-grade price; "" = exact.
 function whyEstimated(i: any): string {
@@ -14,18 +15,20 @@ function whyEstimated(i: any): string {
   return why.join("; ");
 }
 
-function Value({ i }: { i: any }) {
+function Value({ i, open, toggle }: { i: any; open: boolean; toggle: () => void }) {
   if (i.value == null) return <span className="opacity-70" title="No price for this grade">no price</span>;
   const why = whyEstimated(i);
-  const per = Object.entries(i.sources ?? {}).map(([s, v]: any) => `${s}: ${money(v.value)} (${v.price_kind}${v.match !== "exact" ? `, ${v.match}` : ""})`).join("\n");
-  return <span title={per}>{money(i.value)}{why && <span title={why}> ≈</span>}
+  const far = (i.spread?.outliers ?? []).length > 0;
+  return <span title={i.headline_rule ?? ""}>{money(i.value)}{why && <span title={why}> ≈</span>}
     <span className={`ml-1 rounded px-1 text-xs ${KIND_CLASS[i.price_kind] ?? ""}`}>{i.price_kind}</span>
     <span className="ml-1 text-xs opacity-70">{i.source}{i.thin && i.sample_size ? ` · only ${i.sample_size} sold` : ""}</span>
-    {why && <div className="text-xs text-amber-600 dark:text-amber-400">{why}</div>}</span>;
+    {why && <div className="text-xs text-amber-600 dark:text-amber-400">{why}</div>}
+    <button className="btn-ghost ml-1 text-xs" onClick={toggle} aria-expanded={open}>{open ? "hide sources" : `compare ${Object.keys(i.sources ?? {}).length} sources`}{far ? " ⚠" : ""}</button></span>;
 }
 
 export default function Collection() {
   const [f, setF] = useState({ q: "", graded: "", language: "", condition: "", sort: "added" });
+  const [open, setOpen] = useState<Record<string, boolean>>({});
   const sum = useQuery({ queryKey: ["collection", "summary"], queryFn: api.collectionSummary });
   const list = useQuery({ queryKey: ["collection", f], queryFn: () => api.collection(f) });
   const s = sum.data;
@@ -45,14 +48,15 @@ export default function Collection() {
       {list.data?.items.length === 0 && <p className="opacity-70">Nothing here. Add cards from the Search page.</p>}
       <table className="w-full text-sm"><thead><tr className="text-left opacity-70"><th></th><th>Card</th><th>Set</th><th>Details</th><th>Qty</th><th>Value</th><th>Cost</th></tr></thead><tbody>
         {list.data?.items.map((i: any) => (
-          <tr key={i.id} className="border-t dark:border-slate-700">
+          <Fragment key={i.id}><tr className="border-t dark:border-slate-700">
             <td><img src={i.card?.images?.small} className="h-12" /></td>
             <td><Link className="hover:underline" to={`/cards/${encodeURIComponent(i.card_id)}`}>{i.card?.name}</Link></td>
             <td>{i.card?.set?.name} #{i.card?.number}</td>
             <td>{i.variant ? `${i.variant} · ` : ""}{i.language.toUpperCase()} · {i.grading ? `${i.grading.company} ${i.grading.grade}` : i.condition}</td>
             <td>{i.quantity}</td>
-            <td><Value i={i} /></td>
-            <td>{money(i.cost)}</td></tr>))}
+            <td><Value i={i} open={!!open[i.id]} toggle={() => setOpen((o) => ({ ...o, [i.id]: !o[i.id] }))} /></td>
+            <td>{money(i.cost)}</td></tr>
+            {open[i.id] && <tr><td></td><td colSpan={6} className="pb-3"><SourceCompare row={i} /></td></tr>}</Fragment>))}
       </tbody></table>
     </div>
   );

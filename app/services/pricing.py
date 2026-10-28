@@ -36,14 +36,16 @@ def point_key(card_id: str, p: dict, observed_on: str) -> dict:
             "observed_on": observed_on}
 
 
-def build_latest(points: list[dict]) -> dict:
+def build_latest(points: list[dict], observed_on: str | None = None) -> dict:
+    """`observed_on` = our fetch day for points that carry none (log rows carry their own)."""
     latest: dict = {}
     for p in points:
         slot = (latest.setdefault(p["source"], {}).setdefault(p.get("kind", "market"), {})
                 .setdefault(grade_slot(p.get("grade_key", "raw")), {}))
         slot[variant_slot(p.get("variant"))] = {
             "market": p.get("market"), "low": p.get("low"), "avg": p.get("avg"),
-            "high": p.get("high"), "currency": p["currency"], "as_of": p.get("as_of")}
+            "high": p.get("high"), "currency": p["currency"], "as_of": p.get("as_of"),
+            "observed_on": p.get("observed_on") or observed_on}
     return latest
 
 
@@ -84,7 +86,7 @@ async def store_card_prices(db, card_doc: dict, rates: dict, observed_on: str | 
     points = extract_prices(card_doc)
     if points:
         await db.prices.bulk_write([_obs_op(card_doc["_id"], p, observed_on) for p in points], ordered=False)
-    latest = build_latest(points)
+    latest = build_latest(points, observed_on)
     upd: dict = {"$set": {"price_base": best_base(latest, rates), "price_schema": PRICE_SCHEMA}}
     for src in CATALOG_SOURCES:
         if src in latest:
@@ -107,7 +109,7 @@ async def store_scraped_points(db, card_id: str, points: list[dict], observed_on
            if type(p.get("as_of")) is date else p for p in points]
     await db.prices.bulk_write([_obs_op(card_id, p, observed_on) for p in pts], ordered=False)
     sets = {f"latest_price.{src}.{kind}.{g}.{v}": val
-            for src, kinds in build_latest(pts).items() for kind, grades in kinds.items()
+            for src, kinds in build_latest(pts, observed_on).items() for kind, grades in kinds.items()
             for g, variants in grades.items() for v, val in variants.items()}
     await db.cards.update_one({"_id": card_id}, {"$set": sets})
     return len(pts)

@@ -72,6 +72,10 @@ Within one grade (D-A): **sold** if >= `SOLD_MIN_SALES` (3) sales in the last `S
 - Cost = acquired price converted at today's rate. P/L = value - cost (null when no cost recorded).
 - Raw headline `cards.price_base` is unchanged (cardmarket, else tcgplayer); valuation of raw items follows `PREFERRED_SOURCES`, so it can differ from it.
 
+## Source comparison (Phase 5b)
+
+Collection (expand a row), CardDetail ("Compare sources": one raw copy + each owned slab, `GET /api/cards/{id}/compare?company=&grade=&variant=`) and Dashboard (source table from `GET /api/collection/summary` `by_source`) show every source side by side. Per source: value, kind, match, thin, data age (`observed_on` = our fetch day, `as_of` = upstream date; sold: newest sale), `stale` (catalog `as_of` older than `MARKET_MAX_AGE_DAYS`; shown struck through), and the matched print (`product` in `GET /api/cards/{id}/match`: slug + Cardmarket version). `headline_rule` says why the headline source won. `spread` = median/min/max plus `outliers` (> `OUTLIER_PCT` = 40 % from the median, >= 3 like-for-like sources). Dashboard `vs_headline_pct` compares a source with the headline over the same items only. `latest_price` entries carry `observed_on` (older ones fill in on the next fetch / refresh).
+
 ## Snapshots
 
 Taken after each refresh (or `POST /api/admin/snapshot`). One per UTC date. No backfill possible: history starts at the first snapshot. Fields: `totals_by_source` (value via that source alone), `total_value` (the headline valuation), `value_kind_breakdown` (sum per sold/market), `estimated_count`, `weak_by_source` (any item valued thin or not exact via that source; the chart draws a hollow dot). Snapshots before Phase 5 lack `weak_by_source`.

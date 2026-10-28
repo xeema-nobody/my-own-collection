@@ -56,6 +56,15 @@ export default function Dashboard() {
         <div className="card"><div className="text-xs opacity-70">Change ({range})</div>
           <div className={`text-xl font-semibold ${delta == null ? "" : delta >= 0 ? "text-emerald-600" : "text-red-500"}`}>{delta == null ? "—" : `${delta >= 0 ? "▲" : "▼"} ${delta.toFixed(1)}%`}</div></div>
       </div>
+      <section className="card"><h2 className="mb-2 font-semibold">Source comparison</h2>
+        <table className="w-full text-sm"><thead><tr className="text-left text-xs opacity-60"><th>Source</th><th>Total</th><th>Items priced</th><th>vs headline (same items)</th></tr></thead><tbody>
+          {Object.entries(sum.data?.by_source ?? {}).map(([k, v]: any) => (
+            <tr key={k} className="border-t dark:border-slate-700"><td style={{ color: SOURCE_COLOR[k] }}>{k}</td><td>{money(v.value)}</td>
+              <td>{v.items}/{sum.data.distinct}</td>
+              <td>{v.vs_headline_pct == null ? "—" : <span className={v.far ? "rounded bg-amber-100 px-1 text-amber-800 dark:bg-amber-900 dark:text-amber-200" : "opacity-70"} title={v.far ? "Far from the headline valuation" : ""}>{v.vs_headline_pct > 0 ? "+" : ""}{v.vs_headline_pct}%{v.far ? " ⚠" : ""}</span>}</td></tr>))}
+        </tbody></table>
+        <p className="mt-1 text-xs opacity-60">Headline = best price per item (sold first, then preferred source). Totals per source use only that source and may cover fewer items.</p>
+      </section>
       <section className="card">
         <div className="mb-2 flex gap-1">{Object.keys(RANGES).map((r) => <button key={r} className={r === range ? "btn" : "btn-ghost"} onClick={() => setRange(r)}>{r}</button>)}</div>
         {rows.length < 2 ? <p className="py-10 text-center text-sm opacity-70">History starts at the first snapshot ({rows.length} so far). No past prices can be backfilled; snapshots are taken after each price refresh.{legacy > 0 && ` ${legacy} older snapshot(s) predate graded valuation and are not plotted.`}</p> :

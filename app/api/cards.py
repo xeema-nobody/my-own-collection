@@ -8,7 +8,7 @@ from app.config import settings
 from app.db.models import CardFetchIn, MatchIn, SaleIn
 from app.providers.fetcher import FetcherClient, FetcherUnavailable
 from app.services import matching
-from app.services.collection import _out
+from app.services.collection import _out, compare_card
 from app.services.price_fetch import fetch_prices, fetch_status
 from app.services.fx import convert, rates_to_base
 from app.services.price_matrix import build_matrix, value_of
@@ -124,6 +124,15 @@ async def card_fetch_status(card_id: str):
     """Last scraped-fetch outcome per scraped source (null = never fetched)."""
     await _require_card(card_id)
     return await fetch_status(get_db(), card_id)
+
+
+@router.get("/cards/{card_id}/compare")
+async def card_compare(card_id: str, company: str | None = None, grade: float | None = None,
+                       variant: str | None = None):
+    """Every source's price for one copy (raw, or `company`+`grade`), owned or not."""
+    await _require_card(card_id)
+    grading = {"company": company, "grade": grade} if company and grade is not None else None
+    return await compare_card(get_db(), card_id, grading, variant)
 
 
 @router.get("/cards/{card_id}/match")

@@ -38,6 +38,8 @@ export const api = {
   priceMatrix: (id: string) => req<any>(`/api/cards/${encodeURIComponent(id)}/price-matrix`),
   priceSources: () => req<any[]>("/api/admin/price-sources"),
   addSale: (id: string, b: unknown) => req<any>(`/api/cards/${encodeURIComponent(id)}/sales`, post(b)),
+  cardCompare: (id: string, p: { company?: string; grade?: number; variant?: string } = {}) =>
+    req<any>(`/api/cards/${encodeURIComponent(id)}/compare` + qs(p)),
   cardMatches: (id: string) => req<any>(`/api/cards/${encodeURIComponent(id)}/match`),
   confirmMatch: (id: string, source: string, url: string) =>
     req<any>(`/api/cards/${encodeURIComponent(id)}/match/${source}`, post({ url })),
@@ -47,6 +49,7 @@ export const api = {
   fetcherStatus: () => req<FetcherStatus>("/api/admin/fetcher-status"),
   sets: (withStats = false) => req<any[]>("/api/sets" + qs({ with_stats: withStats || undefined })),
   filters: () => req<any>("/api/filters"),
+  ownedItems: (cardId: string) => req<any>("/api/collection" + qs({ card_id: cardId })),
   collection: (p: Record<string, unknown>) => req<any>("/api/collection" + qs(p)),
   collectionSummary: () => req<any>("/api/collection/summary"),
   addToCollection: (b: unknown) => req<any>("/api/collection", post(b)),

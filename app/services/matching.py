@@ -2,9 +2,10 @@
 
 A `user` match always wins; `auto` matches (adapter resolved unambiguously) just save the next search.
 Pending candidates (needs_match) are kept alongside so the UI can offer a picker."""
+import re
 from dataclasses import asdict
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from pymongo.errors import DuplicateKeyError
 
@@ -38,11 +39,23 @@ def _key(card_id: str, source: str) -> str:
     return f"{card_id}|{source}"
 
 
+def product_info(url: str | None, title: str | None = None) -> dict | None:
+    """What print a stored product url is: url slug, Cardmarket version (`V5`), title when known.
+    Prints of one card number differ in price, so the UI shows this next to every matched source."""
+    if not url:
+        return None
+    slug = unquote(urlparse(url).path.rstrip("/").split("/")[-1])
+    m = re.search(r"-V(\d+)(?:-|$)", slug)
+    return {"slug": slug, "version": f"V{m[1]}" if m else None, "title": title}
+
+
 def _out(d: dict | None) -> dict:
     if not d:
-        return {"url": None, "confirmed_by": None, "candidates": [], "updated_at": None}
+        return {"url": None, "confirmed_by": None, "candidates": [], "updated_at": None, "product": None}
     return {"url": d.get("url"), "confirmed_by": d.get("confirmed_by"),
-            "candidates": d.get("candidates", []), "updated_at": d.get("updated_at")}
+            "candidates": [{**c, "product": product_info(c.get("url"), c.get("title"))}
+                           for c in d.get("candidates", [])],
+            "updated_at": d.get("updated_at"), "product": product_info(d.get("url"), d.get("title"))}
 
 
 async def get_matches(db, card_id: str) -> dict[str, dict]:
@@ -58,9 +71,11 @@ async def known_url(db, card_id: str, source: str) -> str | None:
 
 async def confirm(db, card_id: str, source: str, url: str) -> dict:
     url = validate_url(source, url)
+    old = await db.product_matches.find_one({"_id": _key(card_id, source)}) or {}
+    title = next((c.get("title") for c in old.get("candidates", []) if c.get("url") == url), None)
     await db.product_matches.update_one(
         {"_id": _key(card_id, source)},
-        {"$set": {"card_id": card_id, "source": source, "url": url, "confirmed_by": "user",
+        {"$set": {"card_id": card_id, "source": source, "url": url, "confirmed_by": "user", "title": title,
                   "candidates": [], "updated_at": datetime.now(timezone.utc)}}, upsert=True)
     return _out(await db.product_matches.find_one({"_id": _key(card_id, source)}))
 

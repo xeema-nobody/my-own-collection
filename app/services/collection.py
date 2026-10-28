@@ -7,10 +7,13 @@ from app.db.models import CollectionIn
 from app.config import settings
 from app.providers.price import registry
 from app.services.pricing import get_rates, latest_as_of
-from app.services.valuation import grade_key, resolve_item  # noqa: F401 - grade_key re-exported
+from app.services.valuation import grade_key, resolve_item, spread  # noqa: F401 - grade_key re-exported
 
 
-SOURCE_FIELDS = ("value", "price_kind", "match", "grade_key_used", "thin", "sample_size")
+PRESENT_FIELDS = ("value", "estimated", "price_kind", "source", "match", "grade_key_used", "thin",
+                  "sample_size", "as_of", "observed_on", "stale", "headline_rule")
+SOURCE_FIELDS = ("value", "price_kind", "match", "grade_key_used", "thin", "sample_size",
+                "as_of", "observed_on", "stale")
 
 
 def source_ids() -> list[str]:
@@ -58,6 +61,34 @@ def oid(id_: str) -> ObjectId:
         raise HTTPException(404, "item not found")
 
 
+def _comparable(best: dict, sources: dict) -> dict[str, int | None]:
+    """Source values that priced the same way as the headline (same match type); a raw fallback
+    next to a graded price is not a like-for-like comparison and must not trigger an outlier flag."""
+    return {s: r["value"] for s, r in sources.items() if r["value"] is not None and r["match"] == best["match"]}
+
+
+def _resolve_all(card, it, rates, sl, now):
+    """Headline result + one result per source (own fallback chain each)."""
+    best = resolve_item(card, it, rates, sl, now=now)
+    return best, {s: resolve_item(card, it, rates, sl, only=s, now=now) for s in source_ids()}
+
+
+async def compare_card(db, card_id: str, grading: dict | None = None, variant: str | None = None) -> dict | None:
+    """Per-source comparison for one copy of a card (raw, or a given grade) whether owned or not.
+    Same row shape as `present`, minus the item fields."""
+    card = await db.cards.find_one({"_id": card_id})
+    if not card:
+        return None
+    now = datetime.now(timezone.utc)
+    sales = [s async for s in db.sales.find({"card_id": card_id, "sold_at": {
+        "$gte": now - timedelta(days=settings.sold_window_days), "$lte": now}})]
+    it = {"card_id": card_id, "quantity": 1, "variant": variant, "grading": grading}
+    best, sources = _resolve_all(card, it, await get_rates(db), sales, now)
+    return {**{k: best[k] for k in PRESENT_FIELDS if k in best}, "grade_key": grade_key(it),
+            "sources": {s: {k: r[k] for k in SOURCE_FIELDS} for s, r in sources.items() if r["value"] is not None},
+            "spread": spread(_comparable(best, sources))}
+
+
 async def valuate(db, filt: dict | None = None, as_of: datetime | None = None) -> list[dict]:
     """Items joined with card + best price (see services/valuation.py). Base-currency cents for the
     whole stack; None = unpriced. `values[source]` = value when only that source is used.
@@ -78,8 +109,7 @@ async def valuate(db, filt: dict | None = None, as_of: datetime | None = None) -
     for it in items:
         card = cards.get(it["card_id"])
         sl = sales.get(it["card_id"], [])
-        best = resolve_item(card, it, rates, sl, now=now)
-        sources = {s: resolve_item(card, it, rates, sl, only=s, now=now) for s in source_ids()}
+        best, sources = _resolve_all(card, it, rates, sl, now)
         cost = None
         a = it.get("acquired") or {}
         if a.get("price") is not None:
@@ -87,6 +117,7 @@ async def valuate(db, filt: dict | None = None, as_of: datetime | None = None) -
             cost = round(a["price"] * r * it["quantity"]) if r else None
         out.append({"item": it, "card": card, "values": {s: r["value"] for s, r in sources.items()},
                     "sources": {s: {k: r[k] for k in SOURCE_FIELDS} for s, r in sources.items() if r["value"] is not None},
+                    "spread": spread(_comparable(best, sources)),
                     "cost": cost, **best, "value": best["value"]})
     return out
 
@@ -96,4 +127,5 @@ def present(v: dict) -> dict:
     return {**_out(v["item"]), "cost": v["cost"], "card": {k: c.get(k) for k in (
         "_id", "name", "number", "rarity", "set", "images")} if c else None,
         **{k: v[k] for k in ("value", "values", "sources", "estimated", "price_kind", "source", "match",
-                             "grade_key_used", "thin", "sample_size")}}
+                             "grade_key_used", "thin", "sample_size", "as_of", "observed_on", "stale",
+                             "headline_rule", "spread")}}
