@@ -6,7 +6,7 @@ from app.jobs import scheduler as sched
 from app.db.models import FetchIn
 from app.providers.fetcher import FetcherClient, FetcherUnavailable
 from app.providers.price import registry_json
-from app.services.catalog_import import import_catalog, last_failed_sets
+from app.services.catalog_import import import_catalog, incomplete_sets
 from app.services.price_fetch import fetch_prices, resolve_targets
 from app.services.refresh import refresh_prices
 from app.services.snapshots import take_snapshot
@@ -21,14 +21,14 @@ async def catalog_import(tcg: str = "pokemon", sets: list[str] | None = Query(No
     return {"started": True}
 
 
-@router.post("/catalog/import/retry-failed", status_code=202)
-async def catalog_import_retry_failed():
+@router.post("/catalog/import/retry-incomplete", status_code=202)
+async def catalog_import_retry_incomplete():
     await ensure_idle("catalog_import")
-    failed = await last_failed_sets(get_db())
-    if not failed:
+    todo = await incomplete_sets(get_db())
+    if not todo:
         return {"started": False, "sets": []}
-    spawn(import_catalog(failed, retry=True))
-    return {"started": True, "sets": failed}
+    spawn(import_catalog(todo, retry=True))
+    return {"started": True, "sets": todo}
 
 
 @router.post("/prices/refresh", status_code=202)

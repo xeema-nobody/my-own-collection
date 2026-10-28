@@ -87,7 +87,7 @@ export const api = {
   jobs: () => req<any[]>("/api/admin/jobs"),
   status: () => req<any>("/api/admin/status"),
   importCatalog: (sets?: string[]) => req<any>("/api/admin/catalog/import" + qs({ sets }), { method: "POST" }),
-  retryFailedImports: () => req<{ started: boolean; sets: string[] }>("/api/admin/catalog/import/retry-failed", { method: "POST" }),
+  retryIncompleteImports: () => req<{ started: boolean; sets: string[] }>("/api/admin/catalog/import/retry-incomplete", { method: "POST" }),
   refreshPrices: (scope = "collection", sets?: string[]) =>
     req<any>("/api/admin/prices/refresh" + qs({ scope, sets }), { method: "POST" }),
   fetchPrices: (b: { cards?: string[]; sets?: string[]; owned?: boolean; sources?: string[]; force?: boolean }) =>

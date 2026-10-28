@@ -17,7 +17,7 @@ export default function Settings() {
   const jobs = useQuery({ queryKey: ["jobs"], queryFn: api.jobs, refetchInterval: 3000 });
   const done = () => { qc.invalidateQueries({ queryKey: ["jobs"] }); qc.invalidateQueries({ queryKey: ["sets"] }); };
   const imp = useMutation({ mutationFn: (ids?: string[]) => api.importCatalog(ids), onSettled: done });
-  const retry = useMutation({ mutationFn: api.retryFailedImports, onSettled: done });
+  const retry = useMutation({ mutationFn: api.retryIncompleteImports, onSettled: done });
   const ref = useMutation({ mutationFn: (a: { scope: string; sets?: string[] }) => api.refreshPrices(a.scope, a.sets), onSettled: done });
   const fetchAll = useMutation({
     mutationFn: () => api.fetchPrices({ ...(scope === "owned" ? { owned: true } : { sets: [...picked] }), sources: fSources, force }),
@@ -28,6 +28,7 @@ export default function Settings() {
   const lastFull = jobs.data?.find((j: any) => j.type === "catalog_import" && j.status !== "running" &&
     (["full", "retry"].includes(j.stats?.origin) || (!j.stats?.origin && !j.stats?.set)));
   const failed: string[] = lastFull?.stats?.failed_sets ?? [];
+  const incomplete: string[] = [...new Set([...(sets.data ?? []).filter((x: any) => x.cards_missing > 0).map((x: any) => x.external_id), ...failed])];
   const ids = [...picked];
   const shown = (sets.data ?? []).filter((x: any) =>
     `${x.name} ${x.external_id}`.toLowerCase().includes(filter.toLowerCase()));
@@ -53,7 +54,7 @@ export default function Settings() {
         <div className="flex flex-wrap items-center gap-2">
           <button className="btn" disabled={importing || !ids.length} onClick={() => imp.mutate(ids)}>Import selected ({ids.length})</button>
           <button className="btn" disabled={refreshing || !ids.length} onClick={() => ref.mutate({ scope: "sets", sets: ids })}>Refresh prices for selected</button>
-          <button className="btn-ghost" disabled={importing || !failed.length} onClick={() => retry.mutate()}>Retry failed imports ({failed.length})</button>
+          <button className="btn-ghost" disabled={importing || !incomplete.length} onClick={() => retry.mutate()}>Retry incomplete ({incomplete.length})</button>
           <button className="btn-ghost" disabled={importing} onClick={() => imp.mutate(undefined)}>Import all</button>
           <button className="btn-ghost" disabled={refreshing} onClick={() => ref.mutate({ scope: "collection" })}>Refresh collection prices</button>
           <button className="btn-ghost" disabled={refreshing} onClick={() => ref.mutate({ scope: "all" })}>Refresh all prices</button>
@@ -62,12 +63,12 @@ export default function Settings() {
         {(importing || refreshing) && <p className="mt-2 text-sm text-amber-500">
           Running: {[running("catalog_import"), running("price_refresh")].filter(Boolean)
             .map((j: any) => `${j.type} ${JSON.stringify(j.stats)}`).join(" · ")}</p>}
-        {failed.length > 0 && <p className="mt-2 text-xs opacity-70">Failed in last full import: {failed.join(", ")}</p>}
+        {incomplete.length > 0 && <p className="mt-2 text-xs opacity-70">Incomplete or failed: {incomplete.join(", ")}</p>}
         <input className="input mt-3 w-full" placeholder="Filter sets by name or id…" value={filter} onChange={(e) => setFilter(e.target.value)} />
         <div className="mt-2 flex gap-2 text-xs">
           <button className="underline" onClick={() => setPicked(new Set(shown.map((x: any) => x.external_id)))}>select shown</button>
           <button className="underline" onClick={() => setPicked(new Set())}>clear</button>
-          <button className="underline" onClick={() => setPicked(new Set(failed))}>select failed</button>
+          <button className="underline" onClick={() => setPicked(new Set(incomplete))}>select incomplete</button>
         </div>
         <ul className="mt-2 max-h-80 overflow-y-auto text-sm">
           {shown.map((x: any) => (
@@ -75,6 +76,7 @@ export default function Settings() {
               <input type="checkbox" checked={picked.has(x.external_id)} onChange={() => toggle(x.external_id)} />
               <span>{x.name}</span><span className="opacity-60">{x.external_id}</span>
               <span className="ml-auto tabular-nums">{x.cards_priced} / {x.cards_total} priced</span>
+              {x.cards_missing > 0 && <span className="text-red-500" title={`Imported ${x.cards_total} of ${x.cards_expected} cards`}>{x.cards_total} / {x.cards_expected} cards, {x.cards_missing} missing</span>}
               {x.cards_total === 0 && <span className="text-amber-500">not imported</span>}
               {x.cards_total > 0 && x.cards_priced === 0 && <span className="text-slate-400" title="No price block in the source payload">no price source</span>}
             </label></li>))}
