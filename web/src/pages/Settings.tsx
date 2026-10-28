@@ -88,13 +88,14 @@ export default function Settings() {
         <FetchProgress job={lastFetch} live={fetching} />
       </section>
       {s && <section className="card text-sm"><h2 className="mb-2 font-semibold">Config</h2>
-        <p>Base currency: {s.base_currency} · Scheduler: {s.scheduler_enabled ? `on (${s.price_refresh_cron})` : "off (manual)"}</p>
+        <p>Base currency: {s.base_currency} · Scheduler: {s.scheduler_enabled ? "on" : "off (manual)"}</p>
+        {s.scheduler_enabled && <ul className="text-xs opacity-80">{s.scheduler.jobs.map((j: any) => <li key={j.id}>{j.id}: next {j.next_run?.slice(0, 16).replace("T", " ")}</li>)}</ul>}
         <table className="mt-2 w-full"><thead><tr className="text-left opacity-70"><th>Price source</th><th>Kinds</th><th>Grades</th><th>Status</th></tr></thead><tbody>
           {s.price_sources.map((p: any) => <tr key={p.id} className="border-t dark:border-slate-700" title={p.note}><td>{p.label}</td><td>{p.kinds.join(", ")}</td><td>{p.grades}</td>
             <td className={p.enabled ? "text-emerald-600" : "opacity-60"}>{p.enabled ? "enabled" : "not available yet"}</td></tr>)}</tbody></table></section>}
       <section className="card"><h2 className="mb-2 font-semibold">Jobs</h2>
         <table className="w-full text-sm"><tbody>{jobs.data?.map((j: any) => (
-          <tr key={j.id} className="border-t dark:border-slate-700"><td>{j.type}</td><td>{j.status}</td><td>{j.started_at.slice(0, 19)}</td><td>{JSON.stringify(j.stats)}</td><td className="text-red-500">{j.error}</td></tr>))}</tbody></table></section>
+          <tr key={j.id} className="border-t dark:border-slate-700"><td>{j.type}</td><td>{j.status}</td><td className="opacity-70" title={j.error ?? ""}>{j.trigger ?? "manual"}</td><td>{j.started_at.slice(0, 19)}</td><td>{JSON.stringify(j.stats)}</td><td className="text-red-500">{j.error}</td></tr>))}</tbody></table></section>
     </div>
   );
 }

@@ -23,7 +23,7 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 | `services/price_fetch.py` | on-demand scraped fetch job `price_fetch` (cards / sets / owned x sources): adapters -> `prices` + `latest_price`, records matches, `fetch_log` (`{card_id}\|{source}`: status, detail, url, fetched_at), snapshot at end. Endpoints `POST /api/admin/prices/fetch`, `POST /api/cards/{id}/fetch-prices` (202; 422 bad target/source; 503 fetcher down; 409 running) |
 | `services/sales.py` | `store_sales` (scraped sold listings, dedupe on listing id), `store_chart_seed` (PriceCharting monthly history as `seed` observations) |
 | `services/matching.py` | persisted card -> product URL per scraped source (`product_matches`), URL validation, user/auto precedence |
-| `jobs/scheduler.py` | APScheduler daily cron, only if `SCHEDULER_ENABLED` |
+| `jobs/scheduler.py` | APScheduler, only if `SCHEDULER_ENABLED`: tasks `daily_refresh`, `daily_fetch` (scraped, unattended, capped), `daily_snapshot`, `weekly_catalog`, each via `run_task` (failures and busy job types are logged, never propagate). Boot `catch_up` runs overdue tasks once, in the background. `jobs` rows carry `trigger` = `manual`\|`scheduler`\|`catchup`; a scheduled fetch with the fetcher down is a `skipped` row |
 
 Long jobs run as asyncio tasks; state is persisted in the `jobs` collection (UI polls `/api/admin/jobs`). One `running` job per type: API returns 409, and a partial unique index on `jobs.type` (status=running) is the race-free backstop. Orphaned `running` jobs are marked `interrupted` on boot.
 
@@ -57,12 +57,12 @@ Money: integer cents + currency everywhere. Missing price = `null`, never 0.
 `GET /cards` (incl. `has_price`), `/cards/{id}`, `/cards/{id}/prices`, `POST /cards/{id}/sales`, `GET /cards/{id}/price-matrix` (grades/graders derived from stored rows), `GET /cards/{id}/fetch-status` (last scraped-fetch outcome per source), `GET /cards/{id}/match`, `POST|DELETE /cards/{id}/match/{source}` (confirm / reset product URL), `GET /sets` (`?with_stats=true`), `/filters`;
 `/collection` (POST add, GET list with per-item `value/price_kind/source/match/estimated/sources`, `/summary` with `value_by_kind`, PATCH/DELETE `/{id}`, POST `/{id}/remove`);
 `/dashboard/history|breakdown|movers`;
-`/admin/catalog/import` (`?sets=` repeatable), `/admin/catalog/import/retry-failed`, `/admin/prices/refresh` (`?scope=&sets=`), `/admin/snapshot`, `/admin/jobs`, `/admin/status`, `/admin/fetcher-status` (`{up, ...}`; 200 even when the fetcher is down), `/admin/prices/fetch`.
+`/admin/catalog/import` (`?sets=` repeatable), `/admin/catalog/import/retry-failed`, `/admin/prices/refresh` (`?scope=&sets=`), `/admin/snapshot`, `/admin/jobs`, `/admin/status` (incl. `scheduler.jobs[].next_run`), `/admin/fetcher-status` (`{up, ...}`; 200 even when the fetcher is down), `/admin/prices/fetch`.
 Health: `/health`, `/health/ready` (pings Mongo).
 
 ## Config (`.env`, see `.env.example`)
 
-`MONGO_ROOT_USER/PASSWORD`, `BASE_CURRENCY`, `POKEMONTCG_API_KEY` (optional), `SCHEDULER_ENABLED`, `PRICE_REFRESH_CRON`, `FETCHER_URL`, valuation rules `SOLD_MIN_SALES` (3), `SOLD_WINDOW_DAYS` (90), `SOLD_SAMPLE` (10), `PREFERRED_SOURCES` (comma list), `MARKET_MAX_AGE_DAYS` (180). `PRICECHARTING_TOKEN` is unused (no paid API).
+`MONGO_ROOT_USER/PASSWORD`, `BASE_CURRENCY`, `POKEMONTCG_API_KEY` (optional), `SCHEDULER_ENABLED`, `PRICE_REFRESH_CRON` (`0 4 * * *`), `PRICE_FETCH_CRON` (`30 4 * * *`), `SNAPSHOT_CRON` (`0 6 * * *`), `CATALOG_IMPORT_CRON` (`0 3 * * 0`), `SCHEDULER_FETCH_CAP` (300), `FETCHER_URL`, valuation rules `SOLD_MIN_SALES` (3), `SOLD_WINDOW_DAYS` (90), `SOLD_SAMPLE` (10), `PREFERRED_SOURCES` (comma list), `MARKET_MAX_AGE_DAYS` (180). `PRICECHARTING_TOKEN` is unused (no paid API).
 
 ## Frontend
 

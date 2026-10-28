@@ -45,7 +45,7 @@ class FetchService:
 
     async def fetch(self, site_id: str, url: str, wait_selector: str | None = None,
                     wait_ms: int = 0, timeout_s: float | None = None,
-                    click_text: str | None = None) -> FetchResult:
+                    click_text: str | None = None, unattended: bool = False) -> FetchResult:
         site = SITES.get(site_id)
         if site is None:
             raise FetchRejected(f"unknown site {site_id!r}")
@@ -55,7 +55,7 @@ class FetchService:
         try:
             async with self._limiters[site_id]:
                 return await self._run(site, url, wait_selector, wait_ms,
-                                       timeout_s or self.cfg.nav_timeout_s, click_text)
+                                       timeout_s or self.cfg.nav_timeout_s, click_text, unattended)
         finally:
             self._active -= 1
             self.site_state[site_id] = "idle"
@@ -65,13 +65,13 @@ class FetchService:
         return PageState(await page.title(), await page.url(), await page.text())
 
     async def _run(self, site: SiteConfig, url, wait_selector, wait_ms, timeout_s,
-                   click_text=None) -> FetchResult:
+                   click_text=None, unattended=False) -> FetchResult:
         self.site_state[site.id] = "fetching"
         page: Page | None = None
         try:
             page = await self.driver.new_page()
             await page.goto(url, timeout_s)
-            blocked = await self._clear_gate(site, page)
+            blocked = await self._clear_gate(site, page, unattended)
             if blocked:
                 await self._fail_shot(site, page)
                 return blocked
@@ -109,8 +109,8 @@ class FetchService:
                 except Exception:
                     pass
 
-    async def _clear_gate(self, site: SiteConfig, page: Page) -> FetchResult | None:
-        """None when the page is usable; a failure result otherwise."""
+    async def _clear_gate(self, site: SiteConfig, page: Page, unattended: bool = False) -> FetchResult | None:
+        """None when the page is usable; a failure result otherwise. Unattended: fail at once, never ask."""
         cfg, start = self.cfg, self._clock()
         waiting = False
         while True:
@@ -119,6 +119,9 @@ class FetchService:
             if not (challenge or login):
                 return None
             elapsed = self._clock() - start
+            if unattended:
+                return FetchResult(status="login_timeout" if login else "blocked", final_url=state.url,
+                                   title=state.title, detail=f"unattended: {'login' if login else 'challenge'} required")
             if not waiting and (login or elapsed >= cfg.challenge_grace_s):
                 # self-resolving challenges get a grace period; logins ask the user at once
                 waiting = True

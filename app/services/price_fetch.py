@@ -36,6 +36,20 @@ async def resolve_targets(db, cards: list[str] | None = None, sets: list[str] | 
     return list(dict.fromkeys(ids))
 
 
+async def stalest_owned(db, limit: int) -> list[str]:
+    """Owned card ids, least recently tried first (never tried = oldest); first `limit`.
+
+    Cards fetched today are cache-fresh and sort last, so a capped run resumes where the last stopped."""
+    epoch = datetime.min.replace(tzinfo=timezone.utc)
+    last: dict[str, datetime] = {}
+    async for d in db.fetch_log.find({}, {"card_id": 1, "fetched_at": 1}):
+        t = d["fetched_at"].replace(tzinfo=timezone.utc) if d["fetched_at"].tzinfo is None else d["fetched_at"]
+        last[d["card_id"]] = max(t, last.get(d["card_id"], t))   # last attempt on any source, any outcome
+    owned = sorted(await db.collection_items.distinct("card_id"))
+    owned.sort(key=lambda c: last.get(c, epoch))
+    return owned[:limit]
+
+
 async def fetch_status(db, card_id: str) -> dict[str, dict | None]:
     """Last `fetch_log` entry per scraped source; None when never fetched."""
     rows = {d["source"]: d async for d in db.fetch_log.find({"card_id": card_id})}
@@ -67,11 +81,11 @@ async def _watch_login(db, job_id, client, stats: dict):
 
 
 async def fetch_prices(card_ids: list[str], sources: list[str] | None = None, force: bool = False,
-                       provider_for=get_provider, client: FetcherClient | None = None) -> dict:
+                       provider_for=get_provider, client: FetcherClient | None = None, trigger: str = "manual") -> dict:
     db = get_db()
     client = client or FetcherClient()
     sources = [s for s in SCRAPED if not sources or s in sources]
-    job = await jobs.start(db, "price_fetch")
+    job = await jobs.start(db, "price_fetch", trigger)
     stats = {"total": len(card_ids) * len(sources), "done": 0, "ok": 0, "failed": 0, "needs_match": 0,
              "not_found": 0, "sales_new": 0, "seeded": 0, "skipped_cached": 0, "skipped_site": 0, "current": None,
              "waiting_login": [], "failures": [], "needs_match_list": []}

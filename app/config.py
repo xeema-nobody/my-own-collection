@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     fetcher_url: str = "http://host.docker.internal:8110"
     scheduler_enabled: bool = False
     price_refresh_cron: str = "0 4 * * *"
+    price_fetch_cron: str = "30 4 * * *"
+    snapshot_cron: str = "0 6 * * *"
+    catalog_import_cron: str = "0 3 * * 0"
+    # max cards per scheduled scraped fetch; stalest first, the rest resumes next run
+    scheduler_fetch_cap: int = 300
     # valuation (D-A): sold beats aggregate when >= sold_min_sales sales in the window
     sold_min_sales: int = 3
     sold_window_days: int = 90

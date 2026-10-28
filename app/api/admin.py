@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.api.deps import ensure_idle, get_db, spawn
 from app.config import settings
+from app.jobs import scheduler as sched
 from app.db.models import FetchIn
 from app.providers.fetcher import FetcherClient, FetcherUnavailable
 from app.providers.price import registry_json
@@ -78,6 +79,7 @@ async def jobs(limit: int = 20):
 async def status():
     return {"base_currency": settings.base_currency, "scheduler_enabled": settings.scheduler_enabled,
             "price_refresh_cron": settings.price_refresh_cron,
+            "scheduler": {"enabled": settings.scheduler_enabled, "jobs": sched.next_runs()},
             "price_sources": registry_json()}
 
 

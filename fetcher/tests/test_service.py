@@ -119,3 +119,19 @@ async def test_click_text_missing_is_error(tmp_path):
     s, *_ = svc(tmp_path, p)
     r = await s.fetch("altxyz", u, click_text="Sold listings")
     assert r.status == "error" and "Sold listings" in r.detail and p.shots
+
+
+async def test_unattended_login_fails_fast(tmp_path):
+    p = FakePage([("Log in", "https://alt.xyz/login")])
+    s, _, c = svc(tmp_path, p)
+    r = await s.fetch("altxyz", "https://alt.xyz/browse", unattended=True)
+    assert r.status == "login_timeout" and "unattended" in r.detail
+    assert not p.fronted and p.closed and c.t == 0       # never asked the user, never waited
+
+
+async def test_unattended_challenge_is_blocked(tmp_path):
+    u = "https://www.cardmarket.com/en/Pokemon/Products/Singles/x"
+    p = FakePage([("Just a moment...", u)])
+    s, *_ = svc(tmp_path, p)
+    r = await s.fetch("cardmarket", u, unattended=True)
+    assert r.status == "blocked" and not p.fronted
