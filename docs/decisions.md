@@ -68,3 +68,8 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - JSON (`{"format":"moc-collection","version":1,"items":[...]}`) is the lossless format; CSV is flat for spreadsheets (money in integer cents, tags `;`-joined, `name/set/number` columns are read-only context). Import of an unknown `version` is refused.
 - Import upserts on `stack_key`. Default mode `set` overwrites quantity and the editable fields (acquired, notes, tags), so re-importing a file is a no-op and an export doubles as a restore; mode `add` increments quantity instead. Rows that fail validation or reference an unknown card are reported by row number and skipped; the rest are applied (no all-or-nothing).
 - Upload is the raw request body (no `python-multipart` dependency); 5 MB and 20k-row caps.
+
+## Phase 8: backup (2026-10-28, defaults by me, change on objection)
+- Host scripts, not app code: the app container cannot reach docker. `mongodump --archive --gzip` run inside the mongo container with its own env credentials, streamed to `backups/` on the host (written as `.part`, renamed when non-empty).
+- Full dump by default (catalog is re-importable but slow to rebuild); `--no-catalog` for a small user-data dump. Keep newest 14 (`MOC_BACKUP_KEEP`), pruning only `moc-*.archive.gz`.
+- Restore replaces archive collections (`--drop`) after a typed confirmation; `--to-scratch` verifies an archive without touching live data. Scheduling is documented (cron/launchd), not automated.

@@ -10,6 +10,7 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 |---|---|
 | `providers/catalog/pokemontcg.py` | httpx + tenacity retry on 429/5xx, maps payload to card/set docs, extracts price points |
 | `services/catalog_import.py` | per-set import (all / chosen sets / retry of failed), upsert by `_id`, job logging, failed-set isolation |
+| `scripts/backup.sh`, `scripts/restore.sh` | host-side `mongodump`/`mongorestore` through `docker compose exec` (creds from container env); see `backup.md` |
 | `services/portability.py` | collection export (JSON v1 lossless, CSV flat) and import (validates via `CollectionIn`, upsert on `stack_key`, per-row errors) |
 | `services/sets.py` | sets with imported / priced card counts |
 | `services/search.py` | builds Mongo query from `q` + filters |

@@ -58,6 +58,9 @@ docker compose run --rm app python -m app.scripts.demo_db drop     # delete the 
 ## Export / import
 Settings -> "Export / import collection": JSON (lossless) or CSV (spreadsheet; money in cents). Import matches stacks by key, so re-importing the same file changes nothing ("set quantities") or adds quantities ("add"). API: `GET /api/collection/export?format=json|csv`, `POST /api/collection/import?format=&mode=set|add` (file as raw body).
 
+## Backup
+`scripts/backup.sh` dumps the whole database to `backups/`; `scripts/restore.sh` restores (or `--to-scratch` verifies). Scheduling, retention, restore steps: `docs/backup.md`.
+
 ## Alerts
 Alerts page (nav badge = unread): add a rule on a stack, a card or the collection total (above/below a EUR amount, or up/down N% over D days; sold/market/any; optionally include estimated values). Rules are checked after every price fetch, refresh and snapshot ("Check now" re-checks). Each crossing gives one inbox item; the rule re-arms when the condition clears. A rule that is already true fires on the next check. The inbox also warns when a scheduled fetch was skipped (fetcher down / login needed).
 
