@@ -41,3 +41,25 @@ async def test_summary_and_filter_split_needs_price(db, client):
 async def test_fetch_without_any_target_is_422(db, client):
     r = await client.post("/api/admin/prices/fetch", json={})
     assert r.status_code == 422
+
+
+async def test_sort_by_value_order_and_unvalued_last(db, client):
+    doc = make_card("a", "1")
+    await db.cards.insert_one(doc)
+    await store_card_prices(db, doc, await get_rates(db))
+    await own(db, None, "raw")
+    await own(db, 9, "slab")  # needs price: value None
+    for order in ("desc", "asc"):
+        items = (await client.get(f"/api/collection?sort=value&order={order}")).json()["items"]
+        assert [i["value"] is None for i in items] == [False, True]  # unvalued stack stays last either way
+    assert (await client.get("/api/collection?sort=pl&order=bogus")).status_code == 422
+
+
+async def test_pl_is_value_minus_cost(db, client):
+    doc = make_card("a", "1")
+    await db.cards.insert_one(doc)
+    await store_card_prices(db, doc, await get_rates(db))
+    await own(db, None, "raw")
+    await db.collection_items.update_one({"stack_key": "raw"}, {"$set": {"acquired": {"price": 100, "currency": "EUR"}}})
+    row = (await client.get("/api/collection")).json()["items"][0]
+    assert row["pl"] == row["value"] - row["cost"] == row["value"] - 100

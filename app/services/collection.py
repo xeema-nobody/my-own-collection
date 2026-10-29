@@ -125,7 +125,8 @@ async def valuate(db, filt: dict | None = None, as_of: datetime | None = None) -
 
 def present(v: dict) -> dict:
     c = v["card"] or {}
-    return {**_out(v["item"]), "cost": v["cost"], "card": {k: c.get(k) for k in (
+    pl = None if v["value"] is None or v["cost"] is None else v["value"] - v["cost"]
+    return {**_out(v["item"]), "cost": v["cost"], "pl": pl, "card": {k: c.get(k) for k in (
         "_id", "name", "number", "rarity", "set", "images")} if c else None,
         **{k: v[k] for k in ("value", "values", "sources", "estimated", "price_kind", "source", "match",
                              "grade_key_used", "thin", "sample_size", "as_of", "observed_on", "stale",
