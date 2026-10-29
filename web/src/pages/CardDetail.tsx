@@ -10,6 +10,7 @@ import CardFetch from "../components/CardFetch";
 import SourceStatus from "../components/SourceStatus";
 import SalesList from "../components/SalesList";
 import SourceCompare from "../components/SourceCompare";
+import { Section } from "../components/ui";
 
 const CONDITIONS = ["NM", "LP", "MP", "HP", "DMG"];
 const LANGS = ["en", "ja", "es", "it", "fr", "de", "pt", "ko", "zh"];
@@ -55,42 +56,42 @@ export default function CardDetail() {
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
 
   return (
-    <div className="grid gap-6 md:grid-cols-[300px_1fr]">
-      <img src={c.images?.large} alt={c.name} className="w-full max-w-xs" />
-      <div className="space-y-4">
-        <div><h1 className="text-2xl font-bold">{c.name}</h1>
-          <p className="opacity-70">{c.set?.name} · #{c.number}/{c.set?.printed_total} · {c.rarity} · {c.types?.join(", ")}</p>
+    <div className="grid gap-8 md:grid-cols-[340px_1fr]">
+      <img src={c.images?.large} alt={c.name} className="w-full max-w-sm self-start rounded-lg shadow-card md:sticky md:top-20" />
+      <div className="max-w-5xl space-y-5">
+        <div><h1 className="text-3xl font-semibold tracking-tight">{c.name}</h1>
+          <p className="text-muted">{c.set?.name} · #{c.number}/{c.set?.printed_total} · {c.rarity} · {c.types?.join(", ")}</p>
           {c.flavor_text && <p className="mt-1 text-sm italic">{c.flavor_text}</p>}</div>
 
-        <section className="card"><h2 className="mb-2 font-semibold">Prices</h2>
+        <Section title="Prices" collapsible id="card-prices">
           <CardFetch cardId={id} />
           <h3 className="mb-1 text-sm font-semibold">Compare sources</h3>
           <div className="mb-3 space-y-3">
-            <div><div className="mb-1 text-xs opacity-70">Raw copy (one)</div>{rawCompare.data ? <SourceCompare row={rawCompare.data} matches={matches.data} /> : <p className="text-sm opacity-70">Loading…</p>}</div>
+            <div><div className="mb-1 text-xs text-muted">Raw copy (one)</div>{rawCompare.data ? <SourceCompare row={rawCompare.data} matches={matches.data} /> : <p className="text-sm text-muted">Loading…</p>}</div>
             {(owned.data?.items ?? []).filter((i: any) => i.grading).map((i: any) => (
-              <div key={i.id}><div className="mb-1 text-xs opacity-70">Owned: {i.grading.company} {i.grading.grade} × {i.quantity} (stack value)</div><SourceCompare row={i} matches={matches.data} /></div>))}
+              <div key={i.id}><div className="mb-1 text-xs text-muted">Owned: {i.grading.company} {i.grading.grade} × {i.quantity} (stack value)</div><SourceCompare row={i} matches={matches.data} /></div>))}
           </div>
           <SourceStatus cardId={id} />
           <PriceMatrix cardId={id} />
           {(c.sales_stats ?? []).map((s: any, i: number) => <p key={i} className="mt-2 text-sm">Sold ({s.count} sales, {s.source}, {s.grade_key}): min {money(s.min, s.currency)} · avg {money(s.avg, s.currency)} · max {money(s.max, s.currency)}</p>)}
           <SalesList sales={c.sales ?? []} />
-        </section>
+        </Section>
 
-        <section className="card"><h2 className="mb-2 font-semibold">Price history</h2><PriceChart cardId={id} /></section>
+        <Section title="Price history" collapsible id="card-history"><PriceChart cardId={id} /></Section>
 
-        <section className="card"><h2 className="mb-2 font-semibold">Owned</h2>
-          {c.owned.length === 0 && <p className="text-sm opacity-70">None yet.</p>}
+        <Section title="Owned">
+          {c.owned.length === 0 && <p className="text-sm text-muted">None yet.</p>}
           {c.owned.map((s: any) => (
-            <div key={s.id} className="flex items-center gap-2 border-b py-1 text-sm last:border-0 dark:border-slate-700">
+            <div key={s.id} className="flex items-center gap-2 border-b border-line py-2 text-sm last:border-0">
               <span className="flex-1">{s.variant ? `${s.variant} · ` : ""}{s.language.toUpperCase()} · {s.grading ? `${s.grading.company} ${s.grading.grade}` : s.condition}</span>
               <button className="btn-ghost" onClick={() => dec.mutate({ sid: s.id })}>−</button>
               <span className="w-6 text-center">{s.quantity}</span>
               <button className="btn-ghost" disabled={!!s.grading?.cert_number} onClick={() => inc.mutate(s)}>+</button>
               <button className="btn-ghost" onClick={() => dec.mutate({ sid: s.id, del: true })}>Remove</button>
             </div>))}
-        </section>
+        </Section>
 
-        <section className="card"><h2 className="mb-2 font-semibold">Add to collection</h2>
+        <Section title="Add to collection">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {c.variants.length > 1 && field("Variant", <select className="input w-full" value={f.variant} onChange={set("variant")}>{c.variants.map((v: string) => <option key={v}>{v}</option>)}</select>)}
             {field("Language", <select className="input w-full" value={f.language} onChange={set("language")}>{LANGS.map((v) => <option key={v}>{v}</option>)}</select>)}
@@ -104,10 +105,10 @@ export default function CardDetail() {
             {field("Notes", <input className="input w-full" value={f.notes} onChange={set("notes")} />)}
           </div>
           <button className="btn mt-3" disabled={add.isPending} onClick={() => add.mutate()}>Add</button>
-          {add.error && <span className="ml-3 text-sm text-red-500">{String(add.error)}</span>}
+          {add.error && <span className="ml-3 text-sm text-danger">{String(add.error)}</span>}
           {fetchMsg && <span className="ml-3 text-sm opacity-80" role="status">{fetchMsg}</span>}
-          {add.isSuccess && <span className="ml-3 text-sm text-emerald-600">Added</span>}
-        </section>
+          {add.isSuccess && <span className="ml-3 text-sm text-ok">Added</span>}
+        </Section>
       </div>
     </div>
   );

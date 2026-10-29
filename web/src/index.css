@@ -1,6 +1,33 @@
+@import "@fontsource-variable/inter";
 @tailwind base; @tailwind components; @tailwind utilities;
-body { @apply bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100; }
-.btn { @apply rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50; }
-.btn-ghost { @apply rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800; }
-.input { @apply rounded border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800; }
-.card { @apply rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800; }
+
+/* Design tokens: space-separated RGB so Tailwind can apply alpha. Dark is the default look. */
+:root {
+  --bg: 244 244 245; --surface: 255 255 255; --surface-2: 244 244 245; --line: 228 228 231;
+  --fg: 24 24 27; --muted: 113 113 122;
+  --accent: 5 150 105; --accent-fg: 255 255 255;
+  --ok: 5 150 105; --warn: 202 138 4; --danger: 220 38 38;
+  color-scheme: light;
+}
+:root.dark {
+  --bg: 9 9 11; --surface: 24 24 27; --surface-2: 39 39 42; --line: 63 63 70;
+  --fg: 244 244 245; --muted: 161 161 170;
+  --accent: 16 185 129; --accent-fg: 6 20 14;
+  --ok: 52 211 153; --warn: 250 204 21; --danger: 248 113 113;
+  color-scheme: dark;
+}
+
+@layer base {
+  body { @apply bg-bg font-sans text-fg antialiased; }
+  :focus-visible { @apply outline-none ring-2 ring-accent/60; }
+  /* Numbers line up in tables and KPIs. */
+  .num { font-variant-numeric: tabular-nums; }
+}
+
+/* Legacy utility classes, kept so unrestyled pages follow the theme; new code uses components/ui. */
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-1.5 rounded bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50; }
+  .btn-ghost { @apply inline-flex items-center justify-center gap-1.5 rounded border border-line bg-transparent px-3 py-1.5 text-sm transition hover:bg-surface-2 disabled:pointer-events-none disabled:opacity-50; }
+  .input { @apply rounded border border-line bg-surface px-2.5 py-1.5 text-sm placeholder:text-muted; }
+  .card { @apply rounded-lg bg-surface p-4 shadow-card; }
+}
