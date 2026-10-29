@@ -17,7 +17,7 @@ app/                 Python backend
   services/          catalog_import, search, collection (valuation), pricing, fx, snapshots, alerts, refresh, jobs
   providers/         catalog/ (CatalogProvider, pokemontcg), price/ (fx)
   jobs/scheduler.py  APScheduler, only if SCHEDULER_ENABLED
-web/                 Vite React SPA (src/pages, src/lib/api.ts = single API client)
+web/                 Vite React SPA (src/pages, src/components/ui = UI kit, src/lib/api.ts = single API client)
 tests/  docs/
 ```
 
@@ -40,6 +40,7 @@ Never `docker compose down -v` (deletes the mongo volume = all collection data).
 - Money = integer cents + currency, never floats. Missing price = `None`, never 0.
 - Idempotent writes (upsert on natural key); re-running import/refresh/snapshot is safe.
 - Config via `app/config.py`; FE calls only via `web/src/lib/api.ts`.
+- FE: pages use `web/src/components/ui` and theme tokens (`bg-surface`, `text-muted`, `text-accent`...), never raw slate/indigo colours or native selects; default theme is dark.
 - Long jobs run as asyncio tasks, state in `jobs` collection.
 - No live network in tests; fixtures under `tests/fixtures/`.
 

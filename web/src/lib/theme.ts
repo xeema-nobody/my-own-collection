@@ -4,11 +4,11 @@ export type Theme = "light" | "dark" | "system";
 const KEY = "moc-theme";
 
 function stored(): Theme {
-  try { const v = localStorage.getItem(KEY); if (v === "light" || v === "dark") return v; } catch { /* storage blocked */ }
-  return "system";
+  try { const v = localStorage.getItem(KEY); if (v === "light" || v === "dark" || v === "system") return v; } catch { /* storage blocked */ }
+  return "dark"; // default look; "system" is an explicit choice
 }
 
-/** Toggle the `dark` class on <html>; "system" follows the OS. */
+/** Toggle the `dark` class on <html>; "system" follows the OS. Default (nothing stored) is dark. */
 export function applyTheme(t: Theme) {
   const dark = t === "dark" || (t === "system" && matchMedia?.("(prefers-color-scheme: dark)").matches);
   document.documentElement.classList.toggle("dark", dark);
@@ -17,7 +17,7 @@ export function applyTheme(t: Theme) {
 export function useTheme() {
   const [theme, setThemeState] = useState<Theme>(stored);
   const setTheme = (t: Theme) => {
-    try { t === "system" ? localStorage.removeItem(KEY) : localStorage.setItem(KEY, t); } catch { /* storage blocked */ }
+    try { localStorage.setItem(KEY, t); } catch { /* storage blocked */ }
     setThemeState(t);
   };
   useEffect(() => {

@@ -33,7 +33,7 @@ describe("SegmentedControl", () => {
 });
 
 describe("theme", () => {
-  it("toggle sets class and persists; system clears storage", async () => {
+  it("toggle sets class and persists each choice", async () => {
     localStorage.clear();
     render(<ThemeToggle />);
     await userEvent.click(screen.getByRole("radio", { name: "Dark" }));
@@ -42,7 +42,13 @@ describe("theme", () => {
     await userEvent.click(screen.getByRole("radio", { name: "Light" }));
     expect(document.documentElement.classList.contains("dark")).toBe(false);
     await userEvent.click(screen.getByRole("radio", { name: "System" }));
-    expect(localStorage.getItem("moc-theme")).toBeNull();
+    expect(localStorage.getItem("moc-theme")).toBe("system");
+  });
+  it("defaults to dark when nothing is stored", () => {
+    localStorage.clear();
+    const { result } = renderHook(() => useTheme());
+    expect(result.current.theme).toBe("dark");
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
   it("hook reads stored value", () => {
     localStorage.setItem("moc-theme", "light");
