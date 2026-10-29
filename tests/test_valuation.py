@@ -88,15 +88,31 @@ async def test_lower_grade_fallback_is_estimated(db):
     v = await value(db, item(9))
     assert (v["match"], v["grade_key_used"], v["estimated"]) == ("lower", "PSA8", True)
     other = await value(db, item(9, company="BGS"))
-    assert other["match"] == "raw_fallback"
+    assert (other["match"], other["value"], other["needs_price"]) == ("needs_graded_price", None, True)
 
 
-async def test_raw_fallback_is_estimated_and_ignores_raw_sales(db):
+async def test_graded_without_graded_price_is_not_valued_raw_is_reference_only(db):
     await card(db)
     for c in (100, 200, 300):
-        await sale(db, "raw", c, source="pricecharting")
+        await sale(db, "raw", c, source="pricecharting")  # scraped raw sales are ignored for the reference too
+    v = await value(db, item(9, qty=2))
+    assert (v["value"], v["match"], v["needs_price"], v["estimated"]) == (None, "needs_graded_price", True, False)
+    assert (v["ref_raw_value"], v["ref_raw_source"]) == (2 * 22509, "tcgplayer")  # tcgplayer 250.10 USD before catalog cardmarket
+    assert all(x is None for x in v["values"].values())
+
+
+async def test_graded_priced_has_no_needs_price(db):
+    await card(db, pt("pricecharting", "PSA9", 4750))
     v = await value(db, item(9))
-    assert (v["match"], v["grade_key_used"], v["estimated"], v["value"]) == ("raw_fallback", "raw", True, 22509)  # tcgplayer 250.10 USD before catalog cardmarket
+    assert (v["needs_price"], v["ref_raw_value"]) == (False, None)
+    assert (await value(db, item()))["needs_price"] is False  # raw item
+
+
+async def test_graded_with_no_price_at_all_still_needs_price(db):
+    await db.cards.insert_one(make_card("a", "1", priced=False))
+    v = await value(db, item(9))
+    assert (v["value"], v["needs_price"], v["ref_raw_value"]) == (None, True, None)
+    assert (await value(db, item()))["needs_price"] is False  # raw: no data, not "needs graded price"
 
 
 async def test_raw_item_uses_raw_price_exact_and_skips_scraped_raw_sales(db):
@@ -117,7 +133,7 @@ async def test_unpriced_is_none_never_zero(db):
 async def test_ask_never_used(db):
     await card(db, pt("cardmarket_web", "PSA9", 7777, "ask"))
     v = await value(db, item(9))
-    assert v["match"] == "raw_fallback"
+    assert (v["match"], v["value"]) == ("needs_graded_price", None)
 
 
 async def test_quantity_multiplies(db):
@@ -131,8 +147,8 @@ async def test_per_source_values_and_missing_variant_flagged(db):
     v = await value(db, item(9, variant="reverse"))
     assert v["values"]["altxyz"] == 4500 and v["values"]["pricecharting"] == 3600
     assert v["sources"]["altxyz"]["match"] == "exact"
-    assert v["values"]["tcgplayer"] is not None  # no graded tcgplayer price -> its own raw fallback
-    assert v["sources"]["tcgplayer"]["match"] == "raw_fallback"
+    assert v["values"]["tcgplayer"] is None  # no graded tcgplayer price: raw is not a value for a slab
+    assert "tcgplayer" not in v["sources"]
 
 
 async def test_snapshot_matches_valuate(db):
@@ -184,4 +200,14 @@ async def test_snapshot_marks_weak_sources(db):
     await db.collection_items.insert_one(item(9))
     snap = await take_snapshot(db)
     assert snap["weak_by_source"]["pricecharting"] is False
-    assert snap["weak_by_source"]["tcgplayer"] is True  # raw fallback
+    assert "tcgplayer" not in snap["weak_by_source"]  # no graded tcgplayer price: no value, not "weak"
+
+
+async def test_snapshot_excludes_needs_price_stacks(db):
+    await card(db)
+    await db.collection_items.insert_one(item(9))     # slab, raw price only
+    await db.collection_items.insert_one(item(None))  # raw copy
+    snap = await take_snapshot(db)
+    assert snap["total_value"] == 22509 and snap["needs_price_count"] == 1
+    assert snap["ref_raw_value"] == 22509 and snap["valuation_version"] == 2
+    assert snap["card_count"] == 2 and snap["item_count"] == 2

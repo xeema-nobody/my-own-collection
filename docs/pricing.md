@@ -61,10 +61,10 @@ Grade chain, first hit wins (raw items: step 1 only):
 1. **exact** grade (`PSA9`).
 2. **bucket** `G9` (PriceCharting, company-agnostic; none for 10s). Not exact.
 3. **lower**: nearest lower grade of the same company that has data. Not exact.
-4. **raw_fallback**: raw market price. Not exact.
-5. **none**: unpriced, value `None` (never 0).
+4. **raw_fallback** (graded items only, info): the raw market price is NOT the slab's value. The item gets `value=None`, `match=needs_graded_price`, `needs_price=true`, and the raw price is exposed as `ref_raw_value` / `ref_raw_source` ("raw copy is about X, not counted"). Since Phase 9.2; before, it was valued at the raw price, which inflated totals.
+5. **none**: unpriced, value `None` (never 0). Graded: `needs_price=true`; raw: plain "no data".
 
-Only `exact` is shown without `≈`. Every other match sets `estimated`; the UI says why (bucket / lower grade / raw fallback / variant fallback).
+Only `exact` is shown without `≈`. Every other counted match (bucket / lower grade / variant fallback) sets `estimated`; the UI says why. Items without a value (`needs_price`, no data) are excluded from totals, P/L, snapshots, movers and alerts, and counted separately (`needs_price`, `no_data` in `/api/collection/summary`).
 
 Within one grade (D-A): **sold** if >= `SOLD_MIN_SALES` (3) sales in the last `SOLD_WINDOW_DAYS` (90): median of the last `SOLD_SAMPLE` (10), pooled across sources in `sales` and converted to base currency; else aggregate **market** by `PREFERRED_SOURCES` (default `pricecharting > tcgplayer > cardmarket_web > cardmarket > altxyz`, then any other source; Phase 5: scraped `cardmarket_web` is unverified per product version and the catalog `cardmarket` figure can be months stale, so they rank below pricecharting/tcgplayer); else **thin sold** (1-2 sales, or a sold point in `latest_price`), flagged `thin` with the sale count. All three are env settings (`app/config.py`), no UI.
 - Stale guard: a market point whose upstream `as_of` is older than `MARKET_MAX_AGE_DAYS` (180) only counts when no fresher source has that grade. Scraped points have no `as_of` (dated by our fetch) and count as fresh.
@@ -81,7 +81,7 @@ Collection (expand a row), CardDetail ("Compare sources": one raw copy + each ow
 
 ## Snapshots
 
-Taken after each refresh (or `POST /api/admin/snapshot`). One per UTC date. No backfill possible: history starts at the first snapshot. Fields: `totals_by_source` (value via that source alone), `total_value` (the headline valuation), `value_kind_breakdown` (sum per sold/market), `estimated_count`, `weak_by_source` (any item valued thin or not exact via that source; the chart draws a hollow dot). Snapshots before Phase 5 lack `weak_by_source`.
+Taken after each refresh (or `POST /api/admin/snapshot`). One per UTC date. No backfill possible: history starts at the first snapshot. Fields: `totals_by_source` (value via that source alone), `total_value` (the headline valuation), `value_kind_breakdown` (sum per sold/market), `estimated_count`, `weak_by_source` (any item valued thin or not exact via that source; the chart draws a hollow dot). Snapshots before Phase 5 lack `weak_by_source`. Snapshots carry `valuation_version` (2 since Phase 9.2: slabs without a graded price are not valued) plus `needs_price_count` and `ref_raw_value`; older snapshots used the raw fallback, are treated as legacy and hidden from `GET /api/dashboard/history` (`?include_legacy=true` returns them with `legacy_valuation: true`).
 
 ## Movers (`services/movers.py`)
 

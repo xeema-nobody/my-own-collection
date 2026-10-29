@@ -7,6 +7,8 @@ from app.services import alerts
 from app.services.collection import source_ids, valuate
 
 log = logging.getLogger(__name__)
+# 2 = graded stacks without a graded price are not valued. Snapshots without it used the raw fallback.
+VALUATION_VERSION = 2
 
 
 async def take_snapshot(db) -> dict:
@@ -38,6 +40,8 @@ async def take_snapshot(db) -> dict:
            "estimated_count": sum(1 for v in vals if v["estimated"]),
            "total_cost": sum(v["cost"] or 0 for v in vals), "item_count": len(vals),
            "card_count": sum(v["item"]["quantity"] for v in vals), "unpriced_count": unpriced,
+           "needs_price_count": sum(1 for v in vals if v["needs_price"]),
+           "ref_raw_value": sum(v["ref_raw_value"] or 0 for v in vals), "valuation_version": VALUATION_VERSION,
            "breakdowns": {"by_set": dict(by_set), "by_rarity": dict(by_rarity), "by_tcg": dict(by_tcg)},
            "taken_at": datetime.now(timezone.utc)}
     await db.collection_snapshots.update_one({"date": date}, {"$set": doc}, upsert=True)

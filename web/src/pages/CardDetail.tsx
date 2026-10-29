@@ -1,3 +1,4 @@
+import { requestPriceFetch } from "../lib/autoFetch";
 import { QueryError } from "../components/QueryState";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
@@ -29,14 +30,23 @@ export default function CardDetail() {
       grading: f.graded ? { company: f.company, grade: +f.grade, cert_number: f.cert || null } : null,
       quantity: +f.qty, notes: f.notes || null,
       acquired: f.price ? { price: Math.round(+f.price * 100), currency: "EUR" } : null }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["card", id] }); qc.invalidateQueries({ queryKey: ["collection"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["card", id] }); qc.invalidateQueries({ queryKey: ["collection"] }); autoFetch(); },
   });
+  const [fetchMsg, setFetchMsg] = useState("");
+  // Best-effort: adding never waits for or fails because of the price fetch.
+  const autoFetch = async () => {
+    setFetchMsg("Saved. Fetching prices…");
+    const r = await requestPriceFetch(id);
+    qc.invalidateQueries({ queryKey: ["jobs"] });
+    setFetchMsg({ started: "Saved. Fetching prices (see Prices > Fetch).", queued: "Saved. Another price fetch is running; this card is queued.",
+      offline: "Saved. Prices not fetched: fetcher offline (the stack shows “needs price”).", error: "Saved. Prices not fetched." }[r]);
+  };
   const dec = useMutation({
     mutationFn: ({ sid, del }: { sid: string; del?: boolean }) => del ? api.deleteItem(sid) : api.removeFromCollection(sid, 1),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["card", id] }),
   });
   const inc = useMutation({ mutationFn: (s: any) => api.addToCollection({ card_id: id, variant: s.variant, language: s.language, condition: s.condition, grading: s.grading, quantity: 1 }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["card", id] }) });
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["card", id] }); autoFetch(); } });
 
   if (card.isLoading) return <p>Loading…</p>;
   if (card.error) return <QueryError q={card} label="Card" />;
@@ -95,6 +105,7 @@ export default function CardDetail() {
           </div>
           <button className="btn mt-3" disabled={add.isPending} onClick={() => add.mutate()}>Add</button>
           {add.error && <span className="ml-3 text-sm text-red-500">{String(add.error)}</span>}
+          {fetchMsg && <span className="ml-3 text-sm opacity-80" role="status">{fetchMsg}</span>}
           {add.isSuccess && <span className="ml-3 text-sm text-emerald-600">Added</span>}
         </section>
       </div>

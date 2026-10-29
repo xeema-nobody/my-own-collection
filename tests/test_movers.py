@@ -38,10 +38,10 @@ async def test_raw_mover_uses_observation_log(db):
 
 
 async def test_changed_fallback_is_not_a_move(db):
-    await card(db)  # only raw prices: PSA9 item values via raw_fallback now and then
+    await card(db)  # only raw prices: PSA9 slab is not valued (needs price) at the old date
     await own(db, item(9))
     await store_scraped_points(db, CID, [pt("pricecharting", "PSA9", 5000, "sold")], observed_on=today())
-    res = await movers(db, days=7)  # then: raw_fallback, now: exact -> not comparable
+    res = await movers(db, days=7)  # then: no value, now: exact -> not comparable
     assert res == {"down": [], "up": []}
 
 

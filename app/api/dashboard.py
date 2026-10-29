@@ -5,15 +5,20 @@ from fastapi import APIRouter, Query
 from app.api.deps import get_db
 from app.services import collection as svc
 from app.services.movers import movers
+from app.services.snapshots import VALUATION_VERSION
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 @router.get("/history")
-async def history(days: int = Query(90, ge=1, le=3650)):
+async def history(days: int = Query(90, ge=1, le=3650), include_legacy: bool = False):
+    """Snapshots from before `VALUATION_VERSION` 2 priced graded stacks at their raw price: hidden unless asked."""
     since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
-    return [{k: v for k, v in s.items() if k != "_id"}
-            async for s in get_db().collection_snapshots.find({"date": {"$gte": since}}).sort("date", 1)]
+    flt: dict = {"date": {"$gte": since}}
+    if not include_legacy:
+        flt["valuation_version"] = {"$gte": VALUATION_VERSION}
+    return [{**{k: v for k, v in s.items() if k != "_id"}, "legacy_valuation": s.get("valuation_version", 1) < VALUATION_VERSION}
+            async for s in get_db().collection_snapshots.find(flt).sort("date", 1)]
 
 
 @router.get("/breakdown")
