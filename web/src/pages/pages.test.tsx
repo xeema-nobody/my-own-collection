@@ -146,7 +146,7 @@ describe("Alerts 'N new' label", () => {
   });
 });
 
-describe("Settings import", () => {
+describe("Settings", () => {
   const routes = { "/api/admin/status": { base_currency: "EUR", scheduler_enabled: false, price_sources: [] }, "/api/sets": [], "/api/admin/jobs": [], "/api/admin/fetcher-status": { up: false } };
   const pick = async () => {
     await userEvent.upload(document.querySelector('input[type="file"]')!, new File(["{}"], "c.json"));
@@ -154,16 +154,49 @@ describe("Settings import", () => {
   };
   it("shows created/updated/rejected summary", async () => {
     mockApi({ ...routes, "POST /api/collection/import": { created: 3, updated: 1, errors: [{ row: 2, error: "bad card" }] } });
-    renderPage(<Settings />);
+    renderPage(<Settings />, "/settings?tab=data");
     await pick();
     expect(await screen.findByText(/Created 3, updated 1, 1 rejected/)).toBeInTheDocument();
     expect(screen.getByText("row 2: bad card")).toBeInTheDocument();
   });
   it("shows import error", async () => {
     mockApi({ ...routes, "POST /api/collection/import": { status: 413, body: { detail: "file too large" } } });
-    renderPage(<Settings />);
+    renderPage(<Settings />, "/settings?tab=data");
     await pick();
     expect(await screen.findByText(/file too large/)).toBeInTheDocument();
+  });
+  const sets = [
+    { external_id: "base1", name: "Base", series: "Base", release_date: "1999-01-09", cards_total: 102, cards_expected: 102, cards_missing: 0, cards_priced: 100 },
+    { external_id: "sm11", name: "Unified Minds", series: "Sun & Moon", release_date: "2019-08-02", cards_total: 100, cards_expected: 260, cards_missing: 160, cards_priced: 90 },
+    { external_id: "sm12", name: "Cosmic Eclipse", series: "Sun & Moon", release_date: "2019-11-01", cards_total: 0, cards_expected: 272, cards_missing: 0, cards_priced: 0 },
+  ];
+  it("catalog: groups by series, filters, selects, confirms import all", async () => {
+    mockApi({ ...routes, "/api/sets": sets, "POST /api/admin/catalog/import": { started: true } });
+    renderPage(<Settings />);
+    expect(await screen.findByText("Sun & Moon")).toBeInTheDocument();
+    expect(screen.queryByText("Unified Minds")).not.toBeInTheDocument(); // groups start collapsed
+    await userEvent.click(screen.getByRole("button", { name: "Incomplete" }));
+    expect(await screen.findByText("Unified Minds")).toBeInTheDocument();
+    expect(screen.getByText("160 missing")).toBeInTheDocument();
+    expect(screen.queryByText("Cosmic Eclipse")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select Unified Minds" }));
+    expect(screen.getByText("Selected sets (1)")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Import all" }));
+    expect(await screen.findByText("Import all sets?")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() => expect(screen.queryByText("Import all sets?")).not.toBeInTheDocument());
+  });
+  it("jobs: readable summary and type filter", async () => {
+    const now = new Date().toISOString();
+    mockApi({ ...routes, "/api/admin/jobs": [
+      { id: "1", type: "price_fetch", status: "ok", trigger: "manual", started_at: now, finished_at: now, stats: { total: 3, done: 3, ok: 2, not_found: 1, sales_new: 226 } },
+      { id: "2", type: "catalog_import", status: "partial", trigger: "scheduler", started_at: now, finished_at: now, stats: { sets: 4, cards: 90, failed_sets: ["sm11"] } },
+    ] });
+    renderPage(<Settings />, "/settings?tab=jobs");
+    expect(await screen.findByText("3/3 cards, 2 ok, 1 not found, 226 new sales")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Catalog import" }));
+    expect(screen.queryByText(/226 new sales/)).not.toBeInTheDocument();
+    expect(screen.getByText(/1 sets failed/)).toBeInTheDocument();
   });
   it("status error shows Retry", async () => {
     mockApi({ ...routes, "/api/admin/status": down });

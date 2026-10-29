@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, renderHook, act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Combobox, Section, SegmentedControl, Badge, Kpi, EmptyState, Pagination, SortTh, Drawer } from "./index";
+import { Combobox, Section, SegmentedControl, Badge, Kpi, EmptyState, Pagination, SortTh, Drawer, Chip, FileDrop } from "./index";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ThemeToggle from "../ThemeToggle";
 import { useTheme } from "../../lib/theme";
@@ -131,5 +131,29 @@ describe("Combobox", () => {
     await userEvent.click(screen.getByRole("button", { name: "Card" }));
     await userEvent.click(await screen.findByRole("button", { name: "Xatu" }));
     expect(on).toHaveBeenCalledWith("x", "Xatu");
+  });
+});
+
+describe("Chip", () => {
+  it("exposes pressed state", async () => {
+    const on = vi.fn();
+    render(<Chip active onClick={on}>Incomplete</Chip>);
+    const b = screen.getByRole("button", { name: "Incomplete" });
+    expect(b).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(b);
+    expect(on).toHaveBeenCalled();
+  });
+});
+
+describe("FileDrop", () => {
+  it("picks via input and shows file name", async () => {
+    const on = vi.fn();
+    const { rerender } = render(<FileDrop file={null} onFile={on} accept=".json" hint="Drop here" />);
+    expect(screen.getByText("Drop here")).toBeInTheDocument();
+    const f = new File(["{}"], "c.json");
+    await userEvent.upload(document.querySelector('input[type="file"]')!, f);
+    expect(on).toHaveBeenCalledWith(f);
+    rerender(<FileDrop file={f} onFile={on} accept=".json" hint="Drop here" />);
+    expect(screen.getByText("c.json")).toBeInTheDocument();
   });
 });
