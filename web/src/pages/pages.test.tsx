@@ -63,7 +63,7 @@ describe("Alerts", () => {
     mockApi({ "/api/alerts/events": [], "/api/alerts": [], "/api/collection": { items: [] } });
     renderPage(<Alerts />);
     expect(await screen.findByText(/No alerts yet/)).toBeInTheDocument();
-    expect(screen.getByText("No rules yet.")).toBeInTheDocument();
+    expect(screen.getByText("No rules yet")).toBeInTheDocument();
   });
   it("error", async () => {
     mockApi({ "/api/alerts/events": down, "/api/alerts": down, "/api/collection": { items: [] } });
@@ -86,6 +86,44 @@ describe("Alerts", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Check now" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Check now" })).toBeEnabled());
     expect(screen.queryByText(/new$/)).not.toBeInTheDocument();
+  });
+});
+
+describe("Alerts rule form", () => {
+  const base = { "/api/alerts/events": [], "/api/alerts": [] };
+  const stack = { id: "s1", card_id: "c1", card: { name: "Squirtle", number: "7" }, condition: "NM", quantity: 1 };
+  const posted = (fn: ReturnType<typeof mockApi>) => {
+    const c = fn.mock.calls.find(([, i]) => (i as RequestInit | undefined)?.method === "POST");
+    return c ? JSON.parse(String((c[1] as RequestInit).body)) : undefined;
+  };
+  it("total scope, above: posts cents and shows the sentence", async () => {
+    const fn = mockApi({ ...base, "/api/collection": { items: [], total: 0 }, "POST /api/alerts": { id: "n" } });
+    renderPage(<Alerts />);
+    await userEvent.type(await screen.findByLabelText("Amount"), "100");
+    expect(screen.getByText(/alerted when your collection total goes above EUR 100.00/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Add rule/ }));
+    await waitFor(() => expect(posted(fn)).toMatchObject({ scope: "total", op: "above", threshold: 10000, kind: "any" }));
+  });
+  it("percent op reveals days and posts a percentage", async () => {
+    const fn = mockApi({ ...base, "/api/collection": { items: [], total: 0 }, "POST /api/alerts": { id: "n" } });
+    renderPage(<Alerts />);
+    await userEvent.click(await screen.findByRole("combobox", { name: "Condition" }));
+    await userEvent.click(await screen.findByRole("option", { name: "rises by" }));
+    await userEvent.type(screen.getByLabelText("Amount"), "10");
+    await userEvent.click(screen.getByRole("radio", { name: "sold only" }));
+    await userEvent.click(screen.getByRole("button", { name: /Add rule/ }));
+    await waitFor(() => expect(posted(fn)).toMatchObject({ op: "up_pct", threshold: 10, days: 7, kind: "sold" }));
+  });
+  it("validates amount", async () => {
+    mockApi({ ...base, "/api/collection": { items: [], total: 0 } });
+    renderPage(<Alerts />);
+    await userEvent.click(await screen.findByRole("button", { name: /Add rule/ }));
+    expect(await screen.findByText("Enter an amount above 0")).toBeInTheDocument();
+  });
+  it("?stack= prefills the stack scope and its name", async () => {
+    mockApi({ ...base, "/api/collection": { items: [stack], total: 1 } });
+    renderPage(<Alerts />, "/alerts?stack=s1");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Stack" })).toHaveTextContent("Squirtle #7 · NM × 1"));
   });
 });
 

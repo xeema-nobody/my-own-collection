@@ -9,3 +9,9 @@ globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {
 
 // jsdom lacks matchMedia (theme hook).
 globalThis.matchMedia ??= ((q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} })) as unknown as typeof matchMedia;
+
+// jsdom lacks pointer capture / scrollIntoView (Radix Select opens via pointer events).
+Element.prototype.hasPointerCapture ??= () => false;
+Element.prototype.setPointerCapture ??= () => {};
+Element.prototype.releasePointerCapture ??= () => {};
+Element.prototype.scrollIntoView ??= () => {};
