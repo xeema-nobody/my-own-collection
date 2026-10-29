@@ -27,6 +27,30 @@ describe("Collection", () => {
 });
 
 describe("Dashboard", () => {
+  const ok = {
+    "/api/collection/summary": { ...summary, cards: 3, distinct: 2, value: 10000, cost: 8000, pl: 2000, needs_price: 1, value_by_kind: { sold: 5000 }, by_source: {} },
+    "/api/dashboard/history": [], "/api/dashboard/breakdown": [{ name: "Base Set", value: 7500 }, { name: "Jungle", value: 2500 }],
+    "/api/dashboard/movers": { up: [{ card_id: "c1", name: "Pikachu", grade_key: "raw", kind: "market", source: "x", match: "exact", from: 100, to: 150, pct: 50 }], down: [] },
+    "/api/collection": { items: [{ id: "1", card_id: "c9", card: { name: "Charizard" }, condition: "NM", quantity: 1, value: 9000, price_kind: "sold" }], total: 1 },
+    "/api/jobs": [],
+  };
+  it("renders insight sections", async () => {
+    mockApi(ok);
+    renderPage(<Dashboard />);
+    expect(await screen.findByText("Where the value is")).toBeInTheDocument();
+    expect(await screen.findByText("Base Set")).toBeInTheDocument();
+    expect(await screen.findByText("Charizard")).toBeInTheDocument();
+    expect(await screen.findByText("Pikachu")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fetch missing prices" })).toBeEnabled();
+  });
+  it("empty states", async () => {
+    mockApi({ ...ok, "/api/dashboard/breakdown": [], "/api/dashboard/movers": { up: [], down: [] }, "/api/collection": { items: [], total: 0 },
+      "/api/collection/summary": summary });
+    renderPage(<Dashboard />);
+    expect(await screen.findByText("Nothing valued yet")).toBeInTheDocument();
+    expect(await screen.findByText("No moves yet")).toBeInTheDocument();
+    expect(screen.getByText("No valued stacks")).toBeInTheDocument();
+  });
   it("API error shows alerts with Retry", async () => {
     mockApi({ "/api": down });
     renderPage(<Dashboard />);

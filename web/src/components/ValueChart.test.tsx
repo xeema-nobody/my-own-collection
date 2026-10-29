@@ -26,3 +26,23 @@ describe("ValueChart", () => {
     expect(await screen.findByRole("img", { name: "Collection value over time" })).toBeInTheDocument();
   });
 });
+
+describe("ValueChart full", () => {
+  const snaps = [
+    { date: "2026-10-01", total_value: 100, totals_by_source: { pricecharting: 90 } },
+    { date: "2026-10-02", total_value: 200, totals_by_source: { pricecharting: 180 } },
+  ];
+  it("offers 7d range and a compare-sources toggle", async () => {
+    mockApi({ "/api/dashboard/history": snaps });
+    renderPage(<ValueChart full />);
+    expect(await screen.findByRole("radio", { name: "7d" })).toBeInTheDocument();
+    expect(await screen.findByRole("checkbox", { name: "Compare sources" })).not.toBeChecked();
+  });
+  it("compact mode has neither", async () => {
+    mockApi({ "/api/dashboard/history": snaps });
+    renderPage(<ValueChart />);
+    await screen.findByRole("img", { name: "Collection value over time" });
+    expect(screen.queryByRole("radio", { name: "7d" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "Compare sources" })).toBeNull();
+  });
+});
