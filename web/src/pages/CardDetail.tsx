@@ -3,7 +3,7 @@ import { QueryError } from "../components/QueryState";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, money } from "../lib/api";
+import { api } from "../lib/api";
 import PriceChart from "../components/PriceChart";
 import PriceMatrix from "../components/PriceMatrix";
 import CardFetch from "../components/CardFetch";
@@ -11,6 +11,7 @@ import SourceStatus from "../components/SourceStatus";
 import SalesList from "../components/SalesList";
 import SourceCompare from "../components/SourceCompare";
 import { Section } from "../components/ui";
+import { usePriceGrade } from "../lib/priceGrade";
 
 const CONDITIONS = ["NM", "LP", "MP", "HP", "DMG"];
 const LANGS = ["en", "ja", "es", "it", "fr", "de", "pt", "ko", "zh"];
@@ -33,6 +34,7 @@ export default function CardDetail() {
       acquired: f.price ? { price: Math.round(+f.price * 100), currency: "EUR" } : null }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["card", id] }); qc.invalidateQueries({ queryKey: ["collection"] }); autoFetch(); },
   });
+  const pg = usePriceGrade(id);
   const [fetchMsg, setFetchMsg] = useState("");
   // Best-effort: adding never waits for or fails because of the price fetch.
   const autoFetch = async () => {
@@ -71,13 +73,14 @@ export default function CardDetail() {
             {(owned.data?.items ?? []).filter((i: any) => i.grading).map((i: any) => (
               <div key={i.id}><div className="mb-1 text-xs text-muted">Owned: {i.grading.company} {i.grading.grade} × {i.quantity} (stack value)</div><SourceCompare row={i} matches={matches.data} /></div>))}
           </div>
-          <SourceStatus cardId={id} />
-          <PriceMatrix cardId={id} />
-          {(c.sales_stats ?? []).map((s: any, i: number) => <p key={i} className="mt-2 text-sm">Sold ({s.count} sales, {s.source}, {s.grade_key}): min {money(s.min, s.currency)} · avg {money(s.avg, s.currency)} · max {money(s.max, s.currency)}</p>)}
-          <SalesList sales={c.sales ?? []} />
+          <PriceMatrix pg={pg} />
         </Section>
 
-        <Section title="Price history" collapsible id="card-history"><PriceChart cardId={id} /></Section>
+        <Section title="Sources" collapsible id="card-sources" defaultOpen={false}><SourceStatus cardId={id} /></Section>
+
+        <SalesList sales={c.sales ?? []} stats={c.sales_stats ?? []} />
+
+        <Section title="Price history" collapsible id="card-history"><PriceChart cardId={id} pg={pg} /></Section>
 
         <Section title="Owned">
           {c.owned.length === 0 && <p className="text-sm text-muted">None yet.</p>}

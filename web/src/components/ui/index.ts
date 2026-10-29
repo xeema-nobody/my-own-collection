@@ -14,3 +14,4 @@ export { Drawer } from "./Drawer";
 export { BarList, topN, type BarRow } from "./BarList";
 export { Chip } from "./Chip";
 export { FileDrop } from "./FileDrop";
+export { SourceDot } from "./SourceDot";
