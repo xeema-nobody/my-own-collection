@@ -14,7 +14,7 @@ export function errorText(e: unknown): string {
 export function QueryError({ q, label }: { q: Pick<Q<unknown>, "error" | "refetch">; label?: string }) {
   if (!q.error) return null;
   return (
-    <div role="alert" className="flex items-center gap-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+    <div role="alert" className="flex items-center gap-3 rounded border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
       <span>{label ? `${label}: ` : ""}{errorText(q.error)}</span>
       <button className="btn-ghost ml-auto" onClick={() => q.refetch()}>Retry</button>
     </div>
@@ -26,7 +26,7 @@ export function QueryState<T>({ q, label, empty, isEmpty, children }: {
   q: Q<T>; label?: string; empty?: string; isEmpty?: (d: T) => boolean; children: ReactNode | ((d: T) => ReactNode);
 }) {
   if (q.error && q.data === undefined) return <QueryError q={q} label={label} />;
-  if (q.isLoading || q.data === undefined) return <p className="opacity-70">Loading…</p>;
-  if (empty && (isEmpty ? isEmpty(q.data) : false)) return <p className="opacity-70">{empty}</p>;
+  if (q.isLoading || q.data === undefined) return <p className="text-muted">Loading…</p>;
+  if (empty && (isEmpty ? isEmpty(q.data) : false)) return <p className="text-muted">{empty}</p>;
   return <>{typeof children === "function" ? children(q.data) : children}</>;
 }

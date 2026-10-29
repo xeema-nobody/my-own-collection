@@ -109,3 +109,11 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - Old snapshots (no `valuation_version`) are hidden from the history chart, not rewritten or recomputed (user decision). History restarts from the first v2 snapshot.
 - Movers/alerts needed no change: both already ignore unpriced items; tests pin it.
 - Auto-fetch on add is best effort and lives in the FE (`lib/autoFetch.ts`): 503 -> inline "fetcher offline", 409 -> in-memory queue retried every 10 s, never blocks or fails the add. Import does not auto-fetch (banner + "Fetch missing prices" instead). `POST /api/admin/prices/fetch {"missing": true}` targets owned cards that have a needs-price stack; the 24 h fetch cache still applies.
+
+## Phase 9.3: design foundation (2026-10-29)
+- Palette: neutral dark + one emerald accent, as CSS variables (space-separated RGB so Tailwind alpha works) in `web/src/index.css`; Tailwind colours (`bg`, `surface`, `surface-2`, `line`, `fg`, `muted`, `accent`, `ok`, `warn`, `danger`) map to them. User approved the look after a preview of Search + Card page.
+- Theme: class strategy (`darkMode: "class"`). **Default is dark** (user decision: not the OS setting). Toggle in the header: light / system / dark, always stored in `localStorage` (`moc-theme`); "system" is an explicit choice. A tiny inline script in `index.html` applies the class before first paint (no flash).
+- Font: Inter Variable via `@fontsource-variable/inter` (local, works offline). Numbers use `.num` (tabular-nums).
+- Dependencies (user OK): `lucide-react`, `@fontsource-variable/inter`, `@radix-ui/react-{select,tabs,dialog,popover,collapsible}`. Rule: wrap every third-party primitive in our own component under `web/src/components/ui/` and use only those in pages, so the look and behaviour live in one place and are reused (user: abstract reusable components). `dialog`/`popover` are installed for the Collection drawer and Combobox, not used yet.
+- Legacy classes `.btn`, `.btn-ghost`, `.input`, `.card` stay (re-implemented on the tokens) so unrestyled pages follow the theme; remove them when the last page is migrated.
+- Restyle order (user): Collection, Dashboard, Alerts, Settings, then PriceMatrix and the price chart (card detail). Search + Card page shell are done.

@@ -66,6 +66,9 @@ docker compose up -d app                                            # back to th
 docker compose run --rm app python -m app.scripts.demo_db drop     # delete the demo DB
 ```
 
+## Look and theme
+Dark by default. Header toggle: light / system / dark (remembered in the browser). UI building blocks live in `web/src/components/ui`.
+
 ## Export / import
 Settings -> "Export / import collection": JSON (lossless) or CSV (spreadsheet; money in cents). Import matches stacks by key, so re-importing the same file changes nothing ("set quantities") or adds quantities ("add"). API: `GET /api/collection/export?format=json|csv`, `POST /api/collection/import?format=&mode=set|add` (file as raw body).
 

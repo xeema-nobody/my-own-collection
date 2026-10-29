@@ -25,8 +25,8 @@ Recommendation: decide **before** enabling the scheduler. Cap at 2 for scheduled
 Triggered by first real use (2026-10-29). Detail and root causes: `temp/follow_up.md`.
 1. **DONE (9.1)** Catalog completeness: Unified Minds (`sm11`) had 100 of 260 cards, pokemontcg.io fails on page 2+. Adaptive paging, per-set completeness, retry incomplete.
 2. **DONE (9.2)** Valuation correctness: a graded stack with no graded price is not counted (today it falls back to the raw price and inflates the total, 8 of 15 stacks); fetch prices automatically when a card is added.
-3. Design foundation: palette, fonts, light/dark toggle, wider layout, shared UI components.
-4. Screens: card detail, collection (pagination, sort, filters, value chart), dashboard (clear purpose: insights vs collection inventory), settings (set browser, readable jobs), alerts (explained, guided form), search.
+3. **DONE (9.3)** Design foundation: CSS-variable tokens (neutral + emerald), Inter (@fontsource), light/dark/system toggle, wide sticky shell, `web/src/components/ui/` kit (Button, Card/Section, Badge, Field/Input/Checkbox, Select, Tabs/SegmentedControl, Kpi, Skeleton/EmptyState; radix + lucide). Default theme dark. Search + Card page shell restyled as preview; other screens still on legacy `.btn/.card/.input` classes (themed).
+4. Screens, in this order (user decision 2026-10-29): Collection (pagination, sort, filters, value chart), Dashboard (insights vs inventory), Alerts (explained, guided form), Settings (set browser, readable jobs), then PriceMatrix + price chart on card detail; Search polish last.
 
 ## Backlog (after Phase 9, in order)
 a. **Wishlist**: cards you want but do not own. Target price, optional alert when the price falls below it (reuse the alert engine), shown in a Wishlist page and as a flag on search/card detail. Needs: `wishlist` collection, API, page, alert scope.
