@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, renderHook, act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Section, SegmentedControl, Badge, Kpi, EmptyState, Pagination, SortTh, Drawer } from "./index";
+import { Combobox, Section, SegmentedControl, Badge, Kpi, EmptyState, Pagination, SortTh, Drawer } from "./index";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ThemeToggle from "../ThemeToggle";
 import { useTheme } from "../../lib/theme";
 
@@ -106,5 +107,29 @@ describe("Drawer", () => {
   it("renders nothing when closed", () => {
     render(<Drawer open={false} onClose={() => {}} title="Details"><p>body</p></Drawer>);
     expect(screen.queryByText("body")).not.toBeInTheDocument();
+  });
+});
+
+describe("Combobox", () => {
+  const wrap = (ui: React.ReactElement) => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
+  it("searches, pages and selects", async () => {
+    const fetchPage = vi.fn(async (q: string, page: number) => ({
+      options: q === "zzz" ? [] : [{ value: `a${page}`, label: `Alpha ${page}` }], more: page < 2 && q !== "zzz" }));
+    wrap(<Combobox aria-label="Card" cacheKey="t" value="" onChange={vi.fn()} fetchPage={fetchPage} />);
+    await userEvent.click(screen.getByRole("button", { name: "Card" }));
+    expect(await screen.findByText("Alpha 1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Show more" }));
+    expect(await screen.findByText("Alpha 2")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show more" })).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Search"), "zzz");
+    expect(await screen.findByText("No matches")).toBeInTheDocument();
+    expect(fetchPage).toHaveBeenCalledWith("zzz", 1);
+  });
+  it("reports the clicked option", async () => {
+    const on = vi.fn();
+    wrap(<Combobox aria-label="Card" cacheKey="t2" value="" onChange={on} fetchPage={async () => ({ options: [{ value: "x", label: "Xatu" }], more: false })} />);
+    await userEvent.click(screen.getByRole("button", { name: "Card" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Xatu" }));
+    expect(on).toHaveBeenCalledWith("x", "Xatu");
   });
 });
