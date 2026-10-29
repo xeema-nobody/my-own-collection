@@ -19,7 +19,7 @@ describe("Collection", () => {
     expect(await screen.findByText(/Nothing here/)).toBeInTheDocument();
   });
   it("API error shows alert", async () => {
-    mockApi({ "/api/collection/summary": down, "/api/collection": down });
+    mockApi({ "/api/collection/summary": down, "/api/collection": down, "/api/dashboard/history": [] });
     renderPage(<Collection />);
     expect(await screen.findAllByRole("alert")).toHaveLength(2);
     expect(screen.getAllByText(/db down/).length).toBe(2);
@@ -118,10 +118,46 @@ describe("routing", () => {
   });
 });
 
+const row = (over: object = {}) => ({ id: "s1", card_id: "pokemon:a-1", quantity: 2, language: "en", condition: "NM", grading: null, variant: null,
+  card: { name: "Pikachu", number: "25", set: { name: "Base" }, images: {} }, value: 5000, cost: 3000, pl: 2000, price_kind: "market",
+  needs_price: false, sources: {}, ...over });
+
+describe("Collection table", () => {
+  const routes = (calls: string[]) => ({ "/api/collection/summary": { ...summary, cards: 2, distinct: 1, value: 5000, cost: 3000, pl: 2000 },
+    "/api/dashboard/history": [],
+    "/api/collection": (_: unknown) => { calls.push("list"); return { items: [row()], total: 120 }; } });
+  it("shows P/L, paging and sends sort + page to the API", async () => {
+    const calls: string[] = [];
+    const fn = mockApi(routes(calls));
+    renderPage(<Collection />);
+    expect(await screen.findByText("Pikachu")).toBeInTheDocument();
+    expect(screen.getByText("1-50 of 120")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    await userEvent.click(screen.getByRole("button", { name: "P/L" }));
+    await waitFor(() => {
+      const urls = fn.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("/api/collection?"));
+      expect(urls.some((u) => u.includes("page=2"))).toBe(true);
+      expect(urls.some((u) => u.includes("sort=pl") && u.includes("page=1"))).toBe(true); // sorting resets to page 1
+    });
+  });
+  it("row click opens the details drawer with an alert shortcut", async () => {
+    mockApi(routes([]));
+    renderPage(<Collection />);
+    await userEvent.click(await screen.findByRole("button", { name: "Details for Pikachu" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Create alert/ })).toHaveAttribute("href", "/alerts?stack=s1");
+  });
+  it("filters with no match say so", async () => {
+    mockApi({ "/api/collection/summary": summary, "/api/dashboard/history": [], "/api/collection": { items: [], total: 0 } });
+    renderPage(<Collection />, "/?graded=true");
+    expect(await screen.findByText(/No stacks match these filters/)).toBeInTheDocument();
+  });
+});
+
 describe("Collection needs price", () => {
   it("banner explains uncounted slabs and offers bulk fetch", async () => {
     mockApi({ "/api/collection/summary": { ...summary, cards: 1, distinct: 1, unpriced: 1, needs_price: 1, ref_raw_value: 8248 },
-      "/api/collection": { items: [], total: 0 }, "/api/admin/jobs": [], "/api/admin/fetcher-status": { up: true } });
+      "/api/collection": { items: [], total: 0 }, "/api/dashboard/history": [], "/api/admin/jobs": [], "/api/admin/fetcher-status": { up: true } });
     renderPage(<Collection />);
     expect(await screen.findByText(/not counted in Value or P\/L/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Fetch missing prices" })).toBeEnabled();

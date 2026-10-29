@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, renderHook, act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Section, SegmentedControl, Badge, Kpi, EmptyState } from "./index";
+import { Section, SegmentedControl, Badge, Kpi, EmptyState, Pagination, SortTh, Drawer } from "./index";
 import ThemeToggle from "../ThemeToggle";
 import { useTheme } from "../../lib/theme";
 
@@ -63,5 +63,48 @@ describe("presentational", () => {
   it("render content", () => {
     render(<><Badge tone="ok">ok</Badge><Kpi label="Value" value="€1" hint="h" /><EmptyState title="Nothing">sub</EmptyState></>);
     for (const t of ["ok", "Value", "€1", "h", "Nothing", "sub"]) expect(screen.getByText(t)).toBeInTheDocument();
+  });
+});
+
+describe("Pagination", () => {
+  it("shows the range and disables prev on page 1", async () => {
+    const on = vi.fn();
+    render(<Pagination page={1} pageSize={50} total={120} onPage={on} onPageSize={() => {}} />);
+    expect(screen.getByText("1-50 of 120")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(on).toHaveBeenCalledWith(2);
+  });
+  it("last page disables next; empty total reads 0-0", () => {
+    const { rerender } = render(<Pagination page={3} pageSize={50} total={120} onPage={() => {}} onPageSize={() => {}} />);
+    expect(screen.getByText("101-120 of 120")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+    rerender(<Pagination page={1} pageSize={50} total={0} onPage={() => {}} onPageSize={() => {}} />);
+    expect(screen.getByText("0-0 of 0")).toBeInTheDocument();
+  });
+});
+
+describe("SortTh", () => {
+  it("exposes sort direction and fires onSort", async () => {
+    const on = vi.fn();
+    render(<table><thead><tr><SortTh label="Value" active dir="asc" onSort={on} /><SortTh label="Cost" active={false} dir="desc" onSort={() => {}} /></tr></thead></table>);
+    expect(screen.getByRole("columnheader", { name: "Value" })).toHaveAttribute("aria-sort", "ascending");
+    expect(screen.getByRole("columnheader", { name: "Cost" })).toHaveAttribute("aria-sort", "none");
+    await userEvent.click(screen.getByRole("button", { name: "Value" }));
+    expect(on).toHaveBeenCalled();
+  });
+});
+
+describe("Drawer", () => {
+  it("renders content when open and closes on the close button", async () => {
+    const on = vi.fn();
+    render(<Drawer open onClose={on} title="Details"><p>body</p></Drawer>);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(on).toHaveBeenCalled();
+  });
+  it("renders nothing when closed", () => {
+    render(<Drawer open={false} onClose={() => {}} title="Details"><p>body</p></Drawer>);
+    expect(screen.queryByText("body")).not.toBeInTheDocument();
   });
 });

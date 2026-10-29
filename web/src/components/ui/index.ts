@@ -7,3 +7,6 @@ export { Select, type Option } from "./Select";
 export { Tabs, TabList, Tab, TabPanel, SegmentedControl } from "./Tabs";
 export { Kpi } from "./Kpi";
 export { Skeleton, EmptyState } from "./feedback";
+export { Table, THead, Th, Tr, Td, SortTh } from "./Table";
+export { Pagination, PAGE_SIZES } from "./Pagination";
+export { Drawer } from "./Drawer";

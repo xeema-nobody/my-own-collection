@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ago, api, money, type AlertEvent, type AlertIn, type AlertRule } from "../lib/api";
 import { QueryError } from "../components/QueryState";
@@ -45,7 +45,8 @@ function Inbox() {
 function RuleForm() {
   const qc = useQueryClient();
   const items = useQuery({ queryKey: ["collection", "alert-targets"], queryFn: () => api.collection({ page_size: 200 }) });
-  const [f, setF] = useState({ scope: "stack", target: "", op: "above", amount: "", days: "7", kind: "any", est: false });
+  const stack = useSearchParams()[0].get("stack"); // "Create alert" shortcut from Collection
+  const [f, setF] = useState({ scope: "stack", target: stack ?? "", op: "above", amount: "", days: "7", kind: "any", est: false });
   const [err, setErr] = useState("");
   const rows: any[] = items.data?.items ?? [];
   const create = useMutation({

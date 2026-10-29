@@ -49,10 +49,32 @@ async def import_(request: Request, format: str = Query("json", pattern="^(json|
     return await portability.import_items(get_db(), rows, mode)
 
 
+SORT_KEYS = {
+    "added": lambda r: r["item"]["created_at"],
+    "value": lambda r: r["value"],
+    "cost": lambda r: r["cost"],
+    "pl": lambda r: None if r["value"] is None or r["cost"] is None else r["value"] - r["cost"],
+    "qty": lambda r: r["item"]["quantity"],
+    "name": lambda r: (r["card"] or {}).get("name_norm", ""),
+    "set": lambda r: ((r["card"] or {}).get("set", {}).get("name", ""), (r["card"] or {}).get("number", "")),
+}
+DEFAULT_DESC = {"added", "value", "cost", "pl", "qty"}
+
+
+def _sorted(rows: list[dict], sort: str, order: str | None) -> list[dict]:
+    """Sort by `sort`; stacks with no value for that key (None) always go last."""
+    key = SORT_KEYS.get(sort, SORT_KEYS["added"])
+    desc = (order == "desc") if order else sort in DEFAULT_DESC
+    have = [r for r in rows if key(r) is not None]
+    rest = [r for r in rows if key(r) is None]
+    return sorted(have, key=key, reverse=desc) + rest
+
+
 @router.get("")
 async def list_items(q: str | None = None, tcg: str | None = None, set: str | None = None,
                      graded: bool | None = None, language: str | None = None,
                      condition: str | None = None, card_id: str | None = None, needs_price: bool | None = None, sort: str = "added",
+                     order: str | None = Query(None, pattern="^(asc|desc)$"),
                      page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200)):
     flt: dict = {}
     if graded is not None:
@@ -73,9 +95,7 @@ async def list_items(q: str | None = None, tcg: str | None = None, set: str | No
     if q:
         from app.providers.catalog.pokemontcg import norm
         rows = [r for r in rows if r["card"] and norm(q) in r["card"]["search_text"]]
-    keys = {"added": lambda r: r["item"]["created_at"], "value": lambda r: r["value"] or -1,
-            "name": lambda r: (r["card"] or {}).get("name_norm", "")}
-    rows.sort(key=keys.get(sort, keys["added"]), reverse=sort in ("added", "value"))
+    rows = _sorted(rows, sort, order)
     total = len(rows)
     rows = rows[(page - 1) * page_size: page * page_size]
     return {"total": total, "items": [svc.present(r) for r in rows]}

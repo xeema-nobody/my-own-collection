@@ -14,7 +14,7 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 | `services/portability.py` | collection export (JSON v1 lossless, CSV flat) and import (validates via `CollectionIn`, upsert on `stack_key`, per-row errors) |
 | `services/sets.py` | sets with imported / priced card counts |
 | `services/search.py` | builds Mongo query from `q` + filters |
-| `services/collection.py` | add/stack-merge, `valuate` (loads cards + 90 d sales, per-source and best value) |
+| `services/collection.py` | add/stack-merge, `present` (adds `pl` = value - cost), `valuate` (loads cards + 90 d sales, per-source and best value) |
 | `services/valuation.py` | pure per-item price resolver: grade chain exact > bucket > lower > raw fallback, sold (D-A) > market > thin sold |
 | `services/pricing.py` | stores price points, denormalises `latest_price` / `price_base` on cards |
 | `services/fx.py` | daily FX cache in `fx_rates`, fallback to last stored rate |
