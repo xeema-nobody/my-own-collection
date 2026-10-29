@@ -10,3 +10,4 @@ export { Skeleton, EmptyState } from "./feedback";
 export { Table, THead, Th, Tr, Td, SortTh } from "./Table";
 export { Pagination, PAGE_SIZES } from "./Pagination";
 export { Drawer } from "./Drawer";
+export { BarList, topN, type BarRow } from "./BarList";
