@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, FETCHER_START_CMD, SCRAPED_SOURCES } from "../lib/api";
 import { usePriceFetchJob } from "../lib/fetchJob";
+import { Button, Checkbox, Chip } from "./ui";
 import FetcherBadge from "./FetcherBadge";
 import FetchProgress from "./FetchProgress";
 
@@ -25,15 +26,14 @@ export default function CardFetch({ cardId }: { cardId: string }) {
   });
   const toggle = (s: string) => setSources((x) => (x.includes(s) ? x.filter((y) => y !== s) : [...x, s]));
   return (
-    <div className="mb-3 border-b pb-3 dark:border-slate-700">
+    <div className="mb-3 border-b border-line pb-3">
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <button className="btn" disabled={!!running || go.isPending || !sources.length} onClick={() => go.mutate()}>Fetch prices</button>
-        {SCRAPED_SOURCES.map((s) => (
-          <label key={s} className="flex items-center gap-1"><input type="checkbox" checked={sources.includes(s)} onChange={() => toggle(s)} />{s}</label>))}
-        <label className="flex items-center gap-1" title="Ignore the 24 h cache"><input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />force</label>
+        <Button disabled={!!running || go.isPending || !sources.length} onClick={() => go.mutate()}>Fetch prices</Button>
+        {SCRAPED_SOURCES.map((s) => <Chip key={s} active={sources.includes(s)} onClick={() => toggle(s)}>{s}</Chip>)}
+        <Checkbox label="force" title="Ignore the 24 h cache" checked={force} onChange={(e) => setForce(e.target.checked)} />
         <FetcherBadge />
       </div>
-      {go.error && <p className="mt-2 text-sm text-red-500">{errText(go.error)}</p>}
+      {go.error && <p className="mt-2 text-sm text-danger">{errText(go.error)}</p>}
       <FetchProgress job={running ?? (go.isSuccess ? latest : undefined)} live={!!running} />
     </div>
   );

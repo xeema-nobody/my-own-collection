@@ -1,49 +1,50 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ago, api, money, safeUrl } from "../lib/api";
-import { KIND_CLASS, SOURCE_COLOR } from "../lib/colors";
+import { gradeLabel, gradesOf } from "../lib/grades";
+import { kindTone, sourceLabel } from "../lib/colors";
+import type { PriceGrade } from "../lib/priceGrade";
+import GradeSelector from "./GradeSelector";
+import { Badge, Checkbox, SourceDot, Table, THead, Td, Th, Tr, cx } from "./ui";
 
-const BUCKET = /^G(\d+(?:\.\d+)?)$/;
-const label = (g: string) => g === "raw" ? "Raw" : BUCKET.test(g) ? g.replace("G", "Grade ") + " (any grader)" : g.replace(/^([A-Za-z]+?)(\d)/, "$1 $2");
-
-export default function PriceMatrix({ cardId }: { cardId: string }) {
-  const [grader, setGrader] = useState("PSA");
-  const matrix = useQuery({ queryKey: ["matrix", cardId], queryFn: () => api.priceMatrix(cardId) });
+export default function PriceMatrix({ pg }: { pg: PriceGrade }) {
+  const [showAll, setShowAll] = useState(false);
   const sources = useQuery({ queryKey: ["price-sources"], queryFn: api.priceSources });
-  if (!matrix.data || !sources.data) return <p className="text-sm opacity-70">{matrix.error ? String(matrix.error) : "Loading prices…"}</p>;
-  const m = matrix.data;
-  // Columns = registered sources (ids = stored ids) + any stored source not registered.
-  const cols: { id: string; label: string; enabled: boolean }[] = [
-    ...sources.data.map((s: any) => ({ id: s.id, label: s.id, enabled: s.enabled })),
-    ...m.sources.filter((s: string) => !sources.data.some((r: any) => r.id === s)).map((s: string) => ({ id: s, label: s, enabled: true })),
-  ];
-  const graders: string[] = m.graders;
-  const sel = graders.includes(grader) ? grader : graders[0];
-  const rows: string[] = m.grades.filter((g: string) => g === "raw" || BUCKET.test(g) || (sel && g.toUpperCase().startsWith(sel)));
+  const m = pg.matrix.data;
+  if (!m || !sources.data) return <p className="text-sm text-muted">{pg.matrix.error ? String(pg.matrix.error) : "Loading prices…"}</p>;
+  const keys = pg.company === "Raw" ? ["raw"] : gradesOf(pg.keys, pg.company);
+  const has = (g: string, s: string) => !!m.cells[g]?.[s];
+  const rows = showAll ? keys : keys.filter((g: string) => (m.sources as string[]).some((s) => has(g, s)));
+  // Columns = sources with a price in the shown rows; registered-but-off sources only appear when "show all" is on.
+  const cols: string[] = [...new Set<string>([...sources.data.map((s: any) => s.id), ...m.sources])]
+    .filter((s) => (showAll ? sources.data.find((r: any) => r.id === s)?.enabled !== false || rows.some((g) => has(g, s)) : rows.some((g) => has(g, s))));
   return (
-    <div>
-      <div className="mb-2 flex items-center gap-2 text-sm">
-        <span className="opacity-70">Grader</span>
-        <select className="input" value={sel} onChange={(e) => setGrader(e.target.value)}>{graders.map((g) => <option key={g}>{g}</option>)}</select>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <GradeSelector pg={pg} />
+        {pg.company !== "Raw" && <Checkbox label="Show empty grades" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />}
       </div>
-      <table className="w-full text-sm"><thead><tr className="text-left opacity-70"><th>Grade</th>
-        {cols.map((c) => <th key={c.id} style={{ color: SOURCE_COLOR[c.id] }} title={c.enabled ? "" : "not fetching yet"}>{c.label}{!c.enabled && <span className="opacity-50"> ·off</span>}</th>)}
-      </tr></thead><tbody>
-        {rows.map((g) => (
-          <tr key={g} className="border-t dark:border-slate-700">
-            <td className="py-1 font-medium">{label(g)}</td>
-            {cols.map((c) => {
-              const cell = m.cells[g]?.[c.id];
-              if (!cell) return <td key={c.id} className="opacity-40">—</td>;
-              const tip = [cell.variant && `variant ${cell.variant}`, `observed ${cell.observed_on}`, cell.fetched_at && `fetched ${ago(cell.fetched_at)}`,
-                cell.as_of && `upstream ${String(cell.as_of).slice(0, 10)}`, cell.sample_size != null && `${cell.sample_size} sales`].filter(Boolean).join(" · ");
-              return (
-                <td key={c.id} title={tip}>
-                  {safeUrl(cell.url) ? <a className="underline decoration-dotted" href={safeUrl(cell.url)} target="_blank" rel="noreferrer">{money(cell.price, cell.currency)}</a> : money(cell.price, cell.currency)}{" "}
-                  <span className={`rounded px-1 text-xs ${KIND_CLASS[cell.kind] ?? ""}`}>{cell.kind}</span></td>);
-            })}
-          </tr>))}
-      </tbody></table>
-    </div>
-  );
+      {pg.company === "Any" && <p className="text-xs text-muted">Any grader has no grade 10: PriceCharting only publishes company-agnostic grades up to 9.5. Pick a company for 10s.</p>}
+      {rows.length === 0 ? <p className="text-sm text-muted">No {pg.company} prices yet. Fetch prices to fill this in.</p> : (
+        <Table>
+          <THead><Th>Grade</Th>{cols.map((c) => <Th key={c}><SourceDot source={c} /></Th>)}</THead>
+          <tbody>
+            {rows.map((g: string) => (
+              <Tr key={g} aria-selected={g === pg.grade} className={cx(g === pg.grade && "bg-accent/10", "cursor-pointer")} onClick={() => pg.setGrade(g)}>
+                <Td className="font-medium whitespace-nowrap">{gradeLabel(g)}</Td>
+                {cols.map((c) => {
+                  const cell = m.cells[g]?.[c];
+                  if (!cell) return <Td key={c} className="text-muted/50">—</Td>;
+                  const tip = [cell.variant && `variant ${cell.variant}`, `observed ${cell.observed_on}`, cell.fetched_at && `fetched ${ago(cell.fetched_at)}`,
+                    cell.as_of && `upstream ${String(cell.as_of).slice(0, 10)}`, cell.sample_size != null && `${cell.sample_size} sales`].filter(Boolean).join(" · ");
+                  const price = money(cell.price, cell.currency);
+                  return (
+                    <Td key={c} title={`${sourceLabel(c)}: ${tip}`} className="whitespace-nowrap">
+                      {safeUrl(cell.url) ? <a className="num underline decoration-dotted" href={safeUrl(cell.url)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{price}</a> : <span className="num">{price}</span>}{" "}
+                      <Badge tone={kindTone(cell.kind)}>{cell.kind}</Badge></Td>);
+                })}
+              </Tr>))}
+          </tbody>
+        </Table>)}
+    </div>);
 }

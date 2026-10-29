@@ -80,3 +80,7 @@ Alerts page (nav badge = unread; two columns: Inbox left; "How alerts work" expl
 
 ## Scheduler
 Off by default. Set `SCHEDULER_ENABLED=true` in `.env` and `docker compose restart app`. Daily catalog-API refresh, scraped fetch of owned cards (needs `scripts/fetcher.sh start`, else the run shows as `skipped`; sites needing login are skipped, so log in via a manual fetch now and then), snapshot, weekly catalog import, daily prune of old read alerts (`ALERT_EVENTS_KEEP_DAYS`, 90); missed runs are caught up at boot. Settings shows next runs and a trigger column in the Jobs table. Cron/cap settings: `docs/architecture.md`. Restart the host fetcher after updating (`scripts/fetcher.sh stop && scripts/fetcher.sh start`) so it knows the unattended flag.
+
+### Card page prices (Phase 9.4e)
+One grade selector (Raw | Any | PSA | BGS | CGC ... then grade 10 to 1) drives both the price matrix and the history chart and is kept in the URL (`?grade=PSA10`). The matrix shows only the chosen company's rows, hides empty grades/columns ("Show empty grades" reveals them) and highlights the selected row. "Any" has no grade 10 (PriceCharting publishes company-agnostic grades up to 9.5 only). Sold section: one stats table plus filterable sales (grade, source, 20 at a time, listing link). Chart: range 3m/6m/1y/all, ask series hidden unless ticked, one point shows a hint. Source status lives in a collapsed "Sources" section.
+
