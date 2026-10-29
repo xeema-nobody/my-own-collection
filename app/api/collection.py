@@ -52,7 +52,7 @@ async def import_(request: Request, format: str = Query("json", pattern="^(json|
 @router.get("")
 async def list_items(q: str | None = None, tcg: str | None = None, set: str | None = None,
                      graded: bool | None = None, language: str | None = None,
-                     condition: str | None = None, card_id: str | None = None, sort: str = "added",
+                     condition: str | None = None, card_id: str | None = None, needs_price: bool | None = None, sort: str = "added",
                      page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200)):
     flt: dict = {}
     if graded is not None:
@@ -64,6 +64,8 @@ async def list_items(q: str | None = None, tcg: str | None = None, set: str | No
     if card_id:
         flt["card_id"] = card_id
     rows = await svc.valuate(get_db(), flt)
+    if needs_price is not None:
+        rows = [r for r in rows if r["needs_price"] == needs_price]
     if tcg:
         rows = [r for r in rows if r["card"] and r["card"]["tcg"] == tcg]
     if set:
@@ -101,6 +103,9 @@ async def summary():
             "value_by_kind": {k: sum(r["value"] for r in rows if r["price_kind"] == k)
                               for k in {r["price_kind"] for r in rows if r["value"] is not None}},
             "unpriced": sum(1 for r in rows if r["value"] is None),
+            "needs_price": sum(1 for r in rows if r["needs_price"]),
+            "no_data": sum(1 for r in rows if r["value"] is None and not r["needs_price"]),
+            "ref_raw_value": sum(r["ref_raw_value"] or 0 for r in rows),
             "estimated": sum(1 for r in rows if r["estimated"])}
 
 

@@ -52,7 +52,7 @@ export default function Dashboard() {
         <div className="card"><div className="text-xs opacity-70">Value</div><div className="text-xl font-semibold">{money(sum.data?.value)}</div>
           {sum.data?.estimated > 0 && <div className="text-xs opacity-70">{sum.data.estimated} estimated (≈ in Collection)</div>}</div>
         <div className="card"><div className="text-xs opacity-70">Reliability</div><div className="text-xl font-semibold">{soldPct == null ? "—" : `${soldPct}% sold-based`}</div>
-          <div className="text-xs opacity-70">{sum.data?.unpriced ? `${sum.data.unpriced} unpriced · ` : ""}{sum.data?.estimated ?? 0} estimated</div></div>
+          <div className="text-xs opacity-70">{sum.data?.needs_price ? `${sum.data.needs_price} need a graded price (not counted) · ` : ""}{sum.data?.no_data ? `${sum.data.no_data} no data · ` : ""}{sum.data?.estimated ?? 0} estimated</div></div>
         <div className="card"><div className="text-xs opacity-70">Cost</div><div className="text-xl font-semibold">{money(sum.data?.cost)}</div></div>
         <div className="card"><div className="text-xs opacity-70">P/L</div><div className="text-xl font-semibold">{sum.data?.pl == null ? "—" : money(sum.data.pl)}</div></div>
         <div className="card"><div className="text-xs opacity-70">Change ({range})</div>

@@ -6,6 +6,8 @@ Grade chain, first hit wins (raw items use only step 1):
   exact (PSA9) -> bucket (G9, company-agnostic) -> lower (nearest lower grade, same company)
   -> raw_fallback (raw price) -> none.
 Only `exact` is presented as exact; every other match is `estimated`.
+A graded item never takes the raw price as its value (a slab is not worth its raw copy): the raw
+price is kept as `ref_raw_value` for display, value is None, match `needs_graded_price`, `needs_price` True.
 Within one grade (D-A): sold if >= `sold_min_sales` sales in the window (median of the last
 `sold_sample`), else aggregate market by `preferred_sources`, else thin sold (fewer sales, flagged).
 Ask prices are never used. Missing price = None, never 0.
@@ -142,19 +144,24 @@ def resolve_item(card: dict | None, item: dict, rates: dict, sales: list[dict], 
     gk = grade_key(item)
     none = {"value": None, "price_kind": None, "source": None, "match": "none", "grade_key_used": None,
             "estimated": False, "thin": False, "sample_size": None, "as_of": None, "observed_on": None,
-            "stale": False, "headline_rule": None}
+            "stale": False, "headline_rule": None, "needs_price": gk != "raw",
+            "ref_raw_value": None, "ref_raw_source": None}
     if not card:
-        return none
+        return {**none, "needs_price": False}
     # raw_fallback passes no sales: scraped raw sales have unknown condition
     for match, g in _chain(card, item, sales, gk):
         hit = _price_at(card, item, g, rates, sales if match != "raw_fallback" else [], cfg, only, now)
+        if hit and match == "raw_fallback":
+            return {**none, "match": "needs_graded_price", "ref_raw_value": hit["value"] * item["quantity"],
+                    "ref_raw_source": hit["source"]}
         if hit:
             return {"value": hit["value"] * item["quantity"], "price_kind": hit["kind"],
                     "source": hit["source"], "match": match, "grade_key_used": g,
                     "estimated": match != "exact" or hit["variant_est"],
                     "thin": hit["thin"], "sample_size": hit["sample_size"], "as_of": hit["as_of"],
                     "observed_on": hit["observed_on"], "stale": hit["stale"],
-                    "headline_rule": headline_rule(hit, only, cfg)}
+                    "headline_rule": headline_rule(hit, only, cfg), "needs_price": False,
+                    "ref_raw_value": None, "ref_raw_source": None}
     return none
 
 

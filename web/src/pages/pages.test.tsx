@@ -10,7 +10,7 @@ import Dashboard from "./Dashboard";
 import Settings from "./Settings";
 
 const down = { status: 503, body: { detail: "db down" } };
-const summary = { cards: 0, distinct: 0, value: 0, cost: 0, pl: null, unpriced: 0, estimated: 0, by_source: {}, value_by_kind: {} };
+const summary = { cards: 0, distinct: 0, value: 0, cost: 0, pl: null, unpriced: 0, needs_price: 0, no_data: 0, ref_raw_value: 0, estimated: 0, by_source: {}, value_by_kind: {} };
 
 describe("Collection", () => {
   it("empty state", async () => {
@@ -115,5 +115,15 @@ describe("routing", () => {
     mockApi({ "/api/alerts/unread-count": { count: 0 } });
     renderPage(<Routes><Route path="*" element={<App />} /></Routes>, "/nope");
     expect(screen.getByText("Page not found")).toBeInTheDocument();
+  });
+});
+
+describe("Collection needs price", () => {
+  it("banner explains uncounted slabs and offers bulk fetch", async () => {
+    mockApi({ "/api/collection/summary": { ...summary, cards: 1, distinct: 1, unpriced: 1, needs_price: 1, ref_raw_value: 8248 },
+      "/api/collection": { items: [], total: 0 }, "/api/admin/jobs": [], "/api/admin/fetcher-status": { up: true } });
+    renderPage(<Collection />);
+    expect(await screen.findByText(/not counted in Value or P\/L/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fetch missing prices" })).toBeEnabled();
   });
 });

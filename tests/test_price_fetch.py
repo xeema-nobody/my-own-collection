@@ -278,3 +278,18 @@ async def test_trigger_stored_on_fetch_job(db):
     await pf.fetch_prices([c], ["pricecharting"], provider_for=providers(pricecharting=p), client=FakeClient(),
                           trigger="scheduler")
     assert (await db.jobs.find_one({"type": "price_fetch"}))["trigger"] == "scheduler"
+
+
+async def test_missing_targets_only_graded_stacks_without_graded_price(db):
+    ids = await seed(db, "1", "2", "3")
+    for cid in ids:
+        await store_card_prices(db, await db.cards.find_one({"_id": cid}), await get_rates(db))
+    await store_scraped_points(db, ids[1], [pt("pricecharting", "PSA9", 4000)], "2026-10-29")
+
+    def stack(cid, grade):
+        return {"stack_key": f"{cid}{grade}", "card_id": cid, "variant": None, "language": "en",
+                "condition": None if grade else "NM", "quantity": 1, "created_at": datetime.now(timezone.utc),
+                "grading": {"company": "PSA", "grade": grade, "cert_number": None} if grade else None}
+    await db.collection_items.insert_many([stack(ids[0], 9), stack(ids[1], 9), stack(ids[2], None)])
+    # [0]: slab without graded price -> needs fetch; [1]: slab priced; [2]: raw copy
+    assert await pf.resolve_targets(db, missing=True) == [ids[0]]

@@ -3,7 +3,7 @@
   docker compose run --rm app python -m app.scripts.demo_db create|status|drop
 
 `create` copies the Mew ex 151 #205 card (+ prices, sales, matches, FX) and one unpriced card from the real
-DB and seeds collection items that exercise every valuation match (exact, bucket, lower, raw_fallback,
+DB and seeds collection items that exercise every valuation match (exact, bucket, lower, needs_graded_price,
 none, thin sold; `lower` only occurs when a company has a lower grade but no 10: covered by unit tests) plus a snapshot. Only the demo DB is ever written or dropped.
 Run the app against it with docker-compose.demo.yml (see docs/README.md).
 """
@@ -33,7 +33,7 @@ def seed_items(unpriced_id: str) -> list[CollectionIn]:
         graded("PSA", 8, quantity=2),                                                                 # exact, qty 2
         graded("PSA", 7),                                                                             # bucket G7
         graded("BGS", 9.5),                                                                           # thin sold
-        graded("OTHER", 10),                                                                          # raw_fallback
+        graded("OTHER", 10),                                                                          # needs_graded_price (not counted)
         CollectionIn(card_id=unpriced_id, condition="NM", acquired={"price": 300, "currency": "EUR"}),  # none
     ]
 

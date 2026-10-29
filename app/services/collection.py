@@ -11,7 +11,8 @@ from app.services.valuation import grade_key, resolve_item, spread  # noqa: F401
 
 
 PRESENT_FIELDS = ("value", "estimated", "price_kind", "source", "match", "grade_key_used", "thin",
-                  "sample_size", "as_of", "observed_on", "stale", "headline_rule")
+                  "sample_size", "as_of", "observed_on", "stale", "headline_rule", "needs_price", "ref_raw_value",
+                  "ref_raw_source")
 SOURCE_FIELDS = ("value", "price_kind", "match", "grade_key_used", "thin", "sample_size",
                 "as_of", "observed_on", "stale")
 
@@ -128,4 +129,9 @@ def present(v: dict) -> dict:
         "_id", "name", "number", "rarity", "set", "images")} if c else None,
         **{k: v[k] for k in ("value", "values", "sources", "estimated", "price_kind", "source", "match",
                              "grade_key_used", "thin", "sample_size", "as_of", "observed_on", "stale",
-                             "headline_rule", "spread")}}
+                             "headline_rule", "spread", "needs_price", "ref_raw_value", "ref_raw_source")}}
+
+
+async def needs_price_card_ids(db) -> list[str]:
+    """Owned cards with a graded stack that has no graded price (what "Fetch missing prices" targets)."""
+    return sorted({v["item"]["card_id"] for v in await valuate(db) if v["needs_price"]})

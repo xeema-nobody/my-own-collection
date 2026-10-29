@@ -24,7 +24,7 @@ Recommendation: decide **before** enabling the scheduler. Cap at 2 for scheduled
 ## Phase 9: fix and polish what exists (priority, before the backlog)
 Triggered by first real use (2026-10-29). Detail and root causes: `temp/follow_up.md`.
 1. **DONE (9.1)** Catalog completeness: Unified Minds (`sm11`) had 100 of 260 cards, pokemontcg.io fails on page 2+. Adaptive paging, per-set completeness, retry incomplete.
-2. Valuation correctness: a graded stack with no graded price is not counted (today it falls back to the raw price and inflates the total, 8 of 15 stacks); fetch prices automatically when a card is added.
+2. **DONE (9.2)** Valuation correctness: a graded stack with no graded price is not counted (today it falls back to the raw price and inflates the total, 8 of 15 stacks); fetch prices automatically when a card is added.
 3. Design foundation: palette, fonts, light/dark toggle, wider layout, shared UI components.
 4. Screens: card detail, collection (pagination, sort, filters, value chart), dashboard (clear purpose: insights vs collection inventory), settings (set browser, readable jobs), alerts (explained, guided form), search.
 

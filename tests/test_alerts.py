@@ -79,12 +79,23 @@ async def test_estimated_skipped_unless_included(db):
     await db.collection_items.update_one({}, {"$set": {"grading": {"company": "PSA", "grade": 9, "cert_number": None},
                                                        "condition": None}})
     rid = (await rule(db, op="above", threshold=100))["id"]
-    assert await alerts.evaluate(db) == 0       # raw fallback = estimated
+    await store_scraped_points(db, CID, [pt(10000, "G9")], day())  # company-agnostic bucket = estimated
+    assert await alerts.evaluate(db) == 0
     assert (await db.alerts.find_one())["triggered"] is False and (await db.alerts.find_one())["last_value"] is None
     await alerts.patch(db, rid, alerts.AlertPatch(include_estimated=True))
     assert await alerts.evaluate(db) == 1
     [e] = await events(db)
     assert e["estimated"] is True
+
+
+async def test_graded_stack_without_graded_price_never_fires(db):
+    await setup(db)                             # raw price only
+    await db.collection_items.update_one({}, {"$set": {"grading": {"company": "PSA", "grade": 9, "cert_number": None},
+                                                       "condition": None}})
+    await rule(db, threshold=100)
+    assert await alerts.evaluate(db) == 0       # slab not priced: raw copy value must not trigger
+    a = await db.alerts.find_one()
+    assert a["triggered"] is False and a["last_value"] is None
 
 
 async def test_unknown_leaves_state_untouched(db):

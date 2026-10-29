@@ -90,7 +90,7 @@ export const api = {
   retryIncompleteImports: () => req<{ started: boolean; sets: string[] }>("/api/admin/catalog/import/retry-incomplete", { method: "POST" }),
   refreshPrices: (scope = "collection", sets?: string[]) =>
     req<any>("/api/admin/prices/refresh" + qs({ scope, sets }), { method: "POST" }),
-  fetchPrices: (b: { cards?: string[]; sets?: string[]; owned?: boolean; sources?: string[]; force?: boolean }) =>
+  fetchPrices: (b: { cards?: string[]; sets?: string[]; owned?: boolean; missing?: boolean; sources?: string[]; force?: boolean }) =>
     req<{ started: boolean; cards: number }>("/api/admin/prices/fetch", post(b)),
   fetchCardPrices: (id: string, b: { sources?: string[]; force?: boolean } = {}) =>
     req<{ started: boolean; cards: number }>(`/api/cards/${encodeURIComponent(id)}/fetch-prices`, post(b)),

@@ -10,6 +10,7 @@ from app.db.mongo import get_db
 from app.providers.fetcher import FetcherClient, FetcherUnavailable
 from app.providers.price import SCRAPED, get_provider
 from app.services import alerts, jobs, matching
+from app.services.collection import needs_price_card_ids
 from app.services.pricing import store_scraped_points
 from app.services.sales import store_chart_seed, store_sales
 from app.services.snapshots import take_snapshot
@@ -23,7 +24,7 @@ SOURCE_SITE = {"cardmarket_web": "cardmarket"}   # source id -> fetcher site id 
 
 
 async def resolve_targets(db, cards: list[str] | None = None, sets: list[str] | None = None,
-                          owned: bool = False) -> list[str]:
+                          owned: bool = False, missing: bool = False) -> list[str]:
     """Card ids from explicit ids, set external ids and/or the collection; deduped, in order."""
     ids: list[str] = []
     if cards:
@@ -33,6 +34,8 @@ async def resolve_targets(db, cards: list[str] | None = None, sets: list[str] | 
         ids += [c["_id"] async for c in db.cards.find({"set.id": {"$in": sets}}, {"_id": 1}).sort("_id", 1)]
     if owned:
         ids += sorted(await db.collection_items.distinct("card_id"))
+    if missing:
+        ids += await needs_price_card_ids(db)
     return list(dict.fromkeys(ids))
 
 

@@ -87,11 +87,12 @@ class FetchIn(CardFetchIn):
     cards: list[str] | None = None
     sets: list[str] | None = None
     owned: bool = False
+    missing: bool = False  # owned cards with a graded stack that has no graded price
 
     @model_validator(mode="after")
     def _target(self):
-        if not (self.cards or self.sets or self.owned):
-            raise ValueError("give cards, sets or owned")
+        if not (self.cards or self.sets or self.owned or self.missing):
+            raise ValueError("give cards, sets, owned or missing")
         return self
 
 

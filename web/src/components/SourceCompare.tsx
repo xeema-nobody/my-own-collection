@@ -2,7 +2,7 @@ import { ago, money } from "../lib/api";
 import { KIND_CLASS, SOURCE_COLOR } from "../lib/colors";
 
 const MATCH_WHY: Record<string, string> = {
-  bucket: "company-agnostic grade bucket", lower: "lower grade of the same company", raw_fallback: "raw price (no graded price)",
+  bucket: "company-agnostic grade bucket", lower: "lower grade of the same company", needs_graded_price: "no graded price: not counted",
 };
 
 /** Age of the data behind one source price: our fetch day, plus the upstream date when it differs a lot. */
