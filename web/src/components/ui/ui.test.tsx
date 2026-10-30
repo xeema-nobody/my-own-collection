@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, renderHook, act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Combobox, Section, SegmentedControl, Badge, Kpi, EmptyState, Pagination, SortTh, Drawer, Chip, FileDrop } from "./index";
+import { Combobox, Section, SegmentedControl, Badge, Kpi, EmptyState, Pagination, SortTh, Drawer, Chip, FileDrop, Stepper } from "./index";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ThemeToggle from "../ThemeToggle";
 import { useTheme } from "../../lib/theme";
@@ -155,5 +155,19 @@ describe("FileDrop", () => {
     expect(on).toHaveBeenCalledWith(f);
     rerender(<FileDrop file={f} onFile={on} accept=".json" hint="Drop here" />);
     expect(screen.getByText("c.json")).toBeInTheDocument();
+  });
+});
+
+describe("Stepper", () => {
+  it("steps within bounds and honours disabledInc", async () => {
+    const on = vi.fn();
+    const { rerender } = render(<Stepper label="Qty" value={1} min={1} max={2} onChange={on} />);
+    expect(screen.getByRole("button", { name: "Decrease Qty" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Increase Qty" }));
+    expect(on).toHaveBeenCalledWith(2);
+    rerender(<Stepper label="Qty" value={2} min={1} max={2} onChange={on} />);
+    expect(screen.getByRole("button", { name: "Increase Qty" })).toBeDisabled();
+    rerender(<Stepper label="Qty" value={1} min={1} disabledInc onChange={on} />);
+    expect(screen.getByRole("button", { name: "Increase Qty" })).toBeDisabled();
   });
 });

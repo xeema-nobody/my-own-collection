@@ -38,7 +38,7 @@ docker compose up -d --build    # mongo + api + web
 | API + Swagger | http://localhost:8100/docs |
 
 1. Settings -> Import: type a set id (e.g. `base1`) for a quick start, or leave empty for the full catalog (~20k cards, 30+ min, runs in the background; watch the Jobs tab).
-2. Search -> open a card -> Add to collection.
+2. Search -> open a card -> Add to collection (Raw | Graded switch, condition chips or grader + grade selects, quantity stepper, price paid, estimated value shown before adding).
 3. Dashboard -> Refresh prices (re-fetches owned cards' sets, then takes today's snapshot). History needs 2+ snapshots to draw.
 
 Data lives in docker volume `moc_mongo_data`. Never `docker compose down -v`. The backend has no auto-reload: `docker compose restart app` after edits.
