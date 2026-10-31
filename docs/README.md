@@ -66,6 +66,19 @@ docker compose up -d app                                            # back to th
 docker compose run --rm app python -m app.scripts.demo_db drop     # delete the demo DB
 ```
 
+## Screenshots
+
+1600 px wide, dark then light (`docs/screenshots/`). Card page is truncated at 2600 px.
+
+| Page | Dark | Light |
+|---|---|---|
+| Search | ![](screenshots/search-dark-1600.png) | ![](screenshots/search-light-1600.png) |
+| Collection | ![](screenshots/collection-dark-1600.png) | ![](screenshots/collection-light-1600.png) |
+| Dashboard | ![](screenshots/dashboard-dark-1600.png) | ![](screenshots/dashboard-light-1600.png) |
+| Alerts | ![](screenshots/alerts-dark-1600.png) | ![](screenshots/alerts-light-1600.png) |
+| Settings | ![](screenshots/settings-dark-1600.png) | ![](screenshots/settings-light-1600.png) |
+| Card | ![](screenshots/card-dark-1600.png) | ![](screenshots/card-light-1600.png) |
+
 ## Look and theme
 Dark by default. Header toggle: light / system / dark (remembered in the browser). UI building blocks live in `web/src/components/ui`.
 

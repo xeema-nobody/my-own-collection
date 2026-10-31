@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ApiError } from "../lib/api";
+import { Button } from "./ui";
 
 type Q<T> = { data?: T; isLoading: boolean; error: unknown; refetch: () => unknown };
 
@@ -16,7 +17,7 @@ export function QueryError({ q, label }: { q: Pick<Q<unknown>, "error" | "refetc
   return (
     <div role="alert" className="flex items-center gap-3 rounded border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
       <span>{label ? `${label}: ` : ""}{errorText(q.error)}</span>
-      <button className="btn-ghost ml-auto" onClick={() => q.refetch()}>Retry</button>
+      <Button variant="secondary" className="ml-auto" onClick={() => q.refetch()}>Retry</Button>
     </div>
   );
 }

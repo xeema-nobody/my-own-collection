@@ -29,10 +29,3 @@
   .num { font-variant-numeric: tabular-nums; }
 }
 
-/* Legacy utility classes, kept so unrestyled pages follow the theme; new code uses components/ui. */
-@layer components {
-  .btn { @apply inline-flex items-center justify-center gap-1.5 rounded bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50; }
-  .btn-ghost { @apply inline-flex items-center justify-center gap-1.5 rounded border border-line bg-transparent px-3 py-1.5 text-sm transition hover:bg-surface-2 disabled:pointer-events-none disabled:opacity-50; }
-  .input { @apply rounded border border-line bg-surface px-2.5 py-1.5 text-sm placeholder:text-muted; }
-  .card { @apply rounded-lg bg-surface p-4 shadow-card; }
-}
