@@ -4,6 +4,7 @@ import CardDetail from "./pages/CardDetail";
 import Collection from "./pages/Collection";
 import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
+import Wishlist from "./pages/Wishlist";
 import Alerts from "./pages/Alerts";
 import NotFound from "./pages/NotFound";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -29,6 +30,7 @@ export default function App() {
           <span className="mr-6 text-base font-semibold tracking-tight">My Collection</span>
           <NavLink to="/" end className={link}>Search</NavLink>
           <NavLink to="/collection" className={link}>Collection</NavLink>
+          <NavLink to="/wishlist" className={link}>Wishlist</NavLink>
           <NavLink to="/dashboard" className={link}>Dashboard</NavLink>
           <AlertsLink />
           <NavLink to="/settings" className={link}>Settings</NavLink>
@@ -40,6 +42,7 @@ export default function App() {
         <Route path="/" element={<Search />} />
         <Route path="/cards/:id" element={<CardDetail />} />
         <Route path="/collection" element={<Collection />} />
+        <Route path="/wishlist" element={<Wishlist />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/settings" element={<Settings />} />

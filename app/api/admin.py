@@ -46,7 +46,7 @@ async def prices_fetch(body: FetchIn):
         await FetcherClient().status()
     except FetcherUnavailable as e:
         raise HTTPException(503, str(e)) from None
-    cards = await resolve_targets(get_db(), body.cards, body.sets, body.owned, body.missing)
+    cards = await resolve_targets(get_db(), body.cards, body.sets, body.owned, body.missing, body.wishlist)
     if not cards:
         raise HTTPException(422, "no cards match the given targets")
     spawn(fetch_prices(cards, body.sources, body.force))

@@ -94,8 +94,12 @@ async def valuate(db, filt: dict | None = None, as_of: datetime | None = None) -
     """Items joined with card + best price (see services/valuation.py). Base-currency cents for the
     whole stack; None = unpriced. `values[source]` = value when only that source is used.
     `as_of` revalues the same items at a past date from the observation log + sales (see services/movers.py)."""
+    return await valuate_items(db, await db.collection_items.find(filt or {}).to_list(None), as_of)
+
+
+async def valuate_items(db, items: list[dict], as_of: datetime | None = None) -> list[dict]:
+    """`valuate` over any list of item-shaped dicts (collection stacks, or virtual wishlist items)."""
     rates = await get_rates(db)
-    items = await db.collection_items.find(filt or {}).to_list(None)
     ids = list({i["card_id"] for i in items})
     cards = {c["_id"]: c async for c in db.cards.find({"_id": {"$in": ids}})}
     now = as_of or datetime.now(timezone.utc)
@@ -121,6 +125,13 @@ async def valuate(db, filt: dict | None = None, as_of: datetime | None = None) -
                     "spread": spread(_comparable(best, sources)),
                     "cost": cost, **best, "value": best["value"]})
     return out
+
+
+async def valuate_wishlist(db, as_of: datetime | None = None) -> list[dict]:
+    """Wishlist entries valued like one owned copy (virtual item, `_id` = the wish id)."""
+    items = [{"_id": w["_id"], "card_id": w["card_id"], "variant": w.get("variant"), "grading": w.get("grading"),
+              "language": "en", "condition": None, "quantity": 1} async for w in db.wishlist.find()]
+    return await valuate_items(db, items, as_of)
 
 
 def present(v: dict) -> dict:

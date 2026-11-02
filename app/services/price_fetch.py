@@ -24,7 +24,7 @@ SOURCE_SITE = {"cardmarket_web": "cardmarket"}   # source id -> fetcher site id 
 
 
 async def resolve_targets(db, cards: list[str] | None = None, sets: list[str] | None = None,
-                          owned: bool = False, missing: bool = False) -> list[str]:
+                          owned: bool = False, missing: bool = False, wishlist: bool = False) -> list[str]:
     """Card ids from explicit ids, set external ids and/or the collection; deduped, in order."""
     ids: list[str] = []
     if cards:
@@ -36,11 +36,13 @@ async def resolve_targets(db, cards: list[str] | None = None, sets: list[str] | 
         ids += sorted(await db.collection_items.distinct("card_id"))
     if missing:
         ids += await needs_price_card_ids(db)
+    if wishlist:
+        ids += sorted(await db.wishlist.distinct("card_id"))
     return list(dict.fromkeys(ids))
 
 
 async def stalest_owned(db, limit: int) -> list[str]:
-    """Owned card ids, least recently tried first (never tried = oldest); first `limit`.
+    """Owned + wishlisted card ids, least recently tried first (never tried = oldest); first `limit`.
 
     Cards fetched today are cache-fresh and sort last, so a capped run resumes where the last stopped."""
     epoch = datetime.min.replace(tzinfo=timezone.utc)
@@ -48,7 +50,7 @@ async def stalest_owned(db, limit: int) -> list[str]:
     async for d in db.fetch_log.find({}, {"card_id": 1, "fetched_at": 1}):
         t = d["fetched_at"].replace(tzinfo=timezone.utc) if d["fetched_at"].tzinfo is None else d["fetched_at"]
         last[d["card_id"]] = max(t, last.get(d["card_id"], t))   # last attempt on any source, any outcome
-    owned = sorted(await db.collection_items.distinct("card_id"))
+    owned = sorted(set(await db.collection_items.distinct("card_id")) | set(await db.wishlist.distinct("card_id")))
     owned.sort(key=lambda c: last.get(c, epoch))
     return owned[:limit]
 

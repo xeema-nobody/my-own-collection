@@ -9,6 +9,7 @@ import SourceStatus from "../components/SourceStatus";
 import SalesList from "../components/SalesList";
 import SourceCompare from "../components/SourceCompare";
 import CardCollection from "../components/CardCollection";
+import CardWishlist from "../components/CardWishlist";
 import { Section } from "../components/ui";
 import { usePriceGrade } from "../lib/priceGrade";
 
@@ -51,6 +52,7 @@ export default function CardDetail() {
         <Section title="Price history" collapsible id="card-history"><PriceChart cardId={id} pg={pg} /></Section>
 
         <CardCollection card={c} />
+        <CardWishlist card={c} />
       </div>
     </div>
   );

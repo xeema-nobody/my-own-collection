@@ -35,7 +35,7 @@ export type FetchLog = { status: string; detail: string | null; url: string | nu
 export type FetcherStatus = { up: boolean; browser?: string; sites?: Record<string, string>; last_error?: string | null; detail?: string };
 
 export type AlertRule = {
-  id: string; description: string; scope: "stack" | "card" | "total"; op: "above" | "below" | "up_pct" | "down_pct";
+  id: string; description: string; scope: "stack" | "card" | "total" | "wish"; op: "above" | "below" | "up_pct" | "down_pct";
   threshold: number; days: number | null; kind: "any" | "sold" | "market"; include_estimated: boolean;
   enabled: boolean; triggered: boolean; last_value: number | null; last_pct: number | null; last_eval: string | null;
 };
@@ -45,8 +45,20 @@ export type AlertEvent = {
   estimated?: boolean; source?: string | null; fired_at: string; read: boolean;
 };
 export type AlertIn = {
-  scope: string; item_id?: string; card_id?: string; op: string; threshold: number; days?: number;
+  scope: string; item_id?: string; card_id?: string; wish_id?: string; op: string; threshold: number; days?: number;
   kind: string; include_estimated: boolean;
+};
+
+export type WishEntry = {
+  id: string; card_id: string; variant: string | null; grading: { company: string; grade: number } | null;
+  target_price: number | null; note: string | null; alert: boolean; created_at: string;
+  card: { _id: string; name: string; number: string; rarity?: string; set?: { name: string }; images?: { small?: string } } | null;
+  value: number | null; estimated: boolean; price_kind: string | null; source: string | null; thin: boolean; stale: boolean;
+  needs_price: boolean; gap: number | null; hit: boolean;
+};
+export type WishIn = {
+  card_id: string; variant?: string | null; grading?: { company: string; grade: number } | null;
+  target_price?: number | null; note?: string | null; alert?: boolean;
 };
 
 export const api = {
@@ -90,10 +102,15 @@ export const api = {
   retryIncompleteImports: () => req<{ started: boolean; sets: string[] }>("/api/admin/catalog/import/retry-incomplete", { method: "POST" }),
   refreshPrices: (scope = "collection", sets?: string[]) =>
     req<any>("/api/admin/prices/refresh" + qs({ scope, sets }), { method: "POST" }),
-  fetchPrices: (b: { cards?: string[]; sets?: string[]; owned?: boolean; missing?: boolean; sources?: string[]; force?: boolean }) =>
+  fetchPrices: (b: { cards?: string[]; sets?: string[]; owned?: boolean; missing?: boolean; wishlist?: boolean; sources?: string[]; force?: boolean }) =>
     req<{ started: boolean; cards: number }>("/api/admin/prices/fetch", post(b)),
   fetchCardPrices: (id: string, b: { sources?: string[]; force?: boolean } = {}) =>
     req<{ started: boolean; cards: number }>(`/api/cards/${encodeURIComponent(id)}/fetch-prices`, post(b)),
+  wishlist: (cardId?: string) => req<WishEntry[]>("/api/wishlist" + qs({ card_id: cardId })),
+  addWish: (b: WishIn) => req<WishEntry>("/api/wishlist", post(b)),
+  patchWish: (id: string, b: { target_price?: number | null; note?: string | null; alert?: boolean }) =>
+    req<WishEntry>(`/api/wishlist/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+  removeWish: (id: string) => req<void>(`/api/wishlist/${id}`, { method: "DELETE" }),
   alerts: () => req<AlertRule[]>("/api/alerts"),
   createAlert: (b: AlertIn) => req<AlertRule>("/api/alerts", post(b)),
   patchAlert: (id: string, b: Partial<Pick<AlertRule, "enabled" | "include_estimated" | "kind" | "threshold">>) =>
