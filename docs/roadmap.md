@@ -30,7 +30,7 @@ Triggered by first real use (2026-10-29). Detail and root causes: `temp/follow_u
 
 ## Backlog (after Phase 9, in order)
 a. **DONE 2026-10-31 (branch feat/wishlist)** **Wishlist**: cards you want but do not own. Target price, optional alert when the price falls below it (reuse the alert engine), shown in a Wishlist page and as a flag on search/card detail. Needs: `wishlist` collection, API, page, alert scope.
-b. **Toolchain bump** for the 8 `npm audit` findings (vitest 4, vite 8, react-router 7). All fixes are semver-major. Findings are dev-only except react-router, whose advisories do not apply here (see `decisions.md`, Phase 8 review). Do it as one branch, re-run `npm audit`, typecheck and `npm test`. Low urgency while nothing is deployed.
+b. **DONE 2026-11-02 (branch feat/toolchain-bump: vite 8, vitest 4, react-router-dom 7, npm audit = 0)** **Toolchain bump** for the 8 `npm audit` findings (vitest 4, vite 8, react-router 7). All fixes are semver-major. Findings are dev-only except react-router, whose advisories do not apply here (see `decisions.md`, Phase 8 review). Do it as one branch, re-run `npm audit`, typecheck and `npm test`. Low urgency while nothing is deployed.
 c. **One-navigation multi-page fetch** for alt.xyz: the fetcher clicks through pages inside a single page load and returns every page's HTML in one response, instead of one navigation per page. Removes most of the cost in the open decision above, makes 3+ pages cheap, and then the cap question goes away. Needs a fetcher response shape change (list of HTML snapshots) and adapter update.
 
 ## Later / ideas (unscheduled)
