@@ -114,6 +114,18 @@ describe("Alerts rule form", () => {
     await userEvent.click(screen.getByRole("button", { name: /Add rule/ }));
     await waitFor(() => expect(posted(fn)).toMatchObject({ op: "up_pct", threshold: 10, days: 7, kind: "sold" }));
   });
+  it("wishlist scope posts wish_id", async () => {
+    const fn = mockApi({ ...base, "/api/wishlist": [{ id: "w1", card_id: "c1", card: { name: "Charizard", number: "4" }, grading: null }],
+      "/api/collection": { items: [], total: 0 }, "POST /api/alerts": { id: "n" } });
+    renderPage(<Alerts />);
+    await userEvent.click(await screen.findByRole("combobox", { name: "Scope" }));
+    await userEvent.click(await screen.findByRole("option", { name: "a wishlist card" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Wishlist card" }));
+    await userEvent.click(await screen.findByText("Charizard #4 · raw"));
+    await userEvent.type(screen.getByLabelText("Amount"), "50");
+    await userEvent.click(screen.getByRole("button", { name: /Add rule/ }));
+    await waitFor(() => expect(posted(fn)).toMatchObject({ scope: "wish", wish_id: "w1", op: "above", threshold: 5000 }));
+  });
   it("validates amount", async () => {
     mockApi({ ...base, "/api/collection": { items: [], total: 0 } });
     renderPage(<Alerts />);

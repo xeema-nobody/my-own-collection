@@ -88,15 +88,37 @@ class FetchIn(CardFetchIn):
     sets: list[str] | None = None
     owned: bool = False
     missing: bool = False  # owned cards with a graded stack that has no graded price
+    wishlist: bool = False
 
     @model_validator(mode="after")
     def _target(self):
-        if not (self.cards or self.sets or self.owned or self.missing):
-            raise ValueError("give cards, sets, owned or missing")
+        if not (self.cards or self.sets or self.owned or self.missing or self.wishlist):
+            raise ValueError("give cards, sets, owned, missing or wishlist")
         return self
 
 
-AlertScope = Literal["stack", "card", "total"]
+class WishIn(BaseModel):
+    card_id: str
+    variant: str | None = None
+    grading: Grading | None = None      # None = raw; no cert (it is a want, not a slab)
+    target_price: int | None = Field(default=None, gt=0, description="cents, base currency")
+    note: str | None = None
+    alert: bool = True                  # keep a "below target" alert rule while target_price is set
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.grading:
+            self.grading = self.grading.model_copy(update={"cert_number": None})
+        return self
+
+
+class WishPatch(BaseModel):
+    target_price: int | None = Field(default=None, gt=0)
+    note: str | None = None
+    alert: bool | None = None
+
+
+AlertScope = Literal["stack", "card", "total", "wish"]
 AlertOp = Literal["above", "below", "up_pct", "down_pct"]
 AlertKind = Literal["any", "sold", "market"]
 
@@ -105,6 +127,7 @@ class AlertIn(BaseModel):
     scope: AlertScope
     item_id: str | None = None          # stack scope
     card_id: str | None = None          # card scope
+    wish_id: str | None = None          # wish scope (a wishlist entry)
     op: AlertOp
     threshold: float = Field(gt=0, description="cents for above/below, percent for up_pct/down_pct")
     days: int | None = Field(default=None, ge=1, le=365)    # pct ops only
@@ -118,6 +141,10 @@ class AlertIn(BaseModel):
             raise ValueError("stack alerts need item_id")
         if self.scope == "card" and not self.card_id:
             raise ValueError("card alerts need card_id")
+        if self.scope == "wish" and not self.wish_id:
+            raise ValueError("wish alerts need wish_id")
+        if self.scope != "wish":
+            self.wish_id = None
         if self.scope != "stack":
             self.item_id = None
         if self.scope != "card":

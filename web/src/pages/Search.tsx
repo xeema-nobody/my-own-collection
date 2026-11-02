@@ -2,7 +2,7 @@ import { QueryError } from "../components/QueryState";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Search as SearchIcon, X } from "lucide-react";
+import { Heart, Search as SearchIcon, X } from "lucide-react";
 import { api, money } from "../lib/api";
 import { Badge, Button, Card, Chip, Combobox, cx, EmptyState, Field, Input, Select, Skeleton } from "../components/ui";
 import { activeFilters, SORT_OPTIONS, withoutKeys } from "../lib/searchFilters";
@@ -95,7 +95,10 @@ export default function Search() {
               <input type="checkbox" className="absolute left-3 top-3 z-10 h-4 w-4 accent-[rgb(var(--accent))]" aria-label={`Select ${c.name} for price fetch`} title="Select for price fetch"
                 checked={selected.has(c.id)} onChange={() => pick(c.id)} />
               <Link to={`/cards/${encodeURIComponent(c.id)}`} className="block rounded-lg bg-surface p-3 shadow-card transition hover:ring-2 hover:ring-accent/60">
-                {c.owned_qty > 0 && <Badge tone="accent" className="num absolute right-3 top-3">×{c.owned_qty}</Badge>}
+                <div className="absolute right-3 top-3 flex gap-1">
+                  {c.wished && <Badge tone="warn" title="On your wishlist" aria-label="On wishlist"><Heart size={11} className="fill-current" /></Badge>}
+                  {c.owned_qty > 0 && <Badge tone="accent" className="num">×{c.owned_qty}</Badge>}
+                </div>
                 <img src={c.images?.small} alt={c.name} loading="lazy" className="mx-auto h-52 object-contain" />
                 <div className="mt-3 truncate text-sm font-medium">{c.name}</div>
                 <div className="flex items-center gap-1 truncate text-xs text-muted">

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Check, Pause, Play, RefreshCw, Trash2 } from "lucide-react";
-import { ago, api, money, type AlertEvent, type AlertIn, type AlertRule } from "../lib/api";
+import { ago, api, money, type AlertEvent, type AlertIn, type AlertRule, type WishEntry } from "../lib/api";
 import { QueryError } from "../components/QueryState";
 import {
   Badge, Button, Checkbox, Combobox, Drawer, EmptyState, Input, SegmentedControl, Section, Select, Skeleton,
@@ -15,6 +15,7 @@ const SCOPES = [
   { value: "total", label: "my collection total" },
   { value: "card", label: "a card (all its stacks)" },
   { value: "stack", label: "a single stack" },
+  { value: "wish", label: "a wishlist card" },
 ];
 const isPct = (op: string) => op.endsWith("_pct");
 const KIND_TONE: Record<string, "ok" | "neutral" | "warn"> = { sold: "ok", market: "neutral", ask: "warn" };
@@ -80,6 +81,13 @@ const stackPage = (scope: string) => async (q: string, page: number): Promise<Co
     : { value: i.id as string, label: stackLabel(i) });
   return { options, more: page * PAGE < (r.total ?? 0) };
 };
+const wishPage = async (q: string): Promise<ComboPage> => {
+  const all = await api.wishlist();
+  const needle = q.trim().toLowerCase();
+  const options = all.map((w) => ({ value: w.id, label: wishLabel(w) })).filter((o) => o.label.toLowerCase().includes(needle));
+  return { options, more: false };
+};
+export const wishLabel = (w: WishEntry) => `${w.card?.name ?? w.card_id} #${w.card?.number ?? "?"} · ${w.grading ? `${w.grading.company} ${w.grading.grade}` : "raw"}`;
 const stackLabel = (i: any) =>
   `${i.card?.name ?? i.card_id} #${i.card?.number ?? "?"} · ${i.grading ? `${i.grading.company} ${i.grading.grade}` : i.condition} × ${i.quantity}`;
 
@@ -109,6 +117,7 @@ function RuleForm() {
       threshold: isPct(f.op) ? amount : Math.round(amount * 100) };
     if (f.scope === "stack") b.item_id = f.target;
     if (f.scope === "card") b.card_id = f.target;
+    if (f.scope === "wish") b.wish_id = f.target;
     if (isPct(f.op)) b.days = parseInt(f.days, 10);
     create.mutate(b);
   };
@@ -121,8 +130,9 @@ function RuleForm() {
           <div className="w-52"><Select aria-label="Scope" value={f.scope} options={SCOPES} onChange={(v) => set({ scope: v, target: "", targetLabel: "" })} /></div>
           {f.scope !== "total" && (
             <div className="w-72">
-              <Combobox key={f.scope} aria-label={f.scope === "card" ? "Card" : "Stack"} cacheKey={`alert-${f.scope}`} value={f.target} selectedLabel={label}
-                placeholder={f.scope === "card" ? "Search a card…" : "Search a stack…"} fetchPage={stackPage(f.scope)}
+              <Combobox key={f.scope} aria-label={f.scope === "card" ? "Card" : f.scope === "wish" ? "Wishlist card" : "Stack"} cacheKey={`alert-${f.scope}`} value={f.target} selectedLabel={label}
+                placeholder={f.scope === "card" ? "Search a card…" : f.scope === "wish" ? "Search your wishlist…" : "Search a stack…"}
+                fetchPage={f.scope === "wish" ? wishPage : stackPage(f.scope)}
                 onChange={(v, l) => set({ target: v, targetLabel: l })} />
             </div>)}
           <div className="w-40"><Select aria-label="Condition" value={f.op} options={OP_OPTIONS} onChange={(v) => set({ op: v })} /></div>
@@ -153,7 +163,7 @@ function Explainer() {
   return (
     <Section title="How alerts work" collapsible id="alerts-explainer" defaultOpen>
       <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted">
-        <li>A rule watches a <b className="text-fg">stack</b>, a <b className="text-fg">card</b> (all its stacks) or your <b className="text-fg">collection total</b>.</li>
+        <li>A rule watches a <b className="text-fg">stack</b>, a <b className="text-fg">wishlist card</b>, a <b className="text-fg">card</b> (all its stacks) or your <b className="text-fg">collection total</b>.</li>
         <li>Rules are checked after every price fetch, refresh and daily snapshot, or when you press <b className="text-fg">Check now</b>.</li>
         <li>A rule fires <b className="text-fg">once</b> when its condition becomes true, then re-arms when it clears. One that is already true fires on the next check.</li>
         <li>Percent rules compare against the price N days ago. Amounts are in EUR.</li>

@@ -52,7 +52,8 @@ Engine: real Google Chrome started by the fetcher with `--remote-debugging-port`
 - `sales`: sold records, manual (`POST /cards/{id}/sales`) and scraped (unique `(card_id, source, listing_id)` when `listing_id` is set); stats: last 10 within 90 days per source+grade.
 - `collection_snapshots`: unique per date (+ `valuation_version`, `needs_price_count`, `ref_raw_value` from Phase 9.2); `totals_by_source`, `total_value`, `value_kind_breakdown`, `estimated_count`, cost, counts, unpriced counts, breakdowns (pre-Phase-4 docs lack the first three).
 - `product_matches`: `_id "{card_id}|{source}"`, `url`, `confirmed_by` auto|user|null, pending `candidates`; only `pricecharting`, `cardmarket_web`.
-- `alerts`: rule `{scope stack|card|total, item_id|card_id, op above|below|up_pct|down_pct, threshold (cents or %), days, kind, include_estimated, enabled, triggered, last_value, last_pct, last_eval, label}`.
+- `wishlist`: one doc per wanted version, unique `wish_key` = card|variant|grader|grade: `{card_id, variant, grading{company,grade}|null, target_price (cents), note, alert, created_at}`. Valued as a virtual one-copy item (`collection.valuate_wishlist`); never part of collection valuation, totals or snapshots.
+- `alerts`: rule `{scope stack|card|total|wish, wish_id, item_id|card_id, op above|below|up_pct|down_pct, threshold (cents or %), days, kind, include_estimated, enabled, triggered, last_value, last_pct, last_eval, label}`.
 - `alert_events`: `type alert|system`, rule text, card, `value/prev/pct`, kind/match/thin/estimated, `fired_at`, `read`; system items carry a unique `key` (one per day per reason). Index `(read, fired_at)`. Read events older than `ALERT_EVENTS_KEEP_DAYS` (90) are pruned by `daily_prune` (`alerts.prune_events`); unread ones never.
 - `fx_rates`, `jobs`.
 
@@ -62,9 +63,10 @@ Money: integer cents + currency everywhere. Missing price = `null`, never 0.
 
 `GET /cards` (incl. `has_price`), `/cards/{id}`, `/cards/{id}/prices`, `POST /cards/{id}/sales`, `GET /cards/{id}/price-matrix` (grades/graders derived from stored rows), `GET /cards/{id}/fetch-status` (last scraped-fetch outcome per source), `GET /cards/{id}/match`, `POST|DELETE /cards/{id}/match/{source}` (confirm / reset product URL), `GET /sets` (`?with_stats=true`), `/filters`;
 `/collection` (POST add, GET list with per-item `value/price_kind/source/match/estimated/sources`, `/summary` with `value_by_kind`, PATCH/DELETE `/{id}`, POST `/{id}/remove`);
+`/wishlist` (GET list `?card_id=` with `value/price_kind/gap/hit/needs_price`, POST add = upsert on card+variant+grade, PATCH/DELETE `/{id}`; a target keeps one linked `auto` alert rule), `GET /cards` items carry `wished`;
 `/dashboard/history|breakdown|movers`;
 `/alerts` (GET list, POST create, PATCH/DELETE `/{id}`), `/alerts/events` (`?unread=`), POST `/alerts/events/read` (`{ids}` or all), `/alerts/unread-count`, POST `/alerts/evaluate`;
-`/admin/catalog/import` (`?sets=` repeatable), `/admin/catalog/import/retry-incomplete`, `/admin/prices/refresh` (`?scope=&sets=`), `/admin/snapshot`, `/admin/jobs`, `/admin/status` (incl. `scheduler.jobs[].next_run`), `/admin/fetcher-status` (`{up, ...}`; 200 even when the fetcher is down), `/admin/prices/fetch` (targets `cards` / `sets` / `owned` / `missing` = owned cards with a graded stack that has no graded price); `GET /collection?needs_price=` filter; `/collection/summary` has `needs_price`, `no_data`, `ref_raw_value`.
+`/admin/catalog/import` (`?sets=` repeatable), `/admin/catalog/import/retry-incomplete`, `/admin/prices/refresh` (`?scope=&sets=`), `/admin/snapshot`, `/admin/jobs`, `/admin/status` (incl. `scheduler.jobs[].next_run`), `/admin/fetcher-status` (`{up, ...}`; 200 even when the fetcher is down), `/admin/prices/fetch` (targets `cards` / `sets` / `owned` / `wishlist` / `missing` = owned cards with a graded stack that has no graded price); `GET /collection?needs_price=` filter; `/collection/summary` has `needs_price`, `no_data`, `ref_raw_value`.
 Health: `/health`, `/health/ready` (pings Mongo).
 
 ## Config (`.env`, see `.env.example`)

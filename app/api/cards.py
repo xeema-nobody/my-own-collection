@@ -32,8 +32,10 @@ async def search_cards(q: str | None = None, tcg: str | None = None, set: str | 
     qty = {r["_id"]: r["n"] async for r in db.collection_items.aggregate([
         {"$match": {"card_id": {"$in": [c["id"] for c in cards]}}},
         {"$group": {"_id": "$card_id", "n": {"$sum": "$quantity"}}}])}
+    wished = {*await db.wishlist.distinct("card_id", {"card_id": {"$in": [c["id"] for c in cards]}})}  # `set` is the filter param
     for c in cards:
         c["owned_qty"] = qty.get(c["id"], 0)
+        c["wished"] = c["id"] in wished
     return {"total": total, "page": page, "page_size": page_size, "items": cards}
 
 

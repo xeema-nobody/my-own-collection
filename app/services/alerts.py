@@ -15,7 +15,7 @@ from pymongo.errors import DuplicateKeyError
 
 from app.config import settings
 from app.db.models import AlertIn, AlertPatch
-from app.services.collection import oid, valuate
+from app.services.collection import oid, valuate, valuate_wishlist
 from app.services.movers import comparable
 
 log = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ def _fmt_cents(c: int) -> str:
 
 
 def describe(r: dict) -> str:
-    target = {"total": "Collection total", "card": "Card", "stack": "Stack"}[r["scope"]]
+    target = {"total": "Collection total", "card": "Card", "stack": "Stack", "wish": "Wishlist"}[r["scope"]]
     if r["scope"] != "total" and r.get("label"):
         target = f"{target} {r['label']}"
     if r["op"] in ("above", "below"):
@@ -54,6 +54,8 @@ def _usable(v: dict, rule: dict) -> bool:
 def _select(vals: list[dict], rule: dict) -> list[dict]:
     if rule["scope"] == "stack":
         return [v for v in vals if str(v["item"]["_id"]) == rule["item_id"]]
+    if rule["scope"] == "wish":
+        return [v for v in vals if str(v["item"]["_id"]) == rule["wish_id"]]
     if rule["scope"] == "card":
         return [v for v in vals if v["item"]["card_id"] == rule["card_id"]]
     return vals
@@ -104,17 +106,20 @@ async def evaluate(db, vals: list[dict] | None = None) -> int:
         return 0
     now = datetime.now(timezone.utc)
     vals = await valuate(db) if vals is None else vals
-    pasts: dict[int, dict] = {}
+    wish_vals = await valuate_wishlist(db) if any(r["scope"] == "wish" for r in rules) else []
+    pasts: dict[tuple[bool, int], dict] = {}
     fired = 0
     for rule in rules:
         try:
             past = None
+            wish = rule["scope"] == "wish"   # wishlist rows are valued apart: never part of total/stack/card
             if rule["op"] in ("up_pct", "down_pct"):
                 d = rule["days"]
-                if d not in pasts:
-                    pasts[d] = {v["item"]["_id"]: v for v in await valuate(db, as_of=now - timedelta(days=d))}
-                past = pasts[d]
-            m = measure(rule, vals, past)
+                if (wish, d) not in pasts:
+                    old = await (valuate_wishlist if wish else valuate)(db, as_of=now - timedelta(days=d))
+                    pasts[(wish, d)] = {v["item"]["_id"]: v for v in old}
+                past = pasts[(wish, d)]
+            m = measure(rule, wish_vals if wish else vals, past)
             if m is None:
                 await db.alerts.update_one({"_id": rule["_id"]}, {"$set": {"last_eval": now}})
                 continue
@@ -157,7 +162,12 @@ async def _label(db, body: AlertIn) -> tuple[str | None, str | None]:
     """(label, card_id) for the target; 404 when it does not exist."""
     if body.scope == "total":
         return None, None
-    if body.scope == "stack":
+    if body.scope == "wish":
+        w = await db.wishlist.find_one({"_id": oid(body.wish_id)})
+        if not w:
+            raise HTTPException(404, "wishlist entry not found")
+        card_id = w["card_id"]
+    elif body.scope == "stack":
         it = await db.collection_items.find_one({"_id": oid(body.item_id)})
         if not it:
             raise HTTPException(404, "stack not found")
@@ -168,8 +178,8 @@ async def _label(db, body: AlertIn) -> tuple[str | None, str | None]:
             raise HTTPException(404, "card is not in the collection")
     card = await db.cards.find_one({"_id": card_id}, {"name": 1, "number": 1})
     name = f"{card['name']} #{card['number']}" if card else card_id
-    if body.scope == "stack" and it.get("grading"):
-        g = it["grading"]
+    g = (it if body.scope == "stack" else w if body.scope == "wish" else {}).get("grading")
+    if g:
         name += f" {g['company']} {g['grade']:g}"
     return name, card_id
 
