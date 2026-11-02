@@ -17,7 +17,7 @@ from app.providers.price.resolve import safe_fetch
 SOURCE = "altxyz"
 BASE = "https://alt.xyz"
 SPA_WAIT_MS = 5000
-NEXT_PAGE = "Go to next page"   # the list pages client-side (no URL param), so page N = N-1 clicks
+NEXT_PAGE = "Go to next page"   # the list pages client-side (no URL param): the fetcher clicks it in one tab
 
 
 def search_url(card: dict) -> str:
@@ -96,16 +96,14 @@ class AltXyzProvider:
         cutoff = today - timedelta(days=settings.altxyz_max_age_days)
         sales: list[Sale] = []
         seen: set[str] = set()
-        for page in range(1, max(settings.altxyz_max_pages, 1) + 1):
-            r = await safe_fetch(client, self.site, url, wait_selector='a[href^="/itm/"]',   # SPA hydrated
-                                 click_text="Sold listings", click_labels=[NEXT_PAGE] * (page - 1),
-                                 wait_ms=SPA_WAIT_MS)
-            if isinstance(r, AdapterResult):
-                if page == 1:
-                    return r
-                break     # later page failed: keep what the earlier pages gave
-            tiles = parse_tiles(r.html)
-            fresh = [s for s in parse_sold(r.html, card) if s.listing_id not in seen]
+        r = await safe_fetch(client, self.site, url, wait_selector='a[href^="/itm/"]',   # SPA hydrated
+                             click_text="Sold listings", pages=max(settings.altxyz_max_pages, 1),
+                             next_label=NEXT_PAGE, wait_ms=SPA_WAIT_MS)
+        if isinstance(r, AdapterResult):
+            return r
+        for html in r.htmls or [r.html]:    # old fetcher: no htmls, first page only
+            tiles = parse_tiles(html)
+            fresh = [s for s in parse_sold(html, card) if s.listing_id not in seen]
             sales += [s for s in fresh if s.sold_on >= cutoff]
             stop = _stop_paging(tiles, seen, cutoff)
             seen |= {t["id"] for t in tiles}

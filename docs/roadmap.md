@@ -6,20 +6,12 @@ Catalog + collection (0-1), price model v2 (2), scraped fetch + sold sales (3), 
 ## Pending operator tasks (yours, not code)
 Do in this order; the app works without them but runs manual-only until they are done.
 
-1. **Restart the host fetcher after every pull** so it picks up new fetcher code (`click_labels` for alt.xyz paging, `unattended` flag): `scripts/fetcher.sh stop && scripts/fetcher.sh start`. The fetcher is a separate process, `docker compose restart app` does not touch it. Stale fetcher symptom: alt.xyz returns only the first page of sales.
+1. **Restart the host fetcher after every pull** so it picks up new fetcher code (`pages`/`next_label` one-navigation alt.xyz paging, `unattended` flag): `scripts/fetcher.sh stop && scripts/fetcher.sh start`. The fetcher is a separate process, `docker compose restart app` does not touch it. Stale fetcher symptom: alt.xyz returns only the first page of sales (old fetcher ignores `pages`). If `scripts/fetcher.sh stop` says "no pidfile" but `status` is up, kill the process on :8110 by hand.
 2. **Install the backup schedule** (`backup.md`, section "Schedule"): one cron line or launchd plist on the host, daily 05:30. Then run `scripts/restore.sh backups/<file> --to-scratch` once to prove a dump restores. The docker volume is the only copy of your data until this exists.
 3. **Run the scheduler for a few days**: `SCHEDULER_ENABLED=true` in `.env`, `docker compose restart app`, keep `scripts/fetcher.sh` running and the Mac awake around 03:00-06:30 UTC (missed runs catch up at boot). Watch Settings -> Jobs (trigger column) and the Alerts inbox for `skipped` warnings. Sites that need a login are skipped unattended: do a manual fetch now and then to refresh the session. Purpose: shake out real-world failures before trusting it.
 
-## Open decision: `ALTXYZ_MAX_PAGES`
-alt.xyz paging costs one browser navigation per page, so it takes ~66 s per card at the default of 3 pages (was ~15 s with 1). Scheduled fetch caps at 300 cards/run, so worst case is hours, plus the 3-5 s politeness delay per site.
-
-| Option | Cost per card | Effect |
-|---|---|---|
-| 3 pages (default) | ~66 s | up to ~28 sales per card, best median |
-| 2 pages | ~40 s | about two thirds of the sales; still enough for the >=3-in-90-days rule on most cards |
-| 1 page | ~15 s | original behaviour, ~10 sales |
-
-Recommendation: decide **before** enabling the scheduler. Cap at 2 for scheduled runs if the nightly run is too long (watch the first run's duration), keep 3 for manual single-card fetches. Today it is one global setting (`altxyz_max_pages`), so a per-trigger cap would be a small code change. The real fix is backlog item c.
+## Decided: `ALTXYZ_MAX_PAGES` (2026-11-02)
+Closed by one-navigation paging: the fetcher loads the alt.xyz list once and clicks "Go to next page" in the same tab, returning one snapshot per page. Live check (Mew ex 205, 3 pages): 19 s, 30 distinct listings, was ~66 s. Default stays 3; no per-trigger cap needed. Raise it only if a card's useful sales still sit past page 3 (the 180 d recency stop usually ends paging first).
 
 ## Phase 9: fix and polish what exists (priority, before the backlog)
 Triggered by first real use (2026-10-29). Detail and root causes: `temp/follow_up.md`.

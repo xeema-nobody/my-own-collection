@@ -6,8 +6,9 @@ from fetcher.config import Settings
 class FakePage:
     """Scripted page: `states` is a list of (title, url) returned in order, last one sticks."""
 
-    def __init__(self, states, html="<html>ok</html>", on_close=None):
+    def __init__(self, states, html="<html>ok</html>", on_close=None, pages=None):
         self.states, self.i, self.html = list(states), 0, html
+        self.pages, self.pg = list(pages or []), 0     # scripted list pages; a next-label click advances
         self.fronted = self.closed = False
         self.gotos, self.clicked, self.shots = [], [], []
         self.click_ok = True
@@ -30,7 +31,10 @@ class FakePage:
         return ""
 
     async def content(self):
-        return self.html
+        return self.pages[self.pg] if self.pages else self.html
+
+    async def tile_signature(self, selector):
+        return f"sig{self.pg}"
 
     async def wait_for_selector(self, selector, timeout_s):
         pass
@@ -41,6 +45,8 @@ class FakePage:
 
     async def click_label(self, label, timeout_s=2):
         self.clicked.append(f"label:{label}")
+        if self.click_ok and self.pages and self.pg < len(self.pages) - 1:
+            self.pg += 1
         return self.click_ok
 
     async def bring_to_front(self):

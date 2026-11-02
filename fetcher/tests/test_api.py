@@ -31,3 +31,13 @@ async def test_validation(tmp_path):
         assert (await c.post("/fetch/altxyz", json={})).status_code == 422
         assert (await c.post("/fetch/altxyz", json={"url": "https://alt.xyz", "timeout_s": 9999})).status_code == 422
         assert (await c.post("/fetch/altxyz", json={"url": "https://alt.xyz", "click_labels": ["x"] * 11})).status_code == 422
+        for n in (0, 11):
+            assert (await c.post("/fetch/altxyz", json={"url": "https://alt.xyz", "pages": n})).status_code == 422
+
+
+async def test_pages_passthrough(tmp_path):
+    p = FakePage([("T", "https://alt.xyz/browse")], pages=["<a/>", "<b/>"])
+    async with await client(tmp_path, p) as c:
+        r = await c.post("/fetch/altxyz", json={"url": "https://alt.xyz/browse", "wait_selector": "a",
+                                                "pages": 2, "next_label": "Go to next page"})
+        assert r.json()["htmls"] == ["<a/>", "<b/>"] and r.json()["html"] == "<a/>"

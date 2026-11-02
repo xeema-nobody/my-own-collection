@@ -150,19 +150,19 @@ ALT_PAGES = [fx("altxyz/sold_mew_ex_205.html"), fx("altxyz/sold_mew_ex_205_p2.ht
 
 
 class PagedFetcher(FakeFetcher):
-    """Page N of the alt.xyz list = the request carrying N-1 'Go to next page' clicks."""
+    """One call returns a snapshot per list page, as the fetcher does (at most `pages` of them)."""
 
-    def __init__(self, pages=ALT_PAGES, fail_from=None):
+    def __init__(self, pages=ALT_PAGES, fail=False, legacy=False):
         super().__init__()
-        self.pages, self.fail_from = pages, fail_from
+        self.pages, self.fail, self.legacy = pages, fail, legacy
 
     async def fetch(self, site, url, **kw):
         from app.providers.fetcher import FetchResponse
         self.calls.append((site, url, kw))
-        n = len(kw.get("click_labels") or [])
-        if self.fail_from is not None and n >= self.fail_from:
+        if self.fail:
             return FetchResponse("error", detail="boom")
-        return FetchResponse("ok", url, "t", self.pages[n]) if n < len(self.pages) else FetchResponse("error", detail="no page")
+        got = self.pages[:kw.get("pages", 1)]
+        return FetchResponse("ok", url, "t", got[0], htmls=None if self.legacy else got)
 
 
 def test_alt_fixture_pages_are_distinct_and_newest_first():
@@ -172,35 +172,47 @@ def test_alt_fixture_pages_are_distinct_and_newest_first():
     assert dates == sorted(dates, reverse=True)
 
 
-async def test_alt_reads_pages_up_to_the_cap(monkeypatch):
+async def test_alt_reads_pages_up_to_the_cap_in_one_fetch(monkeypatch):
     from app.config import settings
     monkeypatch.setattr(settings, "altxyz_max_pages", 3)
     f = PagedFetcher()
     res = await get_provider("altxyz").fetch(CARD, f, today=TODAY)
-    assert [len(c[2]["click_labels"]) for c in f.calls] == [0, 1, 2]
-    assert all(c[2]["click_text"] == "Sold listings" for c in f.calls)
+    assert len(f.calls) == 1
+    kw = f.calls[0][2]
+    assert kw["pages"] == 3 and kw["next_label"] == "Go to next page" and kw["click_text"] == "Sold listings"
     one = await get_provider("altxyz").fetch(CARD, PagedFetcher(ALT_PAGES[:1]), today=TODAY)
     assert res.status == "ok" and len(res.sales) > len(one.sales)
     assert len({s.listing_id for s in res.sales}) == len(res.sales)         # deduped
 
 
-async def test_alt_page_cap_limits_requests(monkeypatch):
+async def test_alt_page_cap_is_sent_to_fetcher(monkeypatch):
     from app.config import settings
     monkeypatch.setattr(settings, "altxyz_max_pages", 2)
     f = PagedFetcher()
-    await get_provider("altxyz").fetch(CARD, f, today=TODAY)
-    assert len(f.calls) == 2
+    res = await get_provider("altxyz").fetch(CARD, f, today=TODAY)
+    assert f.calls[0][2]["pages"] == 2
+    monkeypatch.setattr(settings, "altxyz_max_pages", 3)
+    three = await get_provider("altxyz").fetch(CARD, PagedFetcher(), today=TODAY)
+    assert len(res.sales) < len(three.sales)
+
+
+async def test_alt_old_fetcher_without_htmls_reads_first_page(monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "altxyz_max_pages", 3)
+    res = await get_provider("altxyz").fetch(CARD, PagedFetcher(legacy=True), today=TODAY)
+    one = await get_provider("altxyz").fetch(CARD, PagedFetcher(ALT_PAGES[:1]), today=TODAY)
+    assert res.status == "ok" and {s.listing_id for s in res.sales} == {s.listing_id for s in one.sales}
 
 
 async def test_alt_stops_paging_once_listings_leave_the_recency_window(monkeypatch):
     from app.config import settings
     monkeypatch.setattr(settings, "altxyz_max_pages", 3)
     monkeypatch.setattr(settings, "altxyz_max_age_days", 180)
-    late = date(2027, 4, 20)       # cutoff Oct 21 2026: page 2 reaches past it, so page 3 is not requested
-    f = PagedFetcher()
-    res = await get_provider("altxyz").fetch(CARD, f, today=late)
-    assert len(f.calls) == 2
-    assert res.sales and all(s.sold_on >= date(2026, 10, 21) for s in res.sales)
+    late = date(2027, 4, 20)       # cutoff Oct 21 2026: page 2 reaches past it, so page 3 is not read
+    res = await get_provider("altxyz").fetch(CARD, PagedFetcher(), today=late)
+    p3 = {t["id"] for t in altxyz.parse_tiles(ALT_PAGES[2])}
+    assert res.sales and not ({s.listing_id for s in res.sales} & p3)
+    assert all(s.sold_on >= date(2026, 10, 21) for s in res.sales)
 
 
 async def test_alt_drops_sales_older_than_window(monkeypatch):
@@ -211,10 +223,10 @@ async def test_alt_drops_sales_older_than_window(monkeypatch):
     assert res.sales and all(s.sold_on >= date(2026, 10, 24) for s in res.sales)
 
 
-async def test_alt_later_page_failure_keeps_earlier_pages():
-    res = await get_provider("altxyz").fetch(CARD, PagedFetcher(fail_from=1), today=TODAY)
+async def test_alt_short_htmls_keep_earlier_pages_and_failure_is_error():
+    res = await get_provider("altxyz").fetch(CARD, PagedFetcher(ALT_PAGES[:1]), today=TODAY)
     assert res.status == "ok" and res.sales
-    bad = await get_provider("altxyz").fetch(CARD, PagedFetcher(fail_from=0), today=TODAY)
+    bad = await get_provider("altxyz").fetch(CARD, PagedFetcher(fail=True), today=TODAY)
     assert bad.status == "error"
 
 
@@ -241,6 +253,14 @@ async def test_client_maps_http():
         return httpx.Response(200, json={"status": "ok", "html": "<p/>", "title": "t", "final_url": "u"})
     c = FetcherClient("http://f", httpx.MockTransport(handler))
     assert (await c.fetch("altxyz", "https://alt.xyz")).html == "<p/>"
+
+    def paged(req):
+        import json
+        body = json.loads(req.content)
+        assert body["pages"] == 3 and body["next_label"] == "next"
+        return httpx.Response(200, json={"status": "ok", "html": "a", "htmls": ["a", "b"]})
+    r = await FetcherClient("http://f", httpx.MockTransport(paged)).fetch("altxyz", "https://alt.xyz", pages=3, next_label="next")
+    assert r.htmls == ["a", "b"]
     bad = FetcherClient("http://f", httpx.MockTransport(lambda r: httpx.Response(422, text="no")))
     with pytest.raises(FetcherUnavailable):
         await bad.fetch("altxyz", "https://x")

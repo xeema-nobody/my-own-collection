@@ -19,6 +19,7 @@ class FetchResponse:
     title: str | None = None
     html: str | None = None
     detail: str | None = None
+    htmls: list[str] | None = None   # one snapshot per list page (pages > 1); old fetchers omit it
 
 
 class FetcherClient:
@@ -32,9 +33,11 @@ class FetcherClient:
         return httpx.AsyncClient(base_url=self.base_url, timeout=timeout, transport=self._transport)
 
     async def fetch(self, site: str, url: str, wait_selector: str | None = None, wait_ms: int = 0,
-                    click_text: str | None = None, click_labels: list[str] | None = None) -> FetchResponse:
+                    click_text: str | None = None, click_labels: list[str] | None = None, pages: int = 1,
+                    next_label: str | None = None) -> FetchResponse:
         body = {"url": url, "wait_selector": wait_selector, "wait_ms": wait_ms,
-                "click_text": click_text, "click_labels": click_labels or [], "unattended": self.unattended}
+                "click_text": click_text, "click_labels": click_labels or [], "pages": pages, "next_label": next_label,
+                "unattended": self.unattended}
         try:
             async with self._client(LOGIN_WAIT_S) as c:
                 r = await c.post(f"/fetch/{site}", json=body)
@@ -44,7 +47,7 @@ class FetcherClient:
             raise FetcherUnavailable(f"fetcher HTTP {r.status_code}: {r.text[:200]}")
         d = r.json()
         return FetchResponse(d["status"], d.get("final_url"), d.get("title"), d.get("html"),
-                             d.get("detail"))
+                             d.get("detail"), d.get("htmls"))
 
     async def status(self) -> dict:
         try:
