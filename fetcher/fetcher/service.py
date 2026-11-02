@@ -21,7 +21,8 @@ class FetchResult(BaseModel):
     status: Literal["ok", "login_timeout", "blocked", "error"]
     final_url: str | None = None
     title: str | None = None
-    html: str | None = None
+    html: str | None = None          # first snapshot (older clients read only this)
+    htmls: list[str] | None = None   # one snapshot per list page, first = html
     detail: str | None = None
 
 
@@ -46,7 +47,8 @@ class FetchService:
     async def fetch(self, site_id: str, url: str, wait_selector: str | None = None,
                     wait_ms: int = 0, timeout_s: float | None = None,
                     click_text: str | None = None, unattended: bool = False,
-                    click_labels: list[str] | None = None) -> FetchResult:
+                    click_labels: list[str] | None = None, pages: int = 1,
+                    next_label: str | None = None) -> FetchResult:
         site = SITES.get(site_id)
         if site is None:
             raise FetchRejected(f"unknown site {site_id!r}")
@@ -57,7 +59,7 @@ class FetchService:
             async with self._limiters[site_id]:
                 return await self._run(site, url, wait_selector, wait_ms,
                                        timeout_s or self.cfg.nav_timeout_s, click_text, unattended,
-                                       click_labels or [])
+                                       click_labels or [], pages, next_label, wait_selector)
         finally:
             self._active -= 1
             self.site_state[site_id] = "idle"
@@ -67,7 +69,8 @@ class FetchService:
         return PageState(await page.title(), await page.url(), await page.text())
 
     async def _run(self, site: SiteConfig, url, wait_selector, wait_ms, timeout_s,
-                   click_text=None, unattended=False, click_labels=()) -> FetchResult:
+                   click_text=None, unattended=False, click_labels=(),
+                   pages=1, next_label=None, signature_selector=None) -> FetchResult:
         self.site_state[site.id] = "fetching"
         page: Page | None = None
         try:
@@ -97,8 +100,11 @@ class FetchService:
                     raise RuntimeError(f"label {label!r} not found to click")
                 if wait_ms:
                     await self._sleep(wait_ms / 1000)
+            htmls = [await page.content()]
+            if next_label and signature_selector:
+                htmls += await self._more_pages(page, next_label, signature_selector, pages - 1, timeout_s)
             res = FetchResult(status="ok", final_url=await page.url(),
-                              title=await page.title(), html=await page.content())
+                              title=await page.title(), html=htmls[0], htmls=htmls)
             self.last_error = None
             return res
         except BrowserError as e:
@@ -115,6 +121,23 @@ class FetchService:
                     await page.close()
                 except Exception:
                     pass
+
+    async def _more_pages(self, page: Page, label: str, selector: str, n: int, timeout_s: float) -> list[str]:
+        """Click `label` up to n times in this tab, snapshotting after each change of the list.
+        Stops quietly when the control is gone or the list does not change (last page)."""
+        out = []
+        for _ in range(n):
+            before = await page.tile_signature(selector)
+            if not await page.click_label(label, min(timeout_s, self.cfg.page_change_s)):
+                break
+            waited = 0.0
+            while await page.tile_signature(selector) == before and waited < self.cfg.page_change_s:
+                await self._sleep(self.cfg.page_poll_s)
+                waited += self.cfg.page_poll_s
+            if await page.tile_signature(selector) == before:
+                break
+            out.append(await page.content())
+        return out
 
     async def _clear_gate(self, site: SiteConfig, page: Page, unattended: bool = False) -> FetchResult | None:
         """None when the page is usable; a failure result otherwise. Unattended: fail at once, never ask."""

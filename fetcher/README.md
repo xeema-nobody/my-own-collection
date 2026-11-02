@@ -19,6 +19,8 @@ Env (prefix `FETCHER_`): `FETCHER_PORT`, `CHROME_PATH`, `PROFILE_DIR`, `CDP_PORT
 
 ## API
 
-`POST /fetch/{pricecharting|cardmarket|altxyz}` `{"url": "...", "wait_selector": null, "click_text": null, "click_labels": [], "wait_ms": 0}` -> `{status, final_url, title, html, detail}`; `GET /status`; `POST /close`; `GET /health`.
+`POST /fetch/{pricecharting|cardmarket|altxyz}` `{"url": "...", "wait_selector": null, "click_text": null, "click_labels": [], "pages": 1, "next_label": null, "wait_ms": 0}` -> `{status, final_url, title, html, htmls, detail}`; `GET /status`; `POST /close`; `GET /health`.
+
+`pages` > 1 with `next_label` (and `wait_selector`, used as the list signature) clicks the control in the same tab after loading once and returns one snapshot per page in `htmls` (`html` = first). It waits for the list to change after each click and stops early, without error, when the control is missing or the list stops changing.
 
 Tests: `pytest` (fake browser, no network).

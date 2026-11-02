@@ -153,3 +153,38 @@ async def test_click_label_missing_is_error(tmp_path):
     s, *_ = svc(tmp_path, p)
     r = await s.fetch("altxyz", u, click_labels=["Go to next page"])
     assert r.status == "error" and "Go to next page" in r.detail
+
+
+ALT = "https://alt.xyz/browse?query=a"
+
+
+async def test_pages_snapshots_in_one_navigation(tmp_path):
+    p = FakePage([("Browse", ALT)], pages=["<p1/>", "<p2/>", "<p3/>"])
+    s, *_ = svc(tmp_path, p)
+    r = await s.fetch("altxyz", ALT, wait_selector="a", click_text="Sold listings",
+                      pages=3, next_label="Go to next page")
+    assert r.status == "ok" and r.htmls == ["<p1/>", "<p2/>", "<p3/>"] and r.html == "<p1/>"
+    assert p.gotos == [ALT]
+    assert p.clicked == ["Sold listings", "label:Go to next page", "label:Go to next page"]
+
+
+async def test_pages_stop_when_list_does_not_change(tmp_path):
+    p = FakePage([("Browse", ALT)], pages=["<p1/>", "<p2/>"])     # only 2 pages exist
+    s, *_ = svc(tmp_path, p)
+    r = await s.fetch("altxyz", ALT, wait_selector="a", pages=4, next_label="Go to next page")
+    assert r.status == "ok" and r.htmls == ["<p1/>", "<p2/>"]
+
+
+async def test_pages_stop_when_next_control_missing(tmp_path):
+    p = FakePage([("Browse", ALT)], pages=["<p1/>", "<p2/>"])
+    p.click_ok = False
+    s, *_ = svc(tmp_path, p)
+    r = await s.fetch("altxyz", ALT, wait_selector="a", pages=3, next_label="Go to next page")
+    assert r.status == "ok" and r.htmls == ["<p1/>"]
+
+
+async def test_single_page_default_unchanged(tmp_path):
+    p = FakePage([OK])
+    s, *_ = svc(tmp_path, p)
+    r = await s.fetch("pricecharting", URL)
+    assert r.html == "<html>ok</html>" and r.htmls == [r.html] and p.clicked == []

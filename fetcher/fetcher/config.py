@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     nav_timeout_s: float = 45
     challenge_grace_s: float = 10             # let Cloudflare self-resolve before asking the user
     click_settle_s: float = 3                 # let SPAs hydrate before clicking
+    page_change_s: float = 8                  # max wait for the list to change after a next-page click
+    page_poll_s: float = 0.25
     login_timeout_s: float = 300
     poll_interval_s: float = 1
 
