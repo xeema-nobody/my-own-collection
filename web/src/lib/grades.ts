@@ -30,3 +30,10 @@ export function gradesOf(keys: string[], company: string): string[] {
   return keys.filter((k) => parseGrade(k).company === company)
     .sort((a, b) => num(parseGrade(b).grade) - num(parseGrade(a).grade) || parseGrade(a).grade.localeCompare(parseGrade(b).grade));
 }
+
+/** Sort order for grade keys: Raw first, then company A-Z, best grade first within a company. */
+export function compareGrades(a: string, b: string): number {
+  const pa = parseGrade(a), pb = parseGrade(b);
+  if ((pa.company === "Raw") !== (pb.company === "Raw")) return pa.company === "Raw" ? -1 : 1;
+  return pa.company.localeCompare(pb.company) || num(pb.grade) - num(pa.grade) || pa.grade.localeCompare(pb.grade);
+}

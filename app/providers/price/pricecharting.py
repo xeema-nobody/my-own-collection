@@ -11,7 +11,7 @@ from app.providers.fetcher import FetcherClient
 from app.providers.price import PricePoint
 from app.providers.price.base import (
     GRADER_RE, JAPANESE_RE, AdapterResult, Candidate, Sale, grade_from_title, parse_money, sold_points)
-from app.providers.price.match import language_of
+from app.providers.price.match import language_of, search_name
 from app.providers.price.resolve import find_product, safe_fetch
 
 SOURCE = "pricecharting"
@@ -20,7 +20,7 @@ CHART_RE = re.compile(r"VGPC\.chart_data\s*=\s*(\{.*?\});", re.S)
 
 
 def search_url(card: dict) -> str:
-    q = f"{card['name']} {card['number']} {(card.get('set') or {}).get('name') or ''}".strip()
+    q = f"{search_name(card['name'])} {card['number']} {(card.get('set') or {}).get('name') or ''}".strip()
     return f"{BASE}/search-products?type=prices&q={quote_plus(q)}"
 
 
