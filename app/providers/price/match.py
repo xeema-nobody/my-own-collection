@@ -11,6 +11,9 @@ STOP = {"pokemon", "tcg", "card", "cards", "the", "of", "and", "set", "scarlet",
         "sword", "shield", "sun", "moon", "japanese"}
 
 
+# sub-set labels shops drop ('Celebrations: Classic Collection' is filed under 'Pokemon Celebrations')
+SET_NOISE = {"classic", "collection"}
+
 LANG_WORDS = {"japanese": "ja", "korean": "ko", "chinese": "zh", "german": "de", "french": "fr",
               "italian": "it", "spanish": "es", "portuguese": "pt"}
 
@@ -49,17 +52,25 @@ def strip_variant(name: str) -> tuple[str, bool]:
     return norm(base), base.strip() != name.strip()
 
 
+def _core(name: str) -> tuple[str, bool]:
+    """(base name without the star marker, has a real variant tag). '[Gold Star]' is not a variant:
+    PriceCharting writes 'Umbreon [Gold Star]' for one print and plain 'Umbreon' for another."""
+    base, has_variant = strip_variant(re.sub(r"\[\s*gold star\s*\]", " ", name, flags=re.I).replace(STAR, " "))
+    return re.sub(r"\bgold star\b", " ", base).strip(), has_variant
+
+
 def score(card: dict, cand: Candidate) -> float:
     """0..1. Number, base name and language must match, else 0; set overlap decides the rest."""
     if norm_number(cand.number) != norm_number(card.get("number")):
         return 0.0
     if cand.language != (card.get("language") or "en"):
         return 0.0
-    card_base, card_has_variant = strip_variant(card["name"])
-    cand_base, cand_has_variant = strip_variant(cand.name)
+    card_base, card_has_variant = _core(card["name"])
+    cand_base, cand_has_variant = _core(cand.name)
     if cand_base != card_base:
         return 0.0
     want = _tokens((card.get("set") or {}).get("name") or "")
+    want = (want - SET_NOISE) or want
     have = _tokens(cand.set_name)
     set_part = len(want & have) / len(want) if want else 0.5
     s = 0.6 + 0.4 * set_part

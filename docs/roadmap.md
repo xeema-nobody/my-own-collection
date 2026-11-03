@@ -13,6 +13,9 @@ Do in this order; the app works without them but runs manual-only until they are
 ## Decided: `ALTXYZ_MAX_PAGES` (2026-11-02)
 Closed by one-navigation paging: the fetcher loads the alt.xyz list once and clicks "Go to next page" in the same tab, returning one snapshot per page. Live check (Mew ex 205, 3 pages): 19 s, 30 distinct listings, was ~66 s. Default stays 3; no per-trigger cap needed. Raise it only if a card's useful sales still sit past page 3 (the 180 d recency stop usually ends paging first).
 
+## Done 2026-11-03: verification pass
+PriceCharting star match verified live and fixed (see `pricing.md`), all 16 stacks priced (`needs_price` 0), card page + wishlist screenshots reviewed in dark and light at 1600 px (no layout fixes needed). Direct work on `main` (trunk-based, user decision 2026-11-03).
+
 ## Phase 9: fix and polish what exists (priority, before the backlog)
 Triggered by first real use (2026-10-29). Detail and root causes: `temp/follow_up.md`.
 1. **DONE (9.1)** Catalog completeness: Unified Minds (`sm11`) had 100 of 260 cards, pokemontcg.io fails on page 2+. Adaptive paging, per-set completeness, retry incomplete.

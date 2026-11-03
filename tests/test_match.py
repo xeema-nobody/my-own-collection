@@ -43,3 +43,23 @@ def test_wrong_set_not_accepted():
 
 def test_no_hits():
     assert pick(CARD, []) == (None, [])
+
+
+STAR_CARD = {"name": "Umbreon ★", "number": "17", "language": "en",
+             "set": {"name": "Celebrations: Classic Collection"}}
+
+
+def test_gold_star_matches_plain_name_in_parent_set():
+    # Live PriceCharting search (tests/fixtures/pricecharting/search_umbreon_gold_star_17.html):
+    # the Classic Collection print is filed as 'Umbreon #17' under 'Pokemon Celebrations'.
+    from pathlib import Path
+    from app.providers.price.pricecharting import parse_search
+    html = (Path(__file__).parent / "fixtures/pricecharting/search_umbreon_gold_star_17.html").read_text()
+    best, ranked = pick(STAR_CARD, parse_search(html))
+    assert best is not None and best.url.endswith("/pokemon-celebrations/umbreon-17")
+    # the 2007 POP5 star shares the number but is another set
+    assert all("pop-series-5" not in c.url for c in ranked if c.score >= 0.8)
+
+
+def test_gold_star_tag_is_not_a_variant():
+    assert score(STAR_CARD, cand("Umbreon [Gold Star]", "17", "Pokemon Celebrations")) >= 0.8

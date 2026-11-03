@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 from app.providers.fetcher import FetcherClient
 from app.providers.price import PricePoint
 from app.providers.price.base import AdapterResult, Candidate, parse_money
+from app.providers.price.match import search_name
 from app.providers.price.resolve import find_product, safe_fetch
 
 SOURCE = "cardmarket_web"
@@ -20,7 +21,7 @@ LABELS = {"From": "from", "Price Trend": "trend", "30-days average price": "avg3
 
 
 def search_url(card: dict) -> str:
-    return f"{BASE}/en/Pokemon/Products/Search?searchString={quote_plus(card['name'] + ' ' + card['number'])}"
+    return f"{BASE}/en/Pokemon/Products/Search?searchString={quote_plus(search_name(card['name']) + ' ' + card['number'])}"
 
 
 def parse_search(html: str) -> list[Candidate]:
