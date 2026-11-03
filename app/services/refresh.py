@@ -1,7 +1,7 @@
 import logging
 
 from app.db.mongo import get_db
-from app.providers.catalog.pokemontcg import PokemonTcgCatalog
+from app.services.catalog_provider import get_catalog
 from app.services import jobs
 from app.services.pricing import get_rates, store_card_prices
 from app.services.snapshots import take_snapshot
@@ -15,7 +15,7 @@ async def refresh_prices(scope: str = "collection", sets: list[str] | None = Non
     `sets` given: refresh every card of those sets (scope becomes `sets`).
     """
     db = get_db()
-    provider = provider or PokemonTcgCatalog()
+    provider = provider or await get_catalog()
     scope = "sets" if sets else scope
     job = await jobs.start(db, "price_refresh", trigger)
     stats = {"scope": scope, "sets": sets, "cards": 0, "prices": 0, "errors": 0}
@@ -35,7 +35,7 @@ async def refresh_prices(scope: str = "collection", sets: list[str] | None = Non
             target_sets = owned_sets
         for sid in sorted(target_sets):
             try:
-                async for card in provider.iter_cards(sid):
+                async for card in provider.iter_cards(sid, only=owned if scope == "collection" else None):
                     if scope == "collection" and card["_id"] not in owned:
                         continue
                     stats["prices"] += await store_card_prices(db, card, rates)

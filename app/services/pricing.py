@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 
 from pymongo import UpdateOne
 
-from app.providers.catalog.pokemontcg import extract_prices
+from app.providers.catalog.common import extract_prices
 from app.services.fx import convert, rates_to_base
 
 NO_VARIANT = "_"  # latest_price slot for variant=None
@@ -81,14 +81,16 @@ async def store_card_prices(db, card_doc: dict, rates: dict, observed_on: str | 
     """Upsert today's price points for one catalog card doc and denormalise latest_price onto the card.
 
     Only the catalog sources' sub-trees of `latest_price` are written: scraped sources
-    (see `store_scraped_points`) must survive a catalog refresh."""
+    (see `store_scraped_points`) must survive a catalog refresh. A provider that cannot supply every
+    catalog source (TCGdex has no TCGplayer) lists the ones it covers in `card_doc["_sources"]`; the
+    others keep their stored value instead of being unset."""
     observed_on = observed_on or today()
     points = extract_prices(card_doc)
     if points:
         await db.prices.bulk_write([_obs_op(card_doc["_id"], p, observed_on) for p in points], ordered=False)
     latest = build_latest(points, observed_on)
     upd: dict = {"$set": {"price_base": best_base(latest, rates), "price_schema": PRICE_SCHEMA}}
-    for src in CATALOG_SOURCES:
+    for src in card_doc.get("_sources", CATALOG_SOURCES):
         if src in latest:
             upd["$set"][f"latest_price.{src}"] = latest[src]
         else:

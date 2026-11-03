@@ -93,7 +93,7 @@ async def list_items(q: str | None = None, tcg: str | None = None, set: str | No
     if set:
         rows = [r for r in rows if r["card"] and r["card"]["set"]["id"] == set]
     if q:
-        from app.providers.catalog.pokemontcg import norm
+        from app.providers.catalog.common import norm
         rows = [r for r in rows if r["card"] and norm(q) in r["card"]["search_text"]]
     rows = _sorted(rows, sort, order)
     total = len(rows)

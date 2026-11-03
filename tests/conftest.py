@@ -32,7 +32,7 @@ class FakeCatalog:
         return [{"_id": f"pokemon:{s}", "tcg": "pokemon", "external_id": s, "name": s,
                  "release_date": None, "total": self.totals.get(s)} for s in self.cards_by_set]
 
-    async def iter_cards(self, set_id=None):
+    async def iter_cards(self, set_id=None, only=None):
         self.calls.append(set_id)
         if set_id in self.fail:
             raise RuntimeError("upstream 500")

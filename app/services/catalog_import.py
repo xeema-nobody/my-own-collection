@@ -3,7 +3,7 @@ import logging
 from pymongo import UpdateOne
 
 from app.db.mongo import get_db
-from app.providers.catalog.pokemontcg import PokemonTcgCatalog
+from app.services.catalog_provider import get_catalog
 from app.services import jobs
 from app.services.sets import sets_with_stats
 from app.services.pricing import get_rates, store_card_prices
@@ -19,7 +19,7 @@ async def import_catalog(set_ids: list[str] | None = None, provider=None, retry:
     `last_failed_sets` find the run whose failures still need retrying.
     """
     db = get_db()
-    provider = provider or PokemonTcgCatalog()
+    provider = provider or await get_catalog()
     job = await jobs.start(db, "catalog_import", trigger)
     stats = {"sets": 0, "cards": 0, "prices": 0, "set": set_ids[0] if set_ids and len(set_ids) == 1 else None,
              "set_ids": set_ids, "origin": "retry" if retry else "selected" if set_ids else "full"}
@@ -38,7 +38,8 @@ async def import_catalog(set_ids: list[str] | None = None, provider=None, retry:
         for sid in targets:
             try:
                 async for card in provider.iter_cards(sid):
-                    await db.cards.update_one({"_id": card["_id"]}, {"$set": _without_raw(card)}, upsert=True)
+                    if not card.get("_prices_only"):  # providers with other ids/vocabulary only refresh prices of known cards
+                        await db.cards.update_one({"_id": card["_id"]}, {"$set": _without_raw(card)}, upsert=True)
                     stats["prices"] += await store_card_prices(db, card, rates)
                     stats["cards"] += 1
             except Exception as e:  # noqa: BLE001
@@ -90,4 +91,4 @@ async def incomplete_sets(db) -> list[str]:
 
 
 def _without_raw(card: dict) -> dict:
-    return {k: v for k, v in card.items() if k != "_prices_raw"}
+    return {k: v for k, v in card.items() if k not in ("_prices_raw", "_prices_only", "_sources")}

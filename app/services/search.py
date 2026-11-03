@@ -1,6 +1,6 @@
 import re
 
-from app.providers.catalog.pokemontcg import norm
+from app.providers.catalog.common import norm
 
 NUM_RE = re.compile(r"^#?(\d+[a-z]*)(?:/(\d+))?$")
 ID_RE = re.compile(r"^[a-z0-9]+-[a-z0-9]+$")

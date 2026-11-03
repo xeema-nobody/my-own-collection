@@ -30,6 +30,6 @@ c. **One-navigation multi-page fetch** for alt.xyz: the fetcher clicks through p
 
 ## Later / ideas (unscheduled)
 - Notification outside the UI (host fetcher polls `/api/alerts/events?unread=true` and shows a macOS notification).
-- Replace pokemontcg.io (deprecated, keys valid until 2027-03-01) with another `CatalogProvider`, e.g. Scrydex (paid) or a static dataset.
+- **Provider built 2026-11-03, not switched**: `CATALOG_PROVIDER=tcgdex` (see `decisions.md`). Before flipping it (deadline 2027-03-01): `scripts/backup.sh`, set the env var, `docker compose restart app`, run Settings -> Catalog import for one owned set and check prices. TCGplayer prices stop updating after the switch.
 - Other TCGs via new catalog providers (schema is already generic).
 - Auth, non-root containers, rate limiting, prod image: only if the app is ever deployed beyond localhost.

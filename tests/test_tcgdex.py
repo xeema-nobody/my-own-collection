@@ -1,0 +1,162 @@
+"""TCGdex adapter against canned responses (real payload samples in tests/fixtures/tcgdex, no network)."""
+import json
+from pathlib import Path
+
+import httpx
+import pytest
+
+from app.providers.catalog import tcgdex
+from app.providers.catalog.common import extract_prices
+from app.providers.catalog.pokemontcg import IncompletePage
+from app.providers.catalog.tcgdex import CatalogIndex, TcgdexCatalog, card_number, match_sets
+
+FIX = Path(__file__).parent / "fixtures/tcgdex"
+SET = json.loads((FIX / "set_sv03.5.json").read_text())
+MEW = json.loads((FIX / "card_sv03.5-205.json").read_text())
+SETS = [{"id": "sv03.5", "name": "151", "cardCount": {"total": 207}},
+        {"id": "swsh9", "name": "Brilliant Stars", "cardCount": {"total": 186}},
+        {"id": "sv10.5b", "name": "Black Bolt", "cardCount": {"total": 172}}]
+
+
+def stub_card(local_id: str, **kw) -> dict:
+    return {**MEW, "id": f"sv03.5-{local_id}", "localId": local_id, "name": f"Card {local_id}", **kw}
+
+
+def provider(index, fail=(), cards=None):
+    calls = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        calls.append(path)
+        if path == "/sets":
+            return httpx.Response(200, json=SETS)
+        if path == "/sets/sv03.5":
+            return httpx.Response(200, json=SET)
+        if path.startswith("/cards/"):
+            cid = path.rsplit("/", 1)[-1]
+            if cid in fail:
+                return httpx.Response(500)
+            return httpx.Response(200, json=(cards or {}).get(cid) or (MEW if cid == "sv03.5-205" else stub_card(cid.split("-")[1])))
+        if path.startswith("/sets/"):  # sets we never imported: detail only (no cards needed)
+            sid = path.rsplit("/", 1)[-1]
+            return httpx.Response(200, json={**next(x for x in SETS if x["id"] == sid), "cards": [], "releaseDate": "2025-01-01"})
+        return httpx.Response(404)
+    return TcgdexCatalog(index, httpx.AsyncClient(base_url="http://up", transport=httpx.MockTransport(handler))), calls
+
+
+@pytest.fixture(autouse=True)
+def no_backoff(monkeypatch):
+    monkeypatch.setattr(tcgdex, "wait_random_exponential", lambda **kw: __import__("tenacity").wait_none())
+
+
+def index(numbers=("1", "205")):
+    return CatalogIndex(sets={"sv3pt5": {"name": "151", "total": 207}}, numbers={"sv3pt5": set(numbers)})
+
+
+FULL = [str(i) for i in range(1, 208) if i != 2]  # every number but 2 known: 207 upstream, 206 here -> still room for 2
+COMPLETE = [str(i) for i in range(1, 208)]          # as many cards as upstream: an unknown number is a numbering difference
+
+
+def test_card_number_strips_padding_only():
+    assert [card_number(x) for x in ("001", "205", "GG41", "TG05", "0")] == ["1", "205", "GG41", "TG05", "0"]
+
+
+def test_match_sets_by_id_then_name_with_total_tiebreak():
+    ours = {"swsh9": {"name": "Brilliant Stars", "total": 186}, "sv3pt5": {"name": "151", "total": 207},
+            "zsv10pt5": {"name": "Black Bolt", "total": 172}, "fut20": {"name": "Futsal", "total": 5}}
+    assert match_sets(ours, SETS) == {"swsh9": "swsh9", "sv3pt5": "sv03.5", "zsv10pt5": "sv10.5b"}
+    dup = SETS + [{"id": "other", "name": "151", "cardCount": {"total": 10}}]
+    assert match_sets({"sv3pt5": {"name": "151", "total": 207}}, dup) == {"sv3pt5": "sv03.5"}
+    assert match_sets({"x": {"name": "151", "total": 5}}, dup) == {}  # ambiguous: no guess
+
+
+async def test_list_sets_known_are_bare_new_are_full():
+    p, _ = provider(index())
+    sets = {s["external_id"]: s for s in await p.list_sets()}
+    assert sets["sv3pt5"] == {"_id": "pokemon:sv3pt5", "tcg": "pokemon", "external_id": "sv3pt5"}  # upsert changes nothing
+    assert "sv03.5" not in sets
+    assert sets["swsh9"]["name"] == "Brilliant Stars" and sets["swsh9"]["total"] == 186 and sets["swsh9"]["release_date"].year == 2025
+
+
+async def test_known_cards_refresh_prices_only_under_our_ids():
+    p, calls = provider(index(COMPLETE))
+    cards = [c async for c in p.iter_cards("sv3pt5")]
+    assert [c["_id"] for c in cards] == ["pokemon:sv3pt5-1", "pokemon:sv3pt5-2", "pokemon:sv3pt5-205"]
+    cards = cards[1:]  # 002 is known too, so also prices only
+    cards = [cards[1]]
+    mew = cards[0]
+    assert mew["_prices_only"] and mew["_sources"] == ("cardmarket",)
+    pts = extract_prices(mew)
+    assert [(p_["source"], p_["currency"], p_["market"]) for p_ in pts] == [("cardmarket", "EUR", 2368)]
+    assert pts[0]["avg30"] == 1779 and pts[0]["as_of"].year == 2026
+
+
+async def test_unknown_cards_created_while_set_has_room_and_never_when_full():
+    p, _ = provider(index(FULL))  # 206 of 207 known: number 2 is a card we miss
+    cards = {c["_id"]: c async for c in p.iter_cards("sv3pt5")}
+    new = cards["pokemon:sv3pt5-2"]
+    assert not new.get("_prices_only") and new["set"]["id"] == "sv3pt5" and new["name"] == "Card 002"
+    full, _ = provider(index(FULL + ["X1"]))  # as many cards as upstream, 2 not among them: numbering differs, skip
+    assert "pokemon:sv3pt5-2" not in {c["_id"] async for c in full.iter_cards("sv3pt5")}
+
+
+async def test_only_filters_requests_and_unmapped_set_yields_nothing():
+    p, calls = provider(index(COMPLETE))
+    cards = [c async for c in p.iter_cards("sv3pt5", only={"pokemon:sv3pt5-205"})]
+    assert [c["_id"] for c in cards] == ["pokemon:sv3pt5-205"]
+    assert calls.count("/cards/sv03.5-001") == 0
+    assert [c async for c in p.iter_cards("nope")] == []
+
+
+async def test_failed_card_is_reported_after_the_rest():
+    p, _ = provider(index(COMPLETE), fail={"sv03.5-001"})
+    got = []
+    with pytest.raises(IncompletePage) as e:
+        async for c in p.iter_cards("sv3pt5"):
+            got.append(c["_id"])
+    assert got == ["pokemon:sv3pt5-2", "pokemon:sv3pt5-205"] and e.value.missing == [(0, 1)]
+
+
+def test_new_card_doc_matches_catalog_shape_and_gold_star():
+    star = {**MEW, "id": "x-CC015", "localId": "CC015", "name": "Umbreon ☆", "category": "Pokemon", "hp": 70,
+            "pricing": {"cardmarket": None, "tcgplayer": None}}
+    doc = tcgdex.map_card(star, "cel25cc", {"name": "Celebrations Classic Collection", "total": 25})
+    assert doc["_id"] == "pokemon:cel25cc-CC015" and doc["name"] == "Umbreon ★" and doc["supertype"] == "Pokémon"
+    assert doc["name_norm"] and "umbreon" in doc["search_text"] and doc["hp"] == "70"
+    assert doc["images"]["large"].endswith("/high.webp") and extract_prices(doc) == []
+
+
+async def test_import_with_tcgdex_keeps_cards_and_tcgplayer_price(db):
+    """Known cards keep their stored data; only Cardmarket is refreshed, TCGplayer survives."""
+    from app.services.catalog_import import import_catalog
+    from conftest import FakeCatalog, make_card
+
+    await import_catalog(None, FakeCatalog({"sv3pt5": [make_card("sv3pt5", "205")]}))
+    before = await db.cards.find_one({"_id": "pokemon:sv3pt5-205"})
+    assert "tcgplayer" in before["latest_price"]
+    p, _ = provider(index(COMPLETE))
+    await import_catalog(["sv3pt5"], p)
+    after = await db.cards.find_one({"_id": "pokemon:sv3pt5-205"})
+    assert after["name"] == before["name"] and after["rarity"] == before["rarity"]  # card doc untouched
+    assert after["latest_price"]["tcgplayer"] == before["latest_price"]["tcgplayer"]
+    assert after["latest_price"]["cardmarket"]["market"]["raw"]["_"]["market"] == 2368  # fresh from TCGdex (EUR 23.68)
+    assert await db.cards.count_documents({}) == 1  # 001/002 of the fixture set were not created (set is complete)
+
+
+async def test_get_catalog_picks_provider(monkeypatch, db):
+    from app.config import settings
+    from app.providers.catalog.pokemontcg import PokemonTcgCatalog
+    from app.services.catalog_provider import get_catalog
+
+    assert isinstance(await get_catalog(), PokemonTcgCatalog)
+    monkeypatch.setattr(settings, "catalog_provider", "tcgdex")
+    assert isinstance(await get_catalog(), TcgdexCatalog)
+    monkeypatch.setattr(settings, "catalog_provider", "nope")
+    with pytest.raises(ValueError):
+        await get_catalog()
+
+
+async def test_set_numbered_differently_is_not_duplicated():
+    odd = [str(i) + "_A" for i in range(1, 25)]  # like cel25c: '17_A' here, 'CC015' upstream
+    p, _ = provider(index(odd))
+    assert [c async for c in p.iter_cards("sv3pt5")] == []  # no number lines up: nothing matched, nothing created

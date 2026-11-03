@@ -8,6 +8,9 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 
 | Module | Role |
 |---|---|
+| `providers/catalog/common.py` | `norm`, price units, `extract_prices` shared by every catalog provider |
+| `providers/catalog/tcgdex.py` | TCGdex adapter (`CATALOG_PROVIDER=tcgdex`): matches its sets to ours by id then name, cards by number; one request per wanted card (8 in parallel); known cards only refresh Cardmarket prices (`_prices_only`), cards of sets we never imported are created in full; no TCGplayer prices (`_sources`) |
+| `services/catalog_provider.py` | `get_catalog()`: picks the provider from `CATALOG_PROVIDER` (`pokemontcg` default, `tcgdex`), builds the id index TCGdex needs from the database |
 | `providers/catalog/pokemontcg.py` | httpx + tenacity retry on 429/5xx; a card page that still fails is re-fetched as smaller aligned pages (50/25/5, `orderBy=number`), windows dead at every size raise `IncompletePage` after the rest is yielded; maps payload to card/set docs, extracts price points |
 | `services/catalog_import.py` | per-set import (all / chosen sets / retry incomplete), upsert by `_id`, job logging, failed-set isolation; after each set stores `sets.imported_count` + `complete` (imported vs upstream `total`), a short set counts as failed (job `partial`), `incomplete_sets()` feeds the retry |
 | `scripts/backup.sh`, `scripts/restore.sh` | host-side `mongodump`/`mongorestore` through `docker compose exec` (creds from container env); see `backup.md` |
@@ -71,7 +74,7 @@ Health: `/health`, `/health/ready` (pings Mongo).
 
 ## Config (`.env`, see `.env.example`)
 
-`MONGO_ROOT_USER/PASSWORD`, `BASE_CURRENCY`, `POKEMONTCG_API_KEY` (optional), `SCHEDULER_ENABLED`, `PRICE_REFRESH_CRON` (`0 4 * * *`), `PRICE_FETCH_CRON` (`30 4 * * *`), `SNAPSHOT_CRON` (`0 6 * * *`), `CATALOG_IMPORT_CRON` (`0 3 * * 0`), `SCHEDULER_FETCH_CAP` (300), `FETCHER_URL`, valuation rules `SOLD_MIN_SALES` (3), `SOLD_WINDOW_DAYS` (90), `SOLD_SAMPLE` (10), `PREFERRED_SOURCES` (comma list), `MARKET_MAX_AGE_DAYS` (180). `PRICECHARTING_TOKEN` is unused (no paid API).
+`MONGO_ROOT_USER/PASSWORD`, `BASE_CURRENCY`, `CATALOG_PROVIDER` (`pokemontcg`|`tcgdex`), `TCGDEX_BASE_URL`, `POKEMONTCG_API_KEY` (optional), `SCHEDULER_ENABLED`, `PRICE_REFRESH_CRON` (`0 4 * * *`), `PRICE_FETCH_CRON` (`30 4 * * *`), `SNAPSHOT_CRON` (`0 6 * * *`), `CATALOG_IMPORT_CRON` (`0 3 * * 0`), `SCHEDULER_FETCH_CAP` (300), `FETCHER_URL`, valuation rules `SOLD_MIN_SALES` (3), `SOLD_WINDOW_DAYS` (90), `SOLD_SAMPLE` (10), `PREFERRED_SOURCES` (comma list), `MARKET_MAX_AGE_DAYS` (180). `PRICECHARTING_TOKEN` is unused (no paid API).
 
 ## Frontend
 
