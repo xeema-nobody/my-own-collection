@@ -20,8 +20,16 @@ def language_of(text: str) -> str:
     return next((c for w, c in LANG_WORDS.items() if w in norm(text).split()), "en")
 
 
+STAR = "\u2605"    # pokemontcg marks vintage Gold Star prints with a trailing star in the name
+
+
+def search_name(name: str) -> str:
+    """Name as sites write it: 'Umbreon \u2605' -> 'Umbreon Gold Star'."""
+    return re.sub(r"\s+", " ", name.replace(STAR, " Gold Star ")).strip()
+
+
 def norm(s: str | None) -> str:
-    s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower()
+    s = unicodedata.normalize("NFKD", (s or "").replace(STAR, " gold star ")).encode("ascii", "ignore").decode().lower()
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]+", " ", s)).strip()
 
 

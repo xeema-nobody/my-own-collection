@@ -11,7 +11,8 @@ from app.config import settings
 from app.providers.fetcher import FetcherClient
 from app.providers.price.base import (
     GRADER_RE, AdapterResult, Sale, grade_from_title, parse_money, sold_points)
-from app.providers.price.match import _tokens, norm, norm_number, strip_variant
+from app.providers.price.match import (
+    STAR, _tokens, language_of, norm, norm_number, search_name, strip_variant)
 from app.providers.price.resolve import safe_fetch
 
 SOURCE = "altxyz"
@@ -22,7 +23,11 @@ NEXT_PAGE = "Go to next page"   # the list pages client-side (no URL param): the
 
 def search_url(card: dict) -> str:
     # set + rarity in the query keeps other prints (e.g. Ultra Premium Collection) off the first page
-    parts = [card["name"], card["number"], (card.get("set") or {}).get("name"), card.get("rarity")]
+    set_name = ((card.get("set") or {}).get("name") or "").replace(":", " ")
+    rarity = card.get("rarity")
+    if norm(rarity) in norm(set_name):     # 'Classic Collection' in 'Celebrations: Classic Collection'
+        rarity = None
+    parts = [search_name(card["name"]), card["number"], " ".join(set_name.split()), rarity]
     return f"{BASE}/browse?query={quote(' '.join(p for p in parts if p))}"
 
 
@@ -62,7 +67,12 @@ def tile_matches(card: dict, t: dict, check_rarity: bool = True) -> bool:
     """Same card and print: number + base name, set tokens and rarity inside the tile title."""
     if norm_number(t["number"]) != norm_number(card["number"]):
         return False
-    if strip_variant(t["name"])[0] != strip_variant(card["name"])[0]:
+    # the star is "Gold Star" in the tile title, not in its name field
+    star = STAR in card["name"]
+    name = strip_variant(card["name"].replace(STAR, ""))[0]
+    if strip_variant(t["name"])[0] != name or star != ("gold star" in norm(t["title"])):
+        return False
+    if language_of(t["title"]) != (card.get("language") or "en"):
         return False
     if not _tokens((card.get("set") or {}).get("name") or "") <= _tokens(t["title"]):
         return False
@@ -100,6 +110,8 @@ class AltXyzProvider:
                              click_text="Sold listings", pages=max(settings.altxyz_max_pages, 1),
                              next_label=NEXT_PAGE, wait_ms=SPA_WAIT_MS)
         if isinstance(r, AdapterResult):
+            if "wait_for_selector" in (r.detail or ""):    # no sold tile ever rendered: nothing sold
+                return AdapterResult("not_found", url=url, detail="no sold listings for this search")
             return r
         for html in r.htmls or [r.html]:    # old fetcher: no htmls, first page only
             tiles = parse_tiles(html)

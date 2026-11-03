@@ -65,9 +65,21 @@ describe("SalesList", () => {
     renderPage(<SalesList sales={sales} stats={stats} />);
     expect(screen.getAllByText("PSA 10", { selector: "td" }).length).toBeGreaterThan(1);
     expect(screen.getByText("25 of 25")).toBeInTheDocument();
-    expect(screen.queryByText("Sale 24")).not.toBeInTheDocument();       // only first 20 shown
-    await userEvent.click(screen.getByRole("button", { name: "Show 5 more" }));
+    expect(screen.queryByText("Sale 10")).not.toBeInTheDocument();       // only first 10 shown
+    await userEvent.click(screen.getByRole("button", { name: "Show 15 more" }));
     expect(screen.getByText("Sale 24")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Show less" }));
+    expect(screen.queryByText("Sale 10")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open listing" })).toHaveAttribute("href", "https://example.com/x");
+  });
+  it("stats sorted raw first then best grade, title search narrows", async () => {
+    const st = [{ grade_key: "PSA9", source: "altxyz", count: 1, min: 1, avg: 1, max: 1, currency: "USD" },
+      { grade_key: "PSA10", source: "altxyz", count: 1, min: 1, avg: 1, max: 1, currency: "USD" },
+      { grade_key: "raw", source: "altxyz", count: 1, min: 1, avg: 1, max: 1, currency: "USD" }];
+    renderPage(<SalesList sales={sales} stats={st} />);
+    const cells = screen.getAllByRole("row").slice(1, 4).map((r) => r.querySelector("td")!.textContent);
+    expect(cells).toEqual(["Raw", "PSA 10", "PSA 9"]);
+    await userEvent.type(screen.getByLabelText("Search listings"), "Sale 7");
+    expect(screen.getByText("1 of 25")).toBeInTheDocument();
   });
 });

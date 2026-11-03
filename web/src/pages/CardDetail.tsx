@@ -7,7 +7,7 @@ import PriceMatrix from "../components/PriceMatrix";
 import CardFetch from "../components/CardFetch";
 import SourceStatus from "../components/SourceStatus";
 import SalesList from "../components/SalesList";
-import SourceCompare from "../components/SourceCompare";
+import { CompareCopies } from "../components/SourceCompare";
 import CardCollection from "../components/CardCollection";
 import CardWishlist from "../components/CardWishlist";
 import { Section } from "../components/ui";
@@ -37,15 +37,17 @@ export default function CardDetail() {
         <Section title="Prices" collapsible id="card-prices">
           <CardFetch cardId={id} />
           <h3 className="mb-1 text-sm font-semibold">Compare sources</h3>
-          <div className="mb-3 space-y-3">
-            <div><div className="mb-1 text-xs text-muted">Raw copy (one)</div>{rawCompare.data ? <SourceCompare row={rawCompare.data} matches={matches.data} /> : <p className="text-sm text-muted">Loading…</p>}</div>
-            {(owned.data?.items ?? []).filter((i: any) => i.grading).map((i: any) => (
-              <div key={i.id}><div className="mb-1 text-xs text-muted">Owned: {i.grading.company} {i.grading.grade} × {i.quantity} (stack value)</div><SourceCompare row={i} matches={matches.data} /></div>))}
+          <div className="mb-3">
+            {rawCompare.data ? <CompareCopies matches={matches.data} copies={[
+              { label: "Raw copy", row: rawCompare.data },
+              ...(owned.data?.items ?? []).filter((i: any) => i.grading).map((i: any) =>
+                ({ label: `Owned: ${i.grading.company} ${i.grading.grade} × ${i.quantity}`, row: i }))]} />
+              : <p className="text-sm text-muted">Loading…</p>}
           </div>
           <PriceMatrix pg={pg} />
         </Section>
 
-        <Section title="Sources" collapsible id="card-sources" defaultOpen={false}><SourceStatus cardId={id} /></Section>
+        <Section title="Sources" collapsible id="card-sources" defaultOpen={false}><SourceStatus cardId={id} sales={c.sales ?? []} /></Section>
 
         <SalesList sales={c.sales ?? []} stats={c.sales_stats ?? []} />
 

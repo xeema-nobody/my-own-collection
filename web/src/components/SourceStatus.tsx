@@ -5,8 +5,24 @@ import { Badge, Button, SourceDot } from "./ui";
 
 const TONE: Record<string, "ok" | "warn" | "neutral" | "danger"> = { ok: "ok", needs_match: "warn", not_found: "neutral" };
 
+/** alt.xyz has no product page to match: it searches, then keeps the sold tiles of this print. Say what it used and kept. */
+function AltSummary({ url, sales }: { url?: string | null; sales: any[] }) {
+  const mine = sales.filter((s) => (s.source ?? s.created_by) === "altxyz");
+  let query: string | null = null;
+  try { query = url ? new URL(url).searchParams.get("query") : null; } catch { /* bad url: no query shown */ }
+  const titles = new Map<string, number>();
+  mine.forEach((s) => titles.set(s.title, (titles.get(s.title) ?? 0) + 1));
+  const last = mine.map((s) => String(s.sold_at).slice(0, 10)).sort().pop();
+  return (
+    <div className="ml-4 mt-1 space-y-0.5 text-xs text-muted">
+      {query && <div>Search: <span className="font-mono text-fg">{query}</span></div>}
+      <div>{mine.length ? `${mine.length} sold listings kept` : "No sold listings kept"}{last ? ` · last sale ${last}` : ""} · only the same number, name, set and language count</div>
+      {[...titles].slice(0, 3).map(([t, n]) => <div key={t}>matched: <span className="text-fg">{t}</span> ×{n}</div>)}
+    </div>);
+}
+
 /** Last fetch outcome per scraped source + product match picker. */
-export default function SourceStatus({ cardId }: { cardId: string }) {
+export default function SourceStatus({ cardId, sales = [] }: { cardId: string; sales?: any[] }) {
   const qc = useQueryClient();
   const log = useQuery({ queryKey: ["fetch-status", cardId], queryFn: () => api.fetchStatus(cardId) });
   const match = useQuery({ queryKey: ["match", cardId], queryFn: () => api.cardMatches(cardId) });
@@ -34,9 +50,10 @@ export default function SourceStatus({ cardId }: { cardId: string }) {
               {l && <span className="text-muted">{ago(l.fetched_at)}{l.detail ? ` · ${l.detail}` : ""}</span>}
               {safeUrl(l?.url) && <a className="underline" href={safeUrl(l?.url)} target="_blank" rel="noreferrer">open</a>}
               {m?.url && <span className="text-xs" title="Matched product: different versions / prints of the same card have different prices">
-                matched print: <b>{m.product?.version ?? "—"}</b> <span className="font-mono text-muted">{m.product?.slug}</span></span>}
+                matched print: <b>{m.product?.title ?? m.product?.version ?? m.product?.slug}</b> <span className="font-mono text-muted">{m.product?.slug}</span></span>}
               {m?.url && m.confirmed_by && <Button size="sm" variant="ghost" disabled={reset.isPending} onClick={() => reset.mutate(s)}>Reset match ({m.confirmed_by})</Button>}
             </div>
+            {s === "altxyz" && l && <AltSummary url={l.url} sales={sales} />}
             {m?.candidates?.length > 0 && !(m.url && m.confirmed_by === "user") && (
               <ul className="ml-4 mt-1 space-y-1">
                 <li className="text-xs text-muted">Several versions / prints share this card number and their prices differ: check the product page before choosing.</li>

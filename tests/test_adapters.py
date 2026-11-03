@@ -295,3 +295,43 @@ def test_alt_rarity_not_in_titles_is_not_filtered():
     t = tile(1, "2021 Pokemon Sword and Shield Chilling Reign")
     assert altxyz.tile_matches(card, t, check_rarity=False)
     assert not altxyz.tile_matches(card, t, check_rarity=True)
+
+
+# --- star (Gold Star) prints
+STAR_CARD = {"_id": "pokemon:cel25c-17_A", "name": "Umbreon ★", "number": "17", "language": "en",
+             "rarity": "Classic Collection", "set": {"id": "cel25c", "name": "Celebrations: Classic Collection"}}
+
+
+def test_alt_search_url_star_card():
+    # star -> "Gold Star" (the raw star char returns no sold tiles), rarity already in the set name
+    assert altxyz.search_url(STAR_CARD).endswith(
+        "query=Umbreon%20Gold%20Star%2017%20Celebrations%20Classic%20Collection")
+
+
+def test_pricecharting_search_url_star_card():
+    assert "q=Umbreon+Gold+Star+17+Celebrations%3A+Classic+Collection" in pricecharting.search_url(STAR_CARD)
+
+
+def test_alt_sold_star_card():
+    html = fx("altxyz/sold_umbreon_gold_star_17.html")
+    sales = altxyz.parse_sold(html, STAR_CARD)
+    assert len(sales) == 10 and all("Gold Star" in s.title for s in sales)
+
+
+def test_alt_tile_matches_star_and_language():
+    t = {"title": "2021 Pokemon Celebrations Classic Collection Pop Series 5 Gold Star", "name": "Umbreon",
+         "number": "17"}
+    assert altxyz.tile_matches(STAR_CARD, t)
+    it = {**t, "title": "2021 Pokemon Celebrations Classic Collection Italian Gold Star Holo"}
+    assert not altxyz.tile_matches(STAR_CARD, it)                                   # other language
+    assert not altxyz.tile_matches(STAR_CARD, {**t, "title": t["title"].replace("Gold Star", "")})
+    assert not altxyz.tile_matches({**STAR_CARD, "name": "Umbreon"}, t)            # non-star card, star tile
+
+
+async def test_alt_no_sold_tiles_is_not_found():
+    class Timeout:
+        async def fetch(self, *a, **k):
+            from app.providers.fetcher import FetchResponse
+            return FetchResponse("error", detail="TimeoutError: Page.wait_for_selector a[href^=\"/itm/\"]")
+    res = await get_provider("altxyz").fetch(STAR_CARD, Timeout(), today=TODAY)
+    assert res.status == "not_found"
