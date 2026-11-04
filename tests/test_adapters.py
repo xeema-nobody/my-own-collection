@@ -318,6 +318,20 @@ def test_alt_sold_star_card():
     assert len(sales) == 10 and all("Gold Star" in s.title for s in sales)
 
 
+def test_alt_pristine_label_is_graded_not_raw():
+    # alt writes a CGC Pristine 10 as "CGC PRI"; it used to fall through to raw ($288-355 vs raw ~$60)
+    html = fx("altxyz/sold_umbreon_gold_star_17.html")
+    sales = altxyz.parse_sold(html, STAR_CARD)
+    assert "raw" not in {s.grade_key for s in sales}
+    assert {s.price for s in sales if s.grade_key == "CGC10Pristine"} >= {28800, 35500}
+
+
+def test_alt_unreadable_slab_label_is_dropped():
+    assert altxyz._grade_label(["Umbreon #17", "BGS ???", "$300"]) is None
+    assert altxyz._grade_label(["Umbreon #17", "$30"]) == "raw"
+    assert altxyz._grade_label(["CGC PRISTINE"]) == "CGC10Pristine"
+
+
 def test_alt_tile_matches_star_and_language():
     t = {"title": "2021 Pokemon Celebrations Classic Collection Pop Series 5 Gold Star", "name": "Umbreon",
          "number": "17"}

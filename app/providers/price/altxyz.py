@@ -39,6 +39,21 @@ def _tile(link):
     return node
 
 
+GRADER_WORD_RE = re.compile(r"(PSA|BGS|CGC|SGC|TAG|ACE|AGS)\b", re.I)
+PRISTINE_RE = re.compile(r"(CGC|TAG|ACE|AGS)\s+PRI(?:STINE)?", re.I)   # alt labels a CGC Pristine 10 "CGC PRI"
+
+
+def _grade_label(strings: list[str]) -> str | None:
+    """Grade key from a tile's slab label, "raw" when the tile has none, None when a slab label is
+    unreadable: that tile is skipped, never counted as raw (a slab would inflate the raw price)."""
+    for x in strings:
+        if GRADER_RE.fullmatch(x):
+            return grade_from_title(x)
+        if m := PRISTINE_RE.fullmatch(x):
+            return f"{m.group(1).upper()}10Pristine"
+    return None if any(GRADER_WORD_RE.match(x) for x in strings) else "raw"
+
+
 def parse_tiles(html: str) -> list[dict]:
     """Raw sold tiles: {id, title, name, number, grade_key, price, sold_on, strings}."""
     out, seen = [], set()
@@ -54,12 +69,12 @@ def parse_tiles(html: str) -> list[dict]:
             continue
         ident = next((x for x in s if "#" in x), "")
         price = next((parse_money(x) for x in s if x.startswith("$")), None)
-        grade = next((x for x in s if GRADER_RE.fullmatch(x)), None)
-        if price is None:
+        grade_key = _grade_label(s[1:])      # s[0] is the listing title
+        if price is None or grade_key is None:
             continue
         out.append({"id": lid, "title": s[0], "name": ident.rpartition("#")[0].strip(),
-                    "number": ident.rpartition("#")[2].strip(), "grade_key":
-                    grade_from_title(grade) if grade else "raw", "price": price, "sold_on": sold_on})
+                    "number": ident.rpartition("#")[2].strip(), "grade_key": grade_key,
+                    "price": price, "sold_on": sold_on})
     return out
 
 
