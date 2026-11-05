@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     page_poll_s: float = 0.25
     login_timeout_s: float = 300
     poll_interval_s: float = 1
+    notify_enabled: bool = True               # macOS notification for new alert events
+    app_url: str = "http://127.0.0.1:8100"
+    notify_poll_s: float = 60
+    notify_state: Path = HOME / "notified.json"
 
 
 settings = Settings()

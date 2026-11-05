@@ -141,3 +141,10 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - Cost: one request per card (a full import is ~20k requests, `refresh_prices` scope `collection` passes `only=` so it fetches just the owned cards). Live check on a scratch database copy: 277 cards of `sv3pt5` + `swsh12pt5gg` in ~12 s, card docs untouched, `cel25c` untouched.
 
 - **Star cards + card page polish (2026-11-02)**: `pokemon:cel25c-17_A` (`Umbreon ★`) failed on alt.xyz because the raw `★` and a doubled rarity in the query returned no sold tiles. Fix = normalise `★` -> `Gold Star` in queries and matching, language check on alt tiles, empty search = `not_found`. PriceCharting got the same query normalisation; verified live 2026-11-03 and fixed (it files this print as plain `Umbreon #17` under `Pokemon Celebrations`, see `pricing.md`). Card page: compare table merged into one (group row per copy), Sold stats sorted and sales capped at 10 with period + title filters, Sources shows alt.xyz's search and kept listings (alt has no stored product match).
+
+## Alert notifications on macOS (2026-11-05)
+- Lives in the host fetcher (`fetcher/fetcher/notify.py`), not in the app: the app runs in docker and cannot show a macOS notification, and the fetcher is already a long-lived host process. The backend is unchanged; the fetcher only polls `GET /api/alerts/events?unread=true` every 60 s.
+- Dedupe by a high-water mark (`fired_at`) + notified ids in `~/.moc-fetcher/notified.json`, not by the event's `read` flag (that is UI state). State is written only after the notification was shown, so a failure retries on the next tick.
+- First run seeds silently (user decision): the existing unread backlog is not announced. Afterwards one new event shows its text, several show "N new price alerts".
+- `osascript` has no click-through; it needs notification permission for the host app that runs it. Off switch `FETCHER_NOTIFY_ENABLED=false`.
+- Known quirk found the same day: `scripts/fetcher.sh stop` can leave the fetcher running (pidfile holds the wrapper pid). Not fixed; see `roadmap.md`.

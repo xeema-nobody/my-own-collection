@@ -15,7 +15,15 @@ python -m fetcher           # 127.0.0.1:8110
 
 Or from the repo root: `scripts/fetcher.sh start|stop|status|logs` (log in `~/.moc-fetcher/fetcher.log`).
 
-Env (prefix `FETCHER_`): `FETCHER_PORT`, `CHROME_PATH`, `PROFILE_DIR`, `CDP_PORT`, `IDLE_TIMEOUT_S`, `LOGIN_TIMEOUT_S`.
+Env (prefix `FETCHER_`): `FETCHER_PORT`, `CHROME_PATH`, `PROFILE_DIR`, `CDP_PORT`, `IDLE_TIMEOUT_S`, `LOGIN_TIMEOUT_S`, `NOTIFY_ENABLED`, `APP_URL`, `NOTIFY_POLL_S`, `NOTIFY_STATE`.
+
+## Alert notifications
+The fetcher also polls the app (`FETCHER_APP_URL`, default `http://127.0.0.1:8100`) every `FETCHER_NOTIFY_POLL_S` (60) seconds for unread alert events and shows one macOS notification (via `osascript`) for events it has not announced yet: the event text for one, "N new price alerts" for several. Off switch: `FETCHER_NOTIFY_ENABLED=false`.
+
+- Dedupe state: `~/.moc-fetcher/notified.json` (`FETCHER_NOTIFY_STATE`): high-water mark + notified ids. Reading an alert in the UI does not matter. Delete the file to reseed.
+- First run (no state file) seeds silently: the existing unread backlog is not announced.
+- App down or osascript failing: logged at debug, retried next tick. While the Mac sleeps or the fetcher is stopped nothing is shown; events queued meanwhile arrive as one summary on return.
+- macOS must allow notifications for the app that runs `osascript` (System Settings -> Notifications -> Script Editor, or the terminal app that started the fetcher). No click-through.
 
 ## API
 
