@@ -2,6 +2,7 @@ import logging
 
 from pymongo import UpdateOne
 
+from app.services import valuation_cache
 from app.db.mongo import get_db
 from app.services.catalog_provider import get_catalog
 from app.services import jobs
@@ -40,6 +41,7 @@ async def import_catalog(set_ids: list[str] | None = None, provider=None, retry:
                 async for card in provider.iter_cards(sid):
                     if not card.get("_prices_only"):  # providers with other ids/vocabulary only refresh prices of known cards
                         await db.cards.update_one({"_id": card["_id"]}, {"$set": _without_raw(card)}, upsert=True)
+                        valuation_cache.bump()
                     stats["prices"] += await store_card_prices(db, card, rates)
                     stats["cards"] += 1
             except Exception as e:  # noqa: BLE001

@@ -8,6 +8,7 @@ from datetime import date, datetime, timezone
 
 from pymongo import UpdateOne
 
+from app.services import valuation_cache
 from app.providers.price.base import Sale
 
 
@@ -27,6 +28,7 @@ async def store_sales(db, card_id: str, sales: list[Sale]) -> int:
                   "fetched_at": now},
          "$setOnInsert": {"first_seen": now}}, upsert=True) for s in sales]
     res = await db.sales.bulk_write(ops, ordered=False)
+    valuation_cache.bump()
     return res.upserted_count
 
 
@@ -45,4 +47,4 @@ async def store_chart_seed(db, card_id: str, source: str, chart: list[tuple[date
         {"$setOnInsert": {"market": cents, "currency": currency, "as_of": _utc(d), "seed": True,
                           "fetched_at": now}}, upsert=True) for d, cents in chart]
     res = await db.prices.bulk_write(ops, ordered=False)
-    return res.upserted_count
+    return res.upserted_count  # history only: latest_price is untouched, no cache bump needed

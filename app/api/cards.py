@@ -3,6 +3,7 @@ from statistics import mean
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.services import valuation_cache
 from app.api.deps import clean, ensure_idle, get_db, spawn
 from app.config import settings
 from app.db.models import CardFetchIn, MatchIn, SaleIn
@@ -99,6 +100,7 @@ async def add_sale(card_id: str, s: SaleIn):
     doc = s.model_dump()
     doc["sold_at"] = datetime.combine(s.sold_at, datetime.min.time(), tzinfo=timezone.utc)
     await db.sales.insert_one({**doc, "card_id": card_id, "kind": "sold", "created_by": "manual"})
+    valuation_cache.bump()
     return {"ok": True}
 
 

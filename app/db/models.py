@@ -86,6 +86,13 @@ class RemoveIn(BaseModel):
     quantity: int = Field(default=1, ge=1)
 
 
+class PresetIn(BaseModel):
+    """Saved filter set for a list page. `query` = the page's URL params (strings), checked against a whitelist."""
+    name: str = Field(min_length=1, max_length=60)
+    scope: Literal["collection", "wishlist"] = "collection"
+    query: dict[str, str] = Field(default_factory=dict, max_length=30)
+
+
 class SaleIn(BaseModel):
     variant: str | None = None
     grade_key: str = "raw"

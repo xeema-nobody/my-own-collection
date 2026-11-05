@@ -48,6 +48,7 @@ async def init_indexes() -> None:
     )
     await db.collection_items.create_index([("card_id", ASCENDING)])
     await db.collection_edits.create_index([("item_id", ASCENDING), ("at", DESCENDING)])
+    await db.list_presets.create_index([("scope", ASCENDING), ("name", ASCENDING)], unique=True)
     await db.wishlist.create_index([("wish_key", ASCENDING)], unique=True)
     await db.wishlist.create_index([("card_id", ASCENDING)])
     # Rows must carry observed_on (and old index gone) before the v2 unique key can build.

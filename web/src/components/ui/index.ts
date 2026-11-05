@@ -16,3 +16,4 @@ export { Chip } from "./Chip";
 export { FileDrop } from "./FileDrop";
 export { SourceDot } from "./SourceDot";
 export { Stepper } from "./Stepper";
+export { ViewToggle, VIEWS, type View } from "./ViewToggle";

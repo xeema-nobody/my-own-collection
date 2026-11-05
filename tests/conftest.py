@@ -40,6 +40,14 @@ class FakeCatalog:
             yield c
 
 
+@pytest.fixture(autouse=True)
+def no_valuation_cache(monkeypatch):
+    """Tests write straight to mongo, so the in-memory valuation cache is off unless a test turns it on."""
+    from app.services import valuation_cache
+    monkeypatch.setattr(settings, "valuation_cache_ttl", 0)
+    valuation_cache.bump()
+
+
 @pytest.fixture
 async def db():
     """Throwaway database on the compose mongo; global accessors point at it for the test."""

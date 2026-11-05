@@ -3,10 +3,13 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 
+from app.services import valuation_cache
 from app.api.deps import get_db
 from app.config import settings
-from app.db.models import BulkAcquiredIn, CollectionIn, CollectionPatch, RemoveIn
+from app.db.models import BulkAcquiredIn, CollectionIn, CollectionPatch, PresetIn, RemoveIn
 from app.services import acquisition
+from app.services import collection_query as cq
+from app.services import presets
 from app.services import collection as svc
 from app.services import portability
 from app.services.price_fetch import price_freshness
@@ -51,63 +54,45 @@ async def import_(request: Request, format: str = Query("json", pattern="^(json|
     return await portability.import_items(get_db(), rows, mode)
 
 
-SORT_KEYS = {
-    "added": lambda r: r["item"]["created_at"],
-    "value": lambda r: r["value"],
-    "cost": lambda r: r["cost"],
-    "pl": lambda r: None if r["value"] is None or r["cost"] is None else r["value"] - r["cost"],
-    "qty": lambda r: r["item"]["quantity"],
-    "name": lambda r: (r["card"] or {}).get("name_norm", ""),
-    "set": lambda r: ((r["card"] or {}).get("set", {}).get("name", ""), (r["card"] or {}).get("number", "")),
-}
-DEFAULT_DESC = {"added", "value", "cost", "pl", "qty"}
-
-
-def _sorted(rows: list[dict], sort: str, order: str | None) -> list[dict]:
-    """Sort by `sort`; stacks with no value for that key (None) always go last."""
-    key = SORT_KEYS.get(sort, SORT_KEYS["added"])
-    desc = (order == "desc") if order else sort in DEFAULT_DESC
-    have = [r for r in rows if key(r) is not None]
-    rest = [r for r in rows if key(r) is None]
-    return sorted(have, key=key, reverse=desc) + rest
-
-
 @router.get("")
 async def list_items(q: str | None = None, tcg: str | None = None, set: str | None = None,
-                     graded: bool | None = None, language: str | None = None,
-                     condition: str | None = None, card_id: str | None = None, needs_price: bool | None = None,
+                     rarity: str | None = None, type: str | None = None,
+                     graded: bool | None = None, grader: str | None = None, grade: str | None = None,
+                     language: str | None = None, condition: str | None = None, card_id: str | None = None,
+                     needs_price: bool | None = None, stale: bool | None = None, cost_missing: bool | None = None,
                      acquisition_type: str | None = Query(None, alias="acquisition", pattern="^(purchased|pulled|traded|gift|other|unset)$"),
-                     cost_missing: bool | None = None, sort: str = "added",
+                     price_min: int | None = Query(None, ge=0), price_max: int | None = Query(None, ge=0),
+                     pl: str | None = Query(None, pattern="^(positive|negative)$"),
+                     sort: str = Query("added", pattern=f"^({'|'.join(cq.SORTS)})$"),
                      order: str | None = Query(None, pattern="^(asc|desc)$"),
                      page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200)):
-    flt: dict = {}
-    if graded is not None:
-        flt["grading"] = {"$ne": None} if graded else None
-    if language:
-        flt["language"] = language
-    if condition:
-        flt["condition"] = condition
-    if card_id:
-        flt["card_id"] = card_id
-    rows = await svc.valuate(get_db(), flt)
-    if acquisition_type:
-        want = None if acquisition_type == "unset" else acquisition_type
-        rows = [r for r in rows if ((r["item"].get("acquired") or {}).get("type")) == want]
-    if cost_missing is not None:
-        rows = [r for r in rows if (r["cost"] is None) == cost_missing]
-    if needs_price is not None:
-        rows = [r for r in rows if r["needs_price"] == needs_price]
-    if tcg:
-        rows = [r for r in rows if r["card"] and r["card"]["tcg"] == tcg]
-    if set:
-        rows = [r for r in rows if r["card"] and r["card"]["set"]["id"] == set]
-    if q:
-        from app.providers.catalog.common import norm
-        rows = [r for r in rows if r["card"] and norm(q) in r["card"]["search_text"]]
-    rows = _sorted(rows, sort, order)
-    total = len(rows)
-    rows = rows[(page - 1) * page_size: page * page_size]
-    return {"total": total, "items": [svc.present(r) for r in rows]}
+    """Filtered, sorted page of valuated stacks + `totals` for the whole filtered set."""
+    query = cq.Query(q=q, tcg=tcg, set=set, rarity=rarity, type=type, graded=graded, grader=grader, grade=grade,
+                     language=language, condition=condition, card_id=card_id, needs_price=needs_price, stale=stale,
+                     cost_missing=cost_missing, acquisition=acquisition_type, price_min=price_min,
+                     price_max=price_max, pl=pl, sort=sort, order=order, page=page, page_size=page_size)
+    return cq.query(await svc.valuate(get_db()), query)
+
+
+@router.get("/facets")
+async def facets():
+    """Distinct sets / rarities / types / languages / conditions / graders / grades with stack counts."""
+    return cq.facets(await svc.valuate(get_db()))
+
+
+@router.get("/presets")
+async def list_presets(scope: str = Query("collection", pattern="^(collection|wishlist)$")):
+    return await presets.list_(get_db(), scope)
+
+
+@router.post("/presets", status_code=201)
+async def save_preset(body: PresetIn):
+    return await presets.create(get_db(), body)
+
+
+@router.delete("/presets/{preset_id}", status_code=204)
+async def delete_preset(preset_id: str):
+    await presets.remove(get_db(), preset_id)
 
 
 @router.get("/summary")
@@ -156,6 +141,7 @@ async def patch_item(item_id: str, body: CollectionPatch):
         fields["updated_at"] = datetime.now(timezone.utc)
         if not (await db.collection_items.update_one({"_id": oid}, {"$set": fields})).matched_count:
             raise HTTPException(404, "item not found")
+        valuation_cache.bump()
     if acq:
         if await acquisition.apply_patch(db, oid, acq) is None:
             raise HTTPException(404, "item not found")
@@ -193,13 +179,16 @@ async def remove(item_id: str, body: RemoveIn):
     left = it["quantity"] - body.quantity
     if left <= 0:
         await db.collection_items.delete_one({"_id": it["_id"]})
+        valuation_cache.bump()
         return {"deleted": True, "quantity": 0}
     await db.collection_items.update_one({"_id": it["_id"]}, {"$set": {"quantity": left}})
+    valuation_cache.bump()
     return {"deleted": False, "quantity": left}
 
 
 @router.delete("/{item_id}", status_code=204)
 async def delete_item(item_id: str):
     r = await get_db().collection_items.delete_one({"_id": svc.oid(item_id)})
+    valuation_cache.bump()
     if not r.deleted_count:
         raise HTTPException(404, "item not found")

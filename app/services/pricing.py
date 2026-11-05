@@ -8,6 +8,7 @@ from datetime import date, datetime, timezone
 
 from pymongo import UpdateOne
 
+from app.services import valuation_cache
 from app.providers.catalog.common import extract_prices
 from app.services.fx import convert, rates_to_base
 
@@ -96,6 +97,7 @@ async def store_card_prices(db, card_doc: dict, rates: dict, observed_on: str | 
         else:
             upd.setdefault("$unset", {})[f"latest_price.{src}"] = ""
     await db.cards.update_one({"_id": card_doc["_id"]}, upd)
+    valuation_cache.bump()
     return len(points)
 
 
@@ -114,6 +116,7 @@ async def store_scraped_points(db, card_id: str, points: list[dict], observed_on
             for src, kinds in build_latest(pts, observed_on).items() for kind, grades in kinds.items()
             for g, variants in grades.items() for v, val in variants.items()}
     await db.cards.update_one({"_id": card_id}, {"$set": sets})
+    valuation_cache.bump()
     return len(pts)
 
 

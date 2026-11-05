@@ -1,8 +1,8 @@
 """Time collection valuation at N synthetic stacks. Read-only on the live db: works in a scratch db
 `<db>_perf` (cards sampled from the live catalog) and drops it afterwards.
 
-Usage: docker compose exec app python scripts/perf_valuate.py [N ...]   (default 15 500 2000)
-Bar (docs/architecture.md): valuate() < 1 s at 2000 stacks.
+Usage: docker compose run --rm -v $PWD/scripts:/code/scripts app python -m scripts.perf_valuate [N ...]   (default 15 500 2000)
+Bar (docs/architecture.md): valuate() < 1 s at 2000 stacks; warm list query < 100 ms at 5000.
 """
 import asyncio
 import random
@@ -14,6 +14,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from app.config import settings
 from app.services import collection as coll
+from app.services import collection_query as cq
+from app.services import valuation_cache
 
 CONDS = ["NM", "LP", "MP"]
 GRADES = [("PSA", 10), ("PSA", 9), ("BGS", 9.5), ("CGC", 10)]
@@ -41,6 +43,7 @@ async def main(sizes: list[int]):
                               "quantity": rng.randint(1, 3), "acquired": {"price": 500, "currency": "EUR"},
                               "stack_key": f"{c['_id']}|{i}", "created_at": now, "tags": []})
             await scratch.collection_items.insert_many(items)
+            valuation_cache.bump()  # cold: measure the real build, not a cached copy
             t = time.perf_counter()
             rows = await coll.valuate(scratch)
             dt = time.perf_counter() - t
@@ -48,6 +51,16 @@ async def main(sizes: list[int]):
             [coll.present(r) for r in rows]
             print(f"N={n:5d}  valuate {dt * 1000:7.0f} ms   present {(time.perf_counter() - t) * 1000:5.0f} ms"
                   f"   priced {sum(r['value'] is not None for r in rows)}/{n}")
+            # list query on the (cached) rows: the warm cost of every filter / sort / page click
+            for label, q in [("page 1 default", cq.Query()), ("graded, sort value", cq.Query(graded=True, sort="value")),
+                             ("search + sort name", cq.Query(q="pika", sort="name", order="asc")),
+                             ("P/L>0, price 1-50 EUR", cq.Query(pl="positive", price_min=100, price_max=5000, sort="pl"))]:
+                t = time.perf_counter()
+                out = cq.query(rows, q)
+                print(f"        query {label:24s} {(time.perf_counter() - t) * 1000:6.0f} ms   total {out['total']}")
+            t = time.perf_counter()
+            cq.facets(rows)
+            print(f"        facets {(time.perf_counter() - t) * 1000:6.0f} ms")
     finally:
         await client.drop_database(name)
         client.close()

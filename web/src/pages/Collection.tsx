@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, ChevronRight, TriangleAlert } from "lucide-react";
 import { api, money, ago } from "../lib/api";
 import AcquiredForm, { ACQ_TYPES, AcqBadge, acqLabel } from "../components/AcquiredForm";
@@ -8,42 +8,22 @@ import { QueryError } from "../components/QueryState";
 import SourceCompare from "../components/SourceCompare";
 import BulkFetch, { fetchErrorText } from "../components/BulkFetch";
 import FetcherBadge from "../components/FetcherBadge";
+import Filters from "../components/collection/Filters";
+import Grid from "../components/collection/Grid";
+import PresetBar from "../components/collection/PresetBar";
+import { Value, detail, whyEstimated } from "../components/collection/parts";
+import { useUrlState } from "../lib/urlState";
+import { useStoredState } from "../lib/storedState";
+import { BUILTIN_PRESETS, COLLECTION_DEFAULTS, DEFAULT_DESC, PRESET_KEYS, activeFilterCount, toApiQuery } from "../lib/collectionList";
 import ValueChart from "../components/ValueChart";
 import { usePriceFetchJob } from "../lib/fetchJob";
-import { Badge, Button, Card, Checkbox, Drawer, EmptyState, Input, Kpi, Pagination, Select, Skeleton, SortTh, Table, THead, Td, Th, Tr } from "../components/ui";
-
-// Why a value is not an exact-grade price; "" = exact.
-function whyEstimated(i: any): string {
-  const why = [] as string[];
-  if (i.match === "bucket") why.push(`company-agnostic ${i.grade_key_used} price, not ${i.grading?.company} ${i.grading?.grade}`);
-  else if (i.match === "lower") why.push(`no ${i.grading?.company} ${i.grading?.grade} price, using lower grade ${i.grade_key_used}`);
-  else if (i.match === "needs_graded_price") why.push("no graded price yet, not counted");
-  if (i.estimated && i.match === "exact") why.push("variant price missing, used another variant");
-  return why.join("; ");
-}
-
-const KIND_TONE = { sold: "ok", market: "neutral", ask: "warn" } as const;
-const DEFAULTS = { q: "", graded: "", language: "", condition: "", needs_price: "", acquisition: "", cost_missing: "", sort: "added", order: "", page: "1", size: "50" };
-type Params = typeof DEFAULTS;
+import { Badge, Button, Card, Checkbox, Drawer, EmptyState, Kpi, Pagination, Skeleton, SortTh, Table, THead, Td, Th, Tr, ViewToggle, VIEWS } from "../components/ui";
 
 const COLS: { key: string; label: string; num?: boolean }[] = [
   { key: "name", label: "Card" }, { key: "set", label: "Set" }, { key: "", label: "Details" },
   { key: "qty", label: "Qty", num: true }, { key: "value", label: "Value", num: true },
   { key: "cost", label: "Cost", num: true }, { key: "pl", label: "P/L", num: true },
 ];
-const DEFAULT_DESC = ["added", "value", "cost", "pl", "qty"];
-
-function Value({ i }: { i: any }) {
-  if (i.needs_price) return <Badge tone="warn" title="A slab is not worth its raw copy, so it is left out of totals until a graded price is fetched">needs price</Badge>;
-  if (i.value == null) return <span className="text-muted" title="No price for this grade">no price</span>;
-  const why = whyEstimated(i);
-  return <span className="inline-flex items-center justify-end gap-1.5" title={i.headline_rule ?? ""}>
-    {why && <span title={why} className="text-warn">≈</span>}<span className="font-semibold">{money(i.value)}</span>
-    <Badge tone={KIND_TONE[i.price_kind as keyof typeof KIND_TONE] ?? "neutral"}>{i.price_kind}</Badge></span>;
-}
-
-const detail = (i: any) => `${i.variant ? `${i.variant} · ` : ""}${i.language.toUpperCase()} · ${i.grading ? `${i.grading.company} ${i.grading.grade}` : i.condition}`;
-
 const fmtAcq = (a: any) => a ? `${acqLabel(a.type)} · ${a.price == null ? "no price" : money(a.price, a.currency)}${a.date ? ` · ${a.date}` : ""}${a.source ? ` · ${a.source}` : ""}` : "nothing";
 
 /** Edit cost + acquisition of one stack, with the edit log (each row can be restored). */
@@ -110,27 +90,25 @@ export default function Collection() {
   const qc = useQueryClient();
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [sp, setSp] = useSearchParams();
-  const f: Params = { ...DEFAULTS, ...Object.fromEntries(sp) };
+  const [view, setView] = useStoredState("collection.view", "table", VIEWS);
+  const [f, set] = useUrlState(COLLECTION_DEFAULTS);
   const [sel, setSel] = useState<any>(null);
-  const set = (patch: Partial<Params>, keepPage = false) => {
-    const next = { ...f, ...(keepPage ? {} : { page: "1" }), ...patch };
-    setSp(Object.fromEntries(Object.entries(next).filter(([k, v]) => v !== DEFAULTS[k as keyof Params])), { replace: true });
-  };
-  const sum = useQuery({ queryKey: ["collection", "summary"], queryFn: api.collectionSummary });
-  const query = { q: f.q, graded: f.graded, language: f.language, condition: f.condition, needs_price: f.needs_price, acquisition: f.acquisition, cost_missing: f.cost_missing,
-    sort: f.sort, order: f.order, page: f.page, page_size: f.size };
-  const list = useQuery({ queryKey: ["collection", query], queryFn: () => api.collection(query), placeholderData: (p) => p });
+  // lists change little between visits: serve the cached page instantly and refresh quietly in the background
+  const cached = { staleTime: 60_000, gcTime: 30 * 60_000 };
+  const sum = useQuery({ queryKey: ["collection", "summary"], queryFn: api.collectionSummary, ...cached });
+  const facets = useQuery({ queryKey: ["collection", "facets"], queryFn: api.collectionFacets, ...cached });
+  const query = toApiQuery(f);
+  const list = useQuery({ queryKey: ["collection", "list", query], queryFn: () => api.collection(query), placeholderData: keepPreviousData, ...cached });
   const s = sum.data;
   const { running } = usePriceFetchJob(() => qc.invalidateQueries({ queryKey: ["collection"] }));
   const fetchMissing = useMutation({ mutationFn: () => api.fetchPrices({ missing: true }),
     onSettled: () => qc.invalidateQueries({ queryKey: ["jobs"] }) });
   const bulk = useMutation({ mutationFn: (acquired: any) => api.bulkAcquired([...picked], acquired),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["collection"] }); qc.invalidateQueries({ queryKey: ["stack-history"] }); } });
-  const FILTERS = ["q", "graded", "language", "condition", "needs_price", "acquisition", "cost_missing"] as const;
-  const dirty = FILTERS.some((k) => f[k] !== "");
+  const dirty = activeFilterCount(f) > 0;
   const dir: "asc" | "desc" = f.order ? (f.order as "asc" | "desc") : DEFAULT_DESC.includes(f.sort) ? "desc" : "asc";
   const sort = (key: string) => key && set(f.sort === key ? { order: dir === "desc" ? "asc" : "desc" } : { sort: key, order: "" });
+  const t = list.data?.totals;
   const items: any[] = list.data?.items ?? [];
   const cur = sel ? items.find((x) => x.id === sel.id) ?? sel : null;  // refreshed row after an edit
   const allOnPage = items.length > 0 && items.every((x) => picked.has(x.id));
@@ -166,20 +144,16 @@ export default function Collection() {
 
       <ValueChart />
 
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="w-56"><Input aria-label="Search owned" placeholder="Search owned…" value={f.q} onChange={(e) => set({ q: e.target.value })} /></div>
-        <div className="w-40"><Select aria-label="Type" value={f.graded} onChange={(v) => set({ graded: v })} allLabel="Raw + graded"
-          options={[{ value: "false", label: "Raw" }, { value: "true", label: "Graded" }]} /></div>
-        <div className="w-40"><Select aria-label="Condition" value={f.condition} onChange={(v) => set({ condition: v })} allLabel="Any condition"
-          options={["NM", "LP", "MP", "HP", "DMG"].map((c) => ({ value: c, label: c }))} /></div>
-        <div className="w-40"><Select aria-label="Language" value={f.language} onChange={(v) => set({ language: v })} allLabel="Any language"
-          options={["en", "ja", "es", "it", "fr", "de", "pt", "ko", "zh"].map((c) => ({ value: c, label: c.toUpperCase() }))} /></div>
-        <div className="w-44"><Select aria-label="Acquired how" value={f.acquisition} onChange={(v) => set({ acquisition: v })} allLabel="Any acquisition"
-          options={[...ACQ_TYPES, { value: "unset", label: "Not set" }]} /></div>
-        <Checkbox className="py-1.5" label="Needs price" checked={f.needs_price === "true"} onChange={(e) => set({ needs_price: e.target.checked ? "true" : "" })} />
-        <Checkbox className="py-1.5" label="No cost" checked={f.cost_missing === "true"} onChange={(e) => set({ cost_missing: e.target.checked ? "true" : "" })} />
-        {dirty && <Button variant="ghost" size="sm" onClick={() => set({ q: "", graded: "", language: "", condition: "", needs_price: "", acquisition: "", cost_missing: "" })}>Clear filters</Button>}
-      </div>
+      <PresetBar scope="collection" state={f} defaults={COLLECTION_DEFAULTS} keys={PRESET_KEYS} builtins={BUILTIN_PRESETS} onApply={set} />
+      <Filters f={f} set={set} facets={facets.data} dir={dir} onDir={(d) => set({ order: d })} />
+      {dirty && t && <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg bg-surface-2 px-3 py-2 text-sm" role="status" aria-label="Filtered totals">
+        <span className="font-medium">{t.stacks} stack{t.stacks === 1 ? "" : "s"} match</span>
+        <span className="num text-muted">{t.cards} cards</span>
+        <span className="num">Value <span className="font-semibold">{money(t.value)}</span></span>
+        <span className="num">Cost <span className="font-semibold">{money(t.cost)}</span>{t.cost_missing > 0 && <span className="text-muted"> ({t.cost_missing} without)</span>}</span>
+        <span className={`num ${t.pl == null ? "text-muted" : t.pl >= 0 ? "text-ok" : "text-danger"}`}>P/L <span className="font-semibold">{t.pl == null ? "—" : money(t.pl)}</span></span>
+      </div>}
+      <div className="flex justify-end"><ViewToggle value={view} onChange={setView} /></div>
 
       <QueryError q={list} label="Collection" />
       {list.isLoading && <Skeleton className="h-64 w-full" />}
@@ -190,7 +164,7 @@ export default function Collection() {
         <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>Clear selection</Button>
       </div>}
       {items.length > 0 && <>
-        <Table>
+        {view === "grid" ? <Grid items={items} picked={picked} onToggle={toggle} onOpen={setSel} /> : <Table>
           <THead>
             <Th className="w-8"><Checkbox aria-label="Select all on this page" label="" checked={allOnPage} onChange={togglePage} /></Th>
             <Th className="w-12"><span className="sr-only">Image</span></Th>
@@ -218,8 +192,8 @@ export default function Collection() {
                   </span></Td>
               </Tr>))}
           </tbody>
-        </Table>
-        <Pagination page={Number(f.page)} pageSize={Number(f.size)} total={list.data.total}
+        </Table>}
+        <Pagination page={Number(f.page)} pageSize={Number(f.size)} total={list.data?.total ?? 0}
           onPage={(p) => set({ page: String(p) }, true)} onPageSize={(n) => set({ size: String(n) })} />
       </>}
       <Drawer open={!!sel} onClose={() => setSel(null)} title={cur?.card?.name ?? "Details"}>{cur && <Details i={cur} />}</Drawer>

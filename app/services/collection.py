@@ -7,6 +7,7 @@ from app.db.models import CollectionIn
 from app.services import acquisition
 from app.config import settings
 from app.providers.price import registry
+from app.services import valuation_cache
 from app.services.pricing import get_rates, latest_as_of
 from app.services.valuation import grade_key, resolve_item, spread  # noqa: F401 - grade_key re-exported
 
@@ -36,6 +37,13 @@ def stack_key(i: CollectionIn) -> str:
 
 
 async def add(db, i: CollectionIn) -> dict:
+    try:
+        return await _add(db, i)
+    finally:
+        valuation_cache.bump()
+
+
+async def _add(db, i: CollectionIn) -> dict:
     if not await db.cards.find_one({"_id": i.card_id}, {"_id": 1}):
         raise HTTPException(404, "card not found")
     now = datetime.now(timezone.utc)
@@ -105,8 +113,15 @@ async def compare_card(db, card_id: str, grading: dict | None = None, variant: s
 async def valuate(db, filt: dict | None = None, as_of: datetime | None = None) -> list[dict]:
     """Items joined with card + best price (see services/valuation.py). Base-currency cents for the
     whole stack; None = unpriced. `values[source]` = value when only that source is used.
-    `as_of` revalues the same items at a past date from the observation log + sales (see services/movers.py)."""
+    `as_of` revalues the same items at a past date from the observation log + sales (see services/movers.py).
+    The unfiltered, current valuation is cached (services/valuation_cache.py): treat its rows as read-only."""
+    if not filt and as_of is None:
+        return await valuation_cache.get_rows(db, _valuate_all)
     return await valuate_items(db, await db.collection_items.find(filt or {}).to_list(None), as_of)
+
+
+async def _valuate_all(db) -> list[dict]:
+    return await valuate_items(db, await db.collection_items.find({}).to_list(None))
 
 
 async def valuate_items(db, items: list[dict], as_of: datetime | None = None) -> list[dict]:

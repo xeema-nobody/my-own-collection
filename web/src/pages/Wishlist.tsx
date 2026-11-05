@@ -3,10 +3,13 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Trash2 } from "lucide-react";
 import { api, money, type WishEntry } from "../lib/api";
-import { eurosToCents, filterWishes, wantLabel, type WishFilter } from "../lib/wishlist";
+import { eurosToCents, filterWishes, searchWishes, sortWishes, wantLabel, wishDir, WISH_SORTS, type WishFilter } from "../lib/wishlist";
+import { useUrlState } from "../lib/urlState";
+import { useStoredState } from "../lib/storedState";
+import PresetBar from "../components/collection/PresetBar";
 import BulkFetch from "../components/BulkFetch";
 import { QueryError } from "../components/QueryState";
-import { Badge, Button, Card, Checkbox, Chip, Drawer, EmptyState, Field, Input, Kpi, Skeleton, Table, THead, Td, Th, Tr } from "../components/ui";
+import { Badge, Button, Card, Checkbox, Chip, Drawer, EmptyState, Field, Input, Kpi, SegmentedControl, Select, Skeleton, SortTh, Table, THead, Td, Th, Tr, ViewToggle, VIEWS } from "../components/ui";
 
 const KIND_TONE = { sold: "ok", market: "neutral", ask: "warn" } as const;
 
@@ -61,10 +64,20 @@ function EditDrawer({ w, onClose }: { w: WishEntry | null; onClose: () => void }
     </Drawer>);
 }
 
+const WISH_DEFAULTS = { q: "", filter: "", sort: "added", order: "" };
+const WISH_KEYS = ["q", "filter", "sort", "order"] as const;
+const WISH_PRESETS: { name: string; query: Record<string, string> }[] = [
+  { name: "Closest to target", query: { sort: "gap", order: "asc" } },
+  { name: "Cheapest first", query: { sort: "value", order: "asc" } },
+];
+
 export default function Wishlist() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["wishlist"], queryFn: () => api.wishlist() });
-  const [filter, setFilter] = useState<WishFilter>("all");
+  const [f, set] = useUrlState(WISH_DEFAULTS);
+  const [view, setView] = useStoredState("wishlist.view", "table", VIEWS);
+  const filter: WishFilter = f.filter === "hit" || f.filter === "noprice" ? f.filter : "all";
+  const setFilter = (v: WishFilter) => set({ filter: v === "all" ? "" : v });
   const [edit, setEdit] = useState<WishEntry | null>(null);
   const [confirm, setConfirm] = useState<WishEntry | null>(null);
   const del = useMutation({
@@ -73,7 +86,9 @@ export default function Wishlist() {
   });
   const fresh = useQuery({ queryKey: ["wishlist", "prices"], queryFn: api.wishlistPrices });
   const all = q.data ?? [];
-  const rows = filterWishes(all, filter);
+  const rows = sortWishes(searchWishes(filterWishes(all, filter), f.q), f.sort, f.order);
+  const dir = wishDir(f.sort, f.order);
+  const sortBy = (key: string) => set(f.sort === key ? { order: dir === "desc" ? "asc" : "desc" } : { sort: key, order: "" });
   const hits = all.filter((w) => w.hit).length;
   const priced = all.filter((w) => w.value != null && w.target_price != null);
   return (
@@ -98,14 +113,39 @@ export default function Wishlist() {
         <Chip active={filter === "all"} onClick={() => setFilter("all")}>All</Chip>
         <Chip active={filter === "hit"} onClick={() => setFilter(filter === "hit" ? "all" : "hit")}>Target hit</Chip>
         <Chip active={filter === "noprice"} onClick={() => setFilter(filter === "noprice" ? "all" : "noprice")}>No price</Chip>
+        <div className="w-56"><Input aria-label="Search wishlist" placeholder="Search name, set, note…" value={f.q} onChange={(e) => set({ q: e.target.value })} /></div>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="w-40"><Select aria-label="Sort by" value={f.sort} onChange={(v) => set({ sort: v, order: "" })} options={WISH_SORTS} /></div>
+          <SegmentedControl label="Sort direction" value={dir} onChange={(d) => set({ order: d })} options={[{ value: "desc", label: "↓" }, { value: "asc", label: "↑" }]} />
+          <ViewToggle value={view} onChange={setView} />
+        </div>
       </div>
+      <PresetBar scope="wishlist" state={f} defaults={WISH_DEFAULTS} keys={WISH_KEYS} builtins={WISH_PRESETS} onApply={set} />
       <QueryError q={q} label="Wishlist" />
       {q.isLoading && <Skeleton className="h-40" />}
       {q.data && all.length === 0 && <EmptyState title="Nothing on your wishlist">Open a card and use “Add to wishlist”.</EmptyState>}
       {q.data && all.length > 0 && rows.length === 0 && <EmptyState title="No entries match this filter" />}
-      {rows.length > 0 && (
+      {rows.length > 0 && view === "grid" && (
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6" aria-label="Wishlist grid">
+          {rows.map((w) => (
+            <li key={w.id} className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface p-2 text-sm">
+              <Link to={`/cards/${encodeURIComponent(w.card_id)}`} className="flex flex-col gap-1.5 hover:text-accent">
+                {w.card?.images?.small ? <img src={w.card.images.small} alt="" loading="lazy" className="aspect-[5/7] w-full rounded object-contain" /> : <div className="aspect-[5/7] w-full rounded bg-surface-2" />}
+                <span className="truncate font-medium">{w.card?.name ?? w.card_id} {w.card?.number && `#${w.card.number}`}</span></Link>
+              <span className="truncate text-xs text-muted">{w.card?.set?.name}</span>
+              <div className="flex items-center justify-between gap-1"><Badge tone={w.grading ? "accent" : "neutral"}>{wantLabel(w)}</Badge><Price w={w} /></div>
+              <div className="text-xs"><Gap w={w} /></div>
+              <div className="flex justify-end">
+                <Button variant="ghost" size="sm" aria-label={`Edit ${w.card?.name} ${wantLabel(w)}`} onClick={() => setEdit(w)}><Pencil size={13} /></Button>
+                <Button variant="ghost" size="sm" aria-label={`Remove ${w.card?.name} ${wantLabel(w)}`} onClick={() => setConfirm(w)}><Trash2 size={13} /></Button></div>
+            </li>))}
+        </ul>)}
+      {rows.length > 0 && view === "table" && (
         <Table>
-          <THead><Th>Card</Th><Th>Version</Th><Th num>Price now</Th><Th num>Target</Th><Th>Status</Th><Th>Note</Th><Th className="text-right">Actions</Th></THead>
+          <THead><Th>Card</Th><Th>Version</Th>
+            <SortTh label="Price now" num active={f.sort === "value"} dir={dir} onSort={() => sortBy("value")} />
+            <SortTh label="Target" num active={f.sort === "target"} dir={dir} onSort={() => sortBy("target")} />
+            <Th>Status</Th><Th>Note</Th><Th className="text-right">Actions</Th></THead>
           <tbody>
             {rows.map((w) => (
               <Tr key={w.id}>

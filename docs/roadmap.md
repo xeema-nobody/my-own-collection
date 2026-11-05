@@ -66,7 +66,7 @@ Functional descriptions only — no technical design. The project agent decides 
 
 **Done when:** every card in the collection has a correct, editable cost and acquisition type, and P/L reflects it.
 
-## Step 4 — Collection list: pagination, filters, speed `[ ]`
+## Step 4 — Collection list: pagination, filters, speed `[x]`
 
 **Wanted:**
 
@@ -262,3 +262,4 @@ _Future — start only after the collection is large and scanning (step 5) works
 | 2026-11-05 | 1    | Done: "Fetch all prices" (all / never / stale / most valuable / stack) on Dashboard, Collection, Settings -> Prices; ETA, pause/resume/cancel, resume-by-skip, failure table + retry + match link, summary + macOS notification, fresh-price counts on data-quality card. Pacing unchanged (sequential, per-site fetcher limits). |
 | 2026-11-05 | 2    | Done: "Fetch all prices" on the Wishlist page via a scope picker (Collection / Wishlist / Both, collection first, deduped) in the shared BulkFetch; alerts re-evaluated right after a run (wishlist target alerts fire at once, wishlist-only run writes no snapshot); scheduler option `SCHEDULER_FETCH_WISHLIST`; wishlist freshness counts on the Wishlist page and data-quality card. Same sequential pacing. |
 | 2026-11-05 | 3    | Done: acquisition type (Purchased/Pulled/Traded/Gift/Other) + price per copy/currency/date/where bought editable per stack (Collection details drawer, card page pencil, add form) and in bulk (row checkboxes); weighted average on merge; edit log with restore; P/L now only over stacks with a cost, plus P/L excl. pulled on Collection and Dashboard; filters Acquired how / No cost to fix the old stacks; export/import carry the type (CSV `acquired_type`). Per-copy lots not built (one type + average per stack). |
+| 2026-11-05 | 4    | Done: server-side filter / sort / paging over a cached whole-collection valuation (warm list query 5-15 ms at 5,000 synthetic stacks, 10-34 ms at 10,000; cold build ~0.4-0.8 s once per change). New filters: set, rarity, card type, grader, grade, price per copy range, P/L positive/negative, price stale (plus existing); sorts: name, set, date added, last price update (plus value, cost, P/L, qty); totals for the filtered set; table | image grid (remembered); saved presets in Mongo + built-ins; URL state; quiet background refresh. Wishlist: search, sort, presets, grid. On-sale and has-photos filters wait for Step 6. |

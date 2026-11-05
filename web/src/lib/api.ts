@@ -68,6 +68,16 @@ export type Acquired = { type?: AcqType | null; price?: number | null; currency?
 export type AcquiredPatch = Acquired;
 export type AcqEdit = { id: string; action: "edit" | "bulk" | "merge" | "import" | "restore"; at: string; before: Acquired | null; after: Acquired | null };
 
+/** Totals of the whole filtered set (not just the page). Money = cents; pl is null when no stack has cost + value. */
+export type CollectionTotals = { stacks: number; cards: number; value: number; cost: number; pl: number | null; pl_ex_pulled: number | null;
+  cost_basis_cost: number; cost_basis_cost_ex_pulled: number; cost_missing: number; needs_price: number; unpriced: number };
+export type CollectionPage = { total: number; items: any[]; totals?: CollectionTotals };
+export type FacetValue = { value: string; count: number; label?: string };
+export type CollectionFacets = { sets: FacetValue[]; rarities: FacetValue[]; types: FacetValue[]; languages: FacetValue[];
+  conditions: FacetValue[]; graders: FacetValue[]; grades: FacetValue[] };
+export type PresetScope = "collection" | "wishlist";
+export type Preset = { id: string; name: string; scope: PresetScope; query: Record<string, string> };
+
 export const api = {
   cards: (p: Record<string, unknown>) => req<any>("/api/cards" + qs(p)),
   card: (id: string) => req<any>(`/api/cards/${encodeURIComponent(id)}`),
@@ -88,7 +98,11 @@ export const api = {
   sets: (withStats = false) => req<any[]>("/api/sets" + qs({ with_stats: withStats || undefined })),
   filters: () => req<any>("/api/filters"),
   ownedItems: (cardId: string) => req<any>("/api/collection" + qs({ card_id: cardId })),
-  collection: (p: Record<string, unknown>) => req<any>("/api/collection" + qs(p)),
+  collection: (p: Record<string, unknown>) => req<CollectionPage>("/api/collection" + qs(p)),
+  collectionFacets: () => req<CollectionFacets>("/api/collection/facets"),
+  presets: (scope: PresetScope) => req<Preset[]>("/api/collection/presets" + qs({ scope })),
+  savePreset: (b: { name: string; scope: PresetScope; query: Record<string, string> }) => req<Preset>("/api/collection/presets", post(b)),
+  deletePreset: (id: string) => req<void>(`/api/collection/presets/${id}`, { method: "DELETE" }),
   exportCollectionUrl: (format: "json" | "csv") => `${BASE}/api/collection/export?format=${format}`,
   importCollection: async (file: File, format: "json" | "csv", mode: "set" | "add") => {
     const r = await fetch(`${BASE}/api/collection/import${qs({ format, mode })}`, { method: "POST", body: file });

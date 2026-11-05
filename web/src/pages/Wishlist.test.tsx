@@ -30,6 +30,25 @@ describe("Wishlist page", () => {
     expect(screen.queryByText("second")).not.toBeInTheDocument();
     expect(screen.getByText("holo")).toBeInTheDocument();
   });
+  it("search narrows the list and sort reorders it (state lives in the URL)", async () => {
+    mockApi({ "/api/wishlist": [entry({ id: "w1", value: 100, card: { _id: "a", name: "Charizard", number: "4", set: { name: "Base" }, images: {} } }),
+      entry({ id: "w2", value: 900, note: "second", card: { _id: "b", name: "Blastoise", number: "2", set: { name: "Base" }, images: {} } })], "/api/collection/presets": [] });
+    renderPage(<Wishlist />, "/?sort=value&order=asc");
+    await screen.findByText("Charizard #4");
+    const names = () => screen.getAllByRole("link").map((a) => /(\w+ #\d+)/.exec(a.textContent ?? "")?.[1]).filter(Boolean);
+    expect(names()).toEqual(["Charizard #4", "Blastoise #2"]);          // value ascending from the URL
+    await userEvent.type(screen.getByLabelText("Search wishlist"), "blast");
+    expect(names()).toEqual(["Blastoise #2"]);
+  });
+  it("grid view lists the entries and is remembered", async () => {
+    localStorage.clear();
+    mockApi({ "/api/wishlist": [entry(), entry({ id: "w2", note: "second" })], "/api/collection/presets": [] });
+    renderPage(<Wishlist />);
+    await screen.findAllByText("Charizard #4");
+    await userEvent.click(screen.getByRole("radio", { name: /Grid/ }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(localStorage.getItem("wishlist.view")).toBe("grid");
+  });
   it("remove asks to confirm, then deletes", async () => {
     const calls: string[] = [];
     mockApi({ "/api/wishlist": [entry()], "DELETE /api/wishlist/w1": () => { calls.push("del"); return { status: 204 }; } });

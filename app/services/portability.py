@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from pydantic import ValidationError
 
+from app.services import valuation_cache
 from app.db.models import CollectionIn
 from app.services import acquisition
 from app.services.collection import stack_key
@@ -145,4 +146,5 @@ async def import_items(db, rows: list[dict], mode: str = "set") -> dict:
                 await acquisition.log_edit(db, {**existing, "stack_key": key, "card_id": item.card_id},
                                            "import", before, after)
         res["created" if out.upserted_id else "updated"] += 1
+    valuation_cache.bump()
     return res

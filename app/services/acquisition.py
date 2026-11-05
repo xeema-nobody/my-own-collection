@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from bson import ObjectId
 
+from app.services import valuation_cache
 from app.db.models import Acquired
 
 TYPES = ("purchased", "pulled", "traded", "gift", "other")
@@ -67,6 +68,7 @@ async def apply_patch(db, oid: ObjectId, patch: dict, action: str = "edit") -> d
     if after != before:
         await db.collection_items.update_one(
             {"_id": oid}, {"$set": {"acquired": after, "updated_at": datetime.now(timezone.utc)}})
+        valuation_cache.bump()
         await log_edit(db, item, action, before, after)
     return await db.collection_items.find_one({"_id": oid})
 
@@ -107,6 +109,7 @@ async def restore(db, oid: ObjectId, edit_id: str) -> dict | None:
     if cur != e["before"]:
         await db.collection_items.update_one(
             {"_id": oid}, {"$set": {"acquired": e["before"], "updated_at": datetime.now(timezone.utc)}})
+        valuation_cache.bump()
         await log_edit(db, item, "restore", cur, e["before"])
     return await db.collection_items.find_one({"_id": oid})
 

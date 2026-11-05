@@ -2,6 +2,7 @@
 import logging
 from datetime import datetime, timezone
 
+from app.services import valuation_cache
 from app.config import settings
 from app.providers.price.fx import fetch_rate
 
@@ -19,6 +20,7 @@ async def get_rate(db, base: str, quote: str) -> float | None:
         rate = await fetch_rate(base, quote)
         await db.fx_rates.update_one({"date": today, "base": base, "quote": quote},
                                      {"$set": {"rate": rate}}, upsert=True)
+        valuation_cache.bump()
         return rate
     except Exception as e:  # noqa: BLE001 - FX outage must not break refresh
         log.warning("fx fetch failed %s->%s: %s", base, quote, e)

@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     market_max_age_days: int = 180
     # a source this many % away from the median of all sources is flagged (needs >= 3 sources)
     outlier_pct: int = 40
+    # seconds the whole-collection valuation is cached in memory (writers also drop it); 0 = off
+    valuation_cache_ttl: int = 60
 
 
 settings = Settings()
