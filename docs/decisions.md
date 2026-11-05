@@ -148,3 +148,9 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - First run seeds silently (user decision): the existing unread backlog is not announced. Afterwards one new event shows its text, several show "N new price alerts".
 - `osascript` has no click-through; it needs notification permission for the host app that runs it. Off switch `FETCHER_NOTIFY_ENABLED=false`.
 - Known quirk found the same day: `scripts/fetcher.sh stop` can leave the fetcher running (pidfile holds the wrapper pid). Not fixed; see `roadmap.md`.
+
+## Wishlist bulk refresh (2026-11-05, roadmap Step 2)
+- One component, one scope: `BulkFetch` gets a Collection / Wishlist / Both picker (Wishlist page defaults to Wishlist) and `POST /admin/prices/fetch` a `scope` field; no second job type, so the one-at-a-time rule and pause/cancel/retry are shared. `both` = owned first, then wishlist-only cards, deduped.
+- Alerts re-evaluate explicitly after any run with an `ok` fetch (`_after_run`). Snapshot only when an owned card updated: a wishlist-only run must not write a collection snapshot. Alert failures are logged, never fail the run.
+- Scheduler keeps staleness-mixed ordering over owned + wishlisted cards (not strictly collection-first): strict ordering would starve the wishlist whenever the collection exceeds `SCHEDULER_FETCH_CAP`. `SCHEDULER_FETCH_WISHLIST=false` opts out. Manual "both" runs are strictly collection first.
+- Known: `tests/test_price_fetch.py::test_pause_resume_cancel_and_rerun_skips_succeeded` is racy (fails on clean main too: run finishes before the cancel lands).
