@@ -16,11 +16,41 @@ class Grading(BaseModel):
     cert_number: str | None = None
 
 
+AcqType = Literal["purchased", "pulled", "traded", "gift", "other"]
+
+
 class Acquired(BaseModel):
-    price: int | None = Field(default=None, ge=0, description="cents")
+    type: AcqType | None = None  # None = not set (treated as non-pulled)
+    price: int | None = Field(default=None, ge=0, description="cents per copy; 0 = free, None = unknown")
     currency: str = "EUR"
     date: dt.date | None = None
+    source: str | None = None  # where it was bought
+
+
+class AcquiredPatch(BaseModel):
+    """Partial edit: only fields sent are applied (explicit null clears one)."""
+    type: AcqType | None = None
+    price: int | None = Field(default=None, ge=0, description="cents per copy")
+    currency: str | None = None
+    date: dt.date | None = None
     source: str | None = None
+
+    @model_validator(mode="after")
+    def _currency(self):
+        if "currency" in self.model_fields_set and not self.currency:
+            raise ValueError("currency cannot be cleared")
+        return self
+
+
+class BulkAcquiredIn(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=500)
+    acquired: AcquiredPatch
+
+    @model_validator(mode="after")
+    def _some(self):
+        if not self.acquired.model_fields_set:
+            raise ValueError("nothing to change")
+        return self
 
 
 class CollectionIn(BaseModel):
@@ -47,7 +77,7 @@ class CollectionIn(BaseModel):
 
 class CollectionPatch(BaseModel):
     quantity: int | None = Field(default=None, ge=1)
-    acquired: Acquired | None = None
+    acquired: AcquiredPatch | None = None
     notes: str | None = None
     tags: list[str] | None = None
 

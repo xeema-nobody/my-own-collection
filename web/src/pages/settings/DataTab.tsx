@@ -18,7 +18,7 @@ export default function DataTab() {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Section title="Export collection">
-        <p className="mb-3 text-sm text-muted">Download every stack with quantity, condition, grading and cost. Prices are not included.</p>
+        <p className="mb-3 text-sm text-muted">Download every stack with quantity, condition, grading, cost and how it was acquired. Prices are not included.</p>
         <div className="flex gap-2">
           <a className="inline-flex items-center gap-1.5 rounded border border-line bg-surface px-3 py-1.5 text-sm font-medium hover:bg-surface-2" href={api.exportCollectionUrl("json")}><Download size={14} aria-hidden />Export JSON</a>
           <a className="inline-flex items-center gap-1.5 rounded border border-line bg-surface px-3 py-1.5 text-sm font-medium hover:bg-surface-2" href={api.exportCollectionUrl("csv")}><Download size={14} aria-hidden />Export CSV</a>

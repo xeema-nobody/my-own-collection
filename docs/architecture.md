@@ -17,7 +17,8 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 | `services/portability.py` | collection export (JSON v1 lossless, CSV flat) and import (validates via `CollectionIn`, upsert on `stack_key`, per-row errors) |
 | `services/sets.py` | sets with imported / priced card counts |
 | `services/search.py` | builds Mongo query from `q` + filters |
-| `services/collection.py` | add/stack-merge, `present` (adds `pl` = value - cost), `valuate` (loads cards + 90 d sales, per-source and best value) |
+| `services/acquisition.py` | cost + acquisition type per stack: partial `acquired` patch (`merge_acquired`), `weighted_merge` when copies join a stack, bulk apply, edit log (`collection_edits`) with `restore`, `cost_stats` (P/L with / without pulled, shared by summary and snapshots) |
+| `services/collection.py` | add/stack-merge (weighted cost average), `present` (adds `pl` = value - cost), `valuate` (loads cards + 90 d sales, per-source and best value) |
 | `services/valuation.py` | pure per-item price resolver: grade chain exact > bucket > lower > raw fallback, sold (D-A) > market > thin sold |
 | `services/pricing.py` | stores price points, denormalises `latest_price` / `price_base` on cards |
 | `services/fx.py` | daily FX cache in `fx_rates`, fallback to last stored rate |
@@ -53,9 +54,11 @@ Engine: real Google Chrome started by the fetcher with `--remote-debugging-port`
 - `cards`: `_id "pokemon:base1-4"`, tcg, name, `name_norm`, `search_text`, set{}, images, variants[], `latest_price{source{variant{market,low,avg,high,currency,as_of}}}`, `price_base` (cents, base currency). Indexes: text, name_norm, (tcg,set,number), rarity, types.
 - `sets`: one per set.
 - `collection_items`: one doc per stack, unique `stack_key` = card|variant|language|condition|grader|grade|cert. Add = `$inc quantity`; remove to 0 deletes.
+- `collection_items.acquired`: `{type purchased|pulled|traded|gift|other|null, price (cents PER COPY, 0 = free, null = unknown), currency, date, source (where bought)}`; stack cost = price x quantity. No migration: stacks created before types have `type` null ("Not set", counted as non-pulled). Notes stay in the item-level `notes`.
+- `collection_edits`: log of `acquired` changes `{item_id, stack_key, card_id, at, action edit|bulk|merge|import|restore, before, after}` (full subdocs, never pruned, survives stack deletion). Index `(item_id, at desc)`.
 - `prices`: unique (card, variant, source, kind, grade_key, as_of); `kind` market | sold | listing_low. Re-refresh same day = same doc.
 - `sales`: sold records, manual (`POST /cards/{id}/sales`) and scraped (unique `(card_id, source, listing_id)` when `listing_id` is set); stats: last 10 within 90 days per source+grade.
-- `collection_snapshots`: unique per date (+ `valuation_version`, `needs_price_count`, `ref_raw_value` from Phase 9.2); `totals_by_source`, `total_value`, `value_kind_breakdown`, `estimated_count`, cost, counts, unpriced counts, breakdowns (pre-Phase-4 docs lack the first three).
+- `collection_snapshots`: unique per date (+ `valuation_version`, `needs_price_count`, `ref_raw_value` from Phase 9.2); `totals_by_source`, `total_value`, `value_kind_breakdown`, `estimated_count`, cost, counts, unpriced counts, breakdowns (pre-Phase-4 docs lack the first three). Step 3 adds `total_cost_ex_pulled`, `cost_basis_value`, `pulled_value`, `cost_missing_count` (older docs lack them; `total_cost` unchanged).
 - `product_matches`: `_id "{card_id}|{source}"`, `url`, `confirmed_by` auto|user|null, pending `candidates`; only `pricecharting`, `cardmarket_web`.
 - `wishlist`: one doc per wanted version, unique `wish_key` = card|variant|grader|grade: `{card_id, variant, grading{company,grade}|null, target_price (cents), note, alert, created_at}`. Valued as a virtual one-copy item (`collection.valuate_wishlist`); never part of collection valuation, totals or snapshots.
 - `alerts`: rule `{scope stack|card|total|wish, wish_id, item_id|card_id, op above|below|up_pct|down_pct, threshold (cents or %), days, kind, include_estimated, enabled, triggered, last_value, last_pct, last_eval, label}`.
@@ -67,7 +70,7 @@ Money: integer cents + currency everywhere. Missing price = `null`, never 0.
 ## API (prefix `/api`; Swagger at `/docs`)
 
 `GET /cards` (incl. `has_price`), `/cards/{id}`, `/cards/{id}/prices`, `POST /cards/{id}/sales`, `GET /cards/{id}/price-matrix` (grades/graders derived from stored rows), `GET /cards/{id}/fetch-status` (last scraped-fetch outcome per source), `GET /cards/{id}/match`, `POST|DELETE /cards/{id}/match/{source}` (confirm / reset product URL), `GET /sets` (`?with_stats=true`), `/filters`;
-`/collection` (POST add, GET list with per-item `value/price_kind/source/match/estimated/sources`, `/summary` with `value_by_kind`, PATCH/DELETE `/{id}`, POST `/{id}/remove`);
+`/collection` (POST add, GET list with per-item `value/price_kind/source/match/estimated/sources`, `/summary` with `value_by_kind`, PATCH `/{id}` (partial `acquired`: only keys sent change, null clears one; logged), DELETE `/{id}`, POST `/{id}/remove`, POST `/bulk-acquired` (`{ids, acquired}` -> `{updated, unchanged, missing}`), GET `/{id}/history`, POST `/{id}/history/{edit_id}/restore`; list filters `acquisition=<type|unset>`, `cost_missing=`; add returns `type_conflict`; `/summary` also has `pl_ex_pulled`, `cost_ex_pulled`, `cost_basis_cost(_ex_pulled)`, `pulled_value`, `cost_missing`, `by_type`);
 `/wishlist` (GET list `?card_id=` with `value/price_kind/gap/hit/needs_price`, POST add = upsert on card+variant+grade, PATCH/DELETE `/{id}`; a target keeps one linked `auto` alert rule), `GET /cards` items carry `wished`;
 `/dashboard/history|breakdown|movers`;
 `/alerts` (GET list, POST create, PATCH/DELETE `/{id}`), `/alerts/events` (`?unread=`), POST `/alerts/events/read` (`{ids}` or all), `/alerts/unread-count`, POST `/alerts/evaluate`;
@@ -103,4 +106,5 @@ Local single-user, no auth. API bound to 127.0.0.1, CORS limited to the web orig
 - Tools (read-only on live data): `scripts/perf_explain.js` (explain table; usage in its header) and `docker compose run --rm -v $PWD/scripts:/code/scripts app python -m scripts.perf_valuate [N ...]` (scratch db `owncollection_perf`, dropped after).
 - The text index `cards_text` (15 MB, never queried) is dropped by `init_indexes`.
 
-`components/CardCollection.tsx` (card page): Owned stack rows (badge, value or "needs price", paid, qty `Stepper`, delete-confirm `Drawer`) and the Add form (Raw|Graded, estimate from `/compare`); both share the auto-fetch status message.
+`components/AcquiredForm.tsx`: shared cost + acquisition form (edit = every field sent, bulk = blank keeps; per-copy or total entry) used by the Collection details drawer (with edit history + restore), the bulk drawer (row checkboxes) and the card page.
+`components/CardCollection.tsx` (card page): Owned stack rows (badge, value or "needs price", acquisition badge + paid, edit-cost pencil, qty `Stepper`, delete-confirm `Drawer`) and the Add form (Raw|Graded, estimate from `/compare`); both share the auto-fetch status message.

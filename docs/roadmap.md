@@ -49,7 +49,7 @@ Functional descriptions only — no technical design. The project agent decides 
 
 **Done when:** wishlist prices refresh in one click and target alerts fire from fresh data.
 
-## Step 3 — Edit purchase value (and how it was acquired) `[ ]`
+## Step 3 — Edit purchase value (and how it was acquired) `[x]`
 
 **Problem:** cost can't be changed after adding a card; some cards were bought, some were just pulled.
 
@@ -261,3 +261,4 @@ _Future — start only after the collection is large and scanning (step 5) works
 | 2026-11-05 | —    | Roadmap created from founder request. Nothing started. |
 | 2026-11-05 | 1    | Done: "Fetch all prices" (all / never / stale / most valuable / stack) on Dashboard, Collection, Settings -> Prices; ETA, pause/resume/cancel, resume-by-skip, failure table + retry + match link, summary + macOS notification, fresh-price counts on data-quality card. Pacing unchanged (sequential, per-site fetcher limits). |
 | 2026-11-05 | 2    | Done: "Fetch all prices" on the Wishlist page via a scope picker (Collection / Wishlist / Both, collection first, deduped) in the shared BulkFetch; alerts re-evaluated right after a run (wishlist target alerts fire at once, wishlist-only run writes no snapshot); scheduler option `SCHEDULER_FETCH_WISHLIST`; wishlist freshness counts on the Wishlist page and data-quality card. Same sequential pacing. |
+| 2026-11-05 | 3    | Done: acquisition type (Purchased/Pulled/Traded/Gift/Other) + price per copy/currency/date/where bought editable per stack (Collection details drawer, card page pencil, add form) and in bulk (row checkboxes); weighted average on merge; edit log with restore; P/L now only over stacks with a cost, plus P/L excl. pulled on Collection and Dashboard; filters Acquired how / No cost to fix the old stacks; export/import carry the type (CSV `acquired_type`). Per-copy lots not built (one type + average per stack). |

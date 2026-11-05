@@ -43,6 +43,13 @@ describe("Dashboard", () => {
     expect(await screen.findByText("Pikachu")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Fetch missing prices" })).toBeEnabled();
   });
+  it("shows P/L with and without pulled cards and the missing-cost hint", async () => {
+    mockApi({ ...ok, "/api/collection/summary": { ...ok["/api/collection/summary"], pl_ex_pulled: 500, cost_basis_cost: 8000, cost_basis_cost_ex_pulled: 5000, cost_missing: 2 } });
+    renderPage(<Dashboard />);
+    expect(await screen.findByText("P/L excl. pulled")).toBeInTheDocument();
+    expect(screen.getByText("+10.0% vs cost")).toBeInTheDocument();
+    expect(screen.getByText("2 stacks without cost")).toBeInTheDocument();
+  });
   it("empty states", async () => {
     mockApi({ ...ok, "/api/dashboard/breakdown": [], "/api/dashboard/movers": { up: [], down: [] }, "/api/collection": { items: [], total: 0 },
       "/api/collection/summary": summary });

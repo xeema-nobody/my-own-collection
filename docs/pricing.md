@@ -73,7 +73,7 @@ Within one grade (D-A): **sold** if >= `SOLD_MIN_SALES` (3) sales in the last `S
 - Scraped raw sales have unknown condition, so they never value a raw item or a raw fallback; only `manual` sales do.
 - Variant: item variant, else the source's no-variant price, else the first variant (flagged estimated).
 - Item value = quantity x price, converted to base currency (FX from frankfurter.dev, cached daily). Row fields: `value`, `price_kind`, `source`, `match`, `grade_key_used`, `estimated`, `thin`, `sample_size`; `values[source]` / `sources[source]` = result when only that source is used (own fallback chain; carries `thin` and `sample_size`). `valuate(db, as_of=date)` revalues the same items at a past date from `prices.observed_on <= date` (`pricing.latest_as_of`) and sales in the window before it.
-- Cost = acquired price converted at today's rate. P/L = value - cost (null when no cost recorded).
+- Cost = acquired price (per copy) x quantity, converted at today's rate. Unknown cost is `null`, never 0; a free copy (pulled, gift) is a known 0. P/L = value - cost per stack, **summed only over stacks with a cost and a value** (a stack without cost is not counted as cost 0, which used to inflate P/L). `pl_ex_pulled` is the same sum without stacks of type Pulled (stacks with no type count as non-pulled). Both are null when no stack qualifies. Mixed costs in one stack are stored as the weighted average per copy (adding copies re-averages; copies of another currency or type do not: the stack keeps its own and the add reports `type_conflict`).
 - Raw headline `cards.price_base` is unchanged (cardmarket, else tcgplayer); valuation of raw items follows `PREFERRED_SOURCES`, so it can differ from it.
 
 ## Source comparison (Phase 5b)

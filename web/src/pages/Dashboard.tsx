@@ -57,7 +57,8 @@ export default function Dashboard() {
   const s = sum.data;
   const delta = changePct(hist30.data);
   const soldPct = s?.value ? Math.round(((s.value_by_kind?.sold ?? 0) / s.value) * 100) : null;
-  const plPct = s?.pl != null && s.cost ? (s.pl / s.cost) * 100 : null;
+  const plPct = s?.pl != null && s.cost_basis_cost ? (s.pl / s.cost_basis_cost) * 100 : null;
+  const plxPct = s?.pl_ex_pulled != null && s.cost_basis_cost_ex_pulled ? (s.pl_ex_pulled / s.cost_basis_cost_ex_pulled) * 100 : null;
   const lastRun = jobs.data?.find((j: any) => j.type === "price_refresh");
   const movers: any[] = [...(mov.data?.up ?? []), ...(mov.data?.down ?? [])];
   const holdings: any[] = (top.data?.items ?? []).filter((i: any) => i.value != null);
@@ -77,14 +78,16 @@ export default function Dashboard() {
       </div>
       <QueryError q={sum} label="Summary" /><QueryError q={hist30} label="History" /><QueryError q={brk} label="Breakdown" /><QueryError q={mov} label="Movers" /><QueryError q={top} label="Top holdings" /><QueryError q={jobs} label="Jobs" />
 
-      {sum.isLoading ? <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[0, 1, 2, 3].map((n) => <Skeleton key={n} className="h-20" />)}</div> : (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {sum.isLoading ? <div className="grid grid-cols-2 gap-3 md:grid-cols-5">{[0, 1, 2, 3, 4].map((n) => <Skeleton key={n} className="h-20" />)}</div> : (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <Kpi label="Value" value={money(s?.value)} hint={s?.estimated > 0 ? `${s.estimated} estimated` : undefined} />
           <Kpi label="Change (30d)" value={delta == null ? "—" : `${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(1)}%`}
             tone={delta == null ? undefined : delta >= 0 ? "ok" : "danger"} hint={delta == null ? "needs 2 snapshots" : undefined} />
           <Kpi label="P/L" value={s?.pl == null ? "—" : money(s.pl)} tone={s?.pl == null ? undefined : s.pl >= 0 ? "ok" : "danger"}
             hint={plPct == null ? undefined : `${plPct >= 0 ? "+" : ""}${plPct.toFixed(1)}% vs cost`} />
-          <Kpi label="Cost" value={money(s?.cost)} />
+          <Kpi label="P/L excl. pulled" value={s?.pl_ex_pulled == null ? "—" : money(s.pl_ex_pulled)} tone={s?.pl_ex_pulled == null ? undefined : s.pl_ex_pulled >= 0 ? "ok" : "danger"}
+            hint={plxPct == null ? undefined : `${plxPct >= 0 ? "+" : ""}${plxPct.toFixed(1)}% vs cost`} />
+          <Kpi label="Cost" value={money(s?.cost)} hint={s?.cost_missing > 0 ? `${s.cost_missing} stack${s.cost_missing === 1 ? "" : "s"} without cost` : undefined} />
         </div>)}
 
       <ValueChart full height="h-72" />

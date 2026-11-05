@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { api, money } from "../lib/api";
 import { requestPriceFetch } from "../lib/autoFetch";
+import AcquiredForm, { ACQ_TYPES, AcqBadge, acqLabel } from "./AcquiredForm";
 import { Badge, Button, Drawer, Field, Input, SegmentedControl, Section, Select, Stepper } from "./ui";
 
 export const CONDITIONS = ["NM", "LP", "MP", "HP", "DMG"];
@@ -18,6 +19,7 @@ export default function CardCollection({ card }: { card: any }) {
   const qc = useQueryClient();
   const [fetchMsg, setFetchMsg] = useState("");
   const [removing, setRemoving] = useState<any>(null);
+  const [editing, setEditing] = useState<any>(null);
   const owned = useQuery({ queryKey: ["owned-values", id], queryFn: () => api.ownedItems(id) });
   const valueOf = (sid: string) => (owned.data?.items ?? []).find((i: any) => i.id === sid);
   const refresh = () => { qc.invalidateQueries({ queryKey: ["card", id] }); qc.invalidateQueries({ queryKey: ["owned-values", id] }); qc.invalidateQueries({ queryKey: ["collection"] }); };
@@ -30,6 +32,8 @@ export default function CardCollection({ card }: { card: any }) {
     setFetchMsg({ started: "Saved. Fetching prices (see Prices > Fetch).", queued: "Saved. Another price fetch is running; this card is queued.",
       offline: "Saved. Prices not fetched: fetcher offline (the stack shows “needs price”).", error: "Saved. Prices not fetched." }[r]);
   };
+  const editCost = useMutation({ mutationFn: ({ sid, acquired }: { sid: string; acquired: any }) => api.patchStack(sid, { acquired }),
+    onSuccess: () => { refresh(); setEditing(null); } });
   const dec = useMutation({
     mutationFn: ({ sid, del }: { sid: string; del?: boolean }) => del ? api.deleteItem(sid) : api.removeFromCollection(sid, 1),
     onSuccess: refresh,
@@ -52,7 +56,10 @@ export default function CardCollection({ card }: { card: any }) {
               <span className="num w-24 text-right" title={v?.needs_price ? "No graded price yet, not counted" : v?.estimated ? "Estimated value of the stack" : "Value of the stack"}>
                 {v == null ? "" : v.value == null ? <span className="text-muted">needs price</span> : <>{v.estimated && "≈ "}{money(v.value)}</>}
               </span>
-              <span className="num w-20 text-right text-muted">{s.acquired?.price != null ? `paid ${money(s.acquired.price, s.acquired.currency)}` : ""}</span>
+              <span className="flex w-36 items-center justify-end gap-1.5 text-right text-muted">
+                <AcqBadge type={s.acquired?.type} />
+                <span className="num" title={s.acquired?.source ? `${acqLabel(s.acquired.type)} · ${s.acquired.source}` : undefined}>{s.acquired?.price != null ? `paid ${money(s.acquired.price, s.acquired.currency)}` : ""}</span></span>
+              <Button variant="ghost" size="sm" aria-label={`Edit cost of ${stackLabel(s)} stack`} title="Edit cost and how acquired" onClick={() => setEditing(s)}><Pencil size={14} /></Button>
               <Stepper label={`${stackLabel(s)} quantity`} value={s.quantity} min={1} disabled={dec.isPending || inc.isPending} disabledInc={!!s.grading?.cert_number}
                 onChange={(n) => (n > s.quantity ? inc.mutate(s) : dec.mutate({ sid: s.id }))} />
               <Button variant="ghost" size="sm" aria-label={`Remove ${stackLabel(s)} stack`} onClick={() => setRemoving(s)}><Trash2 size={14} /></Button>
@@ -61,6 +68,13 @@ export default function CardCollection({ card }: { card: any }) {
       </ul>
       {fetchMsg && <p className="mt-2 text-sm text-muted" role="status">{fetchMsg}</p>}
     </Section>
+    <Drawer open={!!editing} onClose={() => setEditing(null)} title={`Cost · ${card.name}${editing ? ` (${stackLabel(editing)})` : ""}`}>
+      {editing && <>
+        <p className="mb-3 text-sm text-muted">{editing.quantity} {editing.quantity === 1 ? "copy" : "copies"}. The previous value is kept in the stack's edit history.</p>
+        <AcquiredForm initial={editing.acquired} qty={editing.quantity} busy={editCost.isPending} onSubmit={(acquired) => editCost.mutate({ sid: editing.id, acquired })} />
+        {editCost.error && <p role="alert" className="mt-2 text-sm text-danger">{String((editCost.error as Error).message)}</p>}
+      </>}
+    </Drawer>
     <Drawer open={!!removing} onClose={() => setRemoving(null)} title="Remove from collection">
       {removing && <div className="space-y-4 text-sm">
         <p>Remove all <span className="num font-medium">{removing.quantity}</span> {removing.quantity === 1 ? "copy" : "copies"} of {card.name} ({stackLabel(removing)})? This deletes the stack.</p>
@@ -75,8 +89,9 @@ export default function CardCollection({ card }: { card: any }) {
 }
 
 function AddForm({ card, id, onAdded }: { card: any; id: string; onAdded: () => void }) {
-  const [f, setF] = useState({ variant: "", language: "en", graded: false, condition: "NM", company: "PSA", grade: "9", cert: "", qty: 1, price: "", notes: "" });
+  const [f, setF] = useState({ variant: "", language: "en", graded: false, condition: "NM", company: "PSA", grade: "9", cert: "", qty: 1, price: "", acqType: "", date: "", source: "", notes: "" });
   const [more, setMore] = useState(false);
+  const [conflict, setConflict] = useState(false);
   const up = (p: Partial<typeof f>) => setF((o) => ({ ...o, ...p }));
   const variant = f.variant || card.variants?.[0] || "";
   const add = useMutation({
@@ -85,8 +100,9 @@ function AddForm({ card, id, onAdded }: { card: any; id: string; onAdded: () => 
       condition: f.graded ? null : f.condition,
       grading: f.graded ? { company: f.company, grade: +f.grade, cert_number: f.cert || null } : null,
       quantity: f.qty, notes: f.notes || null,
-      acquired: f.price ? { price: Math.round(+f.price * 100), currency: "EUR" } : null }),
-    onSuccess: onAdded,
+      acquired: f.price || f.acqType ? { type: f.acqType || (+f.price > 0 ? "purchased" : null), price: f.price ? Math.round(+f.price * 100) : null, currency: "EUR",
+        date: f.date || null, source: f.source.trim() || null } : null }),
+    onSuccess: (r: any) => { setConflict(!!r?.type_conflict); onAdded(); },
   });
   // Value of one copy as it would be counted today (raw: the raw price; graded: that grade's price).
   const est = useQuery({
@@ -114,6 +130,9 @@ function AddForm({ card, id, onAdded }: { card: any; id: string; onAdded: () => 
         </div>
         {more && <div className="grid gap-3 sm:grid-cols-2">
           {f.graded && <Field label="Cert #"><Input value={f.cert} onChange={(ev) => up({ cert: ev.target.value })} /></Field>}
+          <Field label="Acquired how"><Select aria-label="Acquired how" value={f.acqType} allLabel="Not set (Purchased if priced)" onChange={(v) => up({ acqType: v, ...(v === "pulled" && !f.price ? { price: "0" } : {}) })} options={ACQ_TYPES} /></Field>
+          <Field label="Date"><Input type="date" aria-label="Date" value={f.date} onChange={(ev) => up({ date: ev.target.value })} /></Field>
+          <Field label="Where bought"><Input aria-label="Where bought" value={f.source} onChange={(ev) => up({ source: ev.target.value })} /></Field>
           <Field label="Notes"><Input value={f.notes} onChange={(ev) => up({ notes: ev.target.value })} /></Field>
         </div>}
         <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
@@ -125,6 +144,7 @@ function AddForm({ card, id, onAdded }: { card: any; id: string; onAdded: () => 
           </span>
           {add.error && <span role="alert" className="text-sm text-danger">{String(add.error)}</span>}
           {add.isSuccess && <span className="text-sm text-ok">Added</span>}
+          {add.isSuccess && conflict && <span role="status" className="text-sm text-warn">These copies were added to a stack with a different acquisition type or currency: the stack kept its type/price. Use the pencil to fix it.</span>}
         </div>
       </div>
     </Section>);

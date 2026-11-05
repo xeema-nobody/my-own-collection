@@ -3,7 +3,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 from app.config import settings
-from app.services import alerts
+from app.services import acquisition, alerts
 from app.services.collection import source_ids, valuate
 
 log = logging.getLogger(__name__)
@@ -34,11 +34,14 @@ async def take_snapshot(db) -> dict:
             by_set[v["card"]["set"]["name"]] += v["value"]
             by_rarity[v["card"].get("rarity") or "Unknown"] += v["value"]
             by_tcg[v["card"]["tcg"]] += v["value"]
+    cs = acquisition.cost_stats(vals)
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     doc = {"date": date, "base_currency": settings.base_currency, "totals_by_source": totals, "weak_by_source": weak,
            "total_value": sum(v["value"] or 0 for v in vals), "value_kind_breakdown": dict(by_kind),
            "estimated_count": sum(1 for v in vals if v["estimated"]),
-           "total_cost": sum(v["cost"] or 0 for v in vals), "item_count": len(vals),
+           "total_cost": cs["cost"], "total_cost_ex_pulled": cs["cost_ex_pulled"],
+           "cost_basis_value": cs["cost_basis_value"], "pulled_value": cs["pulled_value"],
+           "cost_missing_count": cs["cost_missing"], "item_count": len(vals),
            "card_count": sum(v["item"]["quantity"] for v in vals), "unpriced_count": unpriced,
            "needs_price_count": sum(1 for v in vals if v["needs_price"]),
            "ref_raw_value": sum(v["ref_raw_value"] or 0 for v in vals), "valuation_version": VALUATION_VERSION,

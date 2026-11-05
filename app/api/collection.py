@@ -5,7 +5,8 @@ from fastapi.responses import Response
 
 from app.api.deps import get_db
 from app.config import settings
-from app.db.models import CollectionIn, CollectionPatch, RemoveIn
+from app.db.models import BulkAcquiredIn, CollectionIn, CollectionPatch, RemoveIn
+from app.services import acquisition
 from app.services import collection as svc
 from app.services import portability
 from app.services.price_fetch import price_freshness
@@ -74,7 +75,9 @@ def _sorted(rows: list[dict], sort: str, order: str | None) -> list[dict]:
 @router.get("")
 async def list_items(q: str | None = None, tcg: str | None = None, set: str | None = None,
                      graded: bool | None = None, language: str | None = None,
-                     condition: str | None = None, card_id: str | None = None, needs_price: bool | None = None, sort: str = "added",
+                     condition: str | None = None, card_id: str | None = None, needs_price: bool | None = None,
+                     acquisition_type: str | None = Query(None, alias="acquisition", pattern="^(purchased|pulled|traded|gift|other|unset)$"),
+                     cost_missing: bool | None = None, sort: str = "added",
                      order: str | None = Query(None, pattern="^(asc|desc)$"),
                      page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200)):
     flt: dict = {}
@@ -87,6 +90,11 @@ async def list_items(q: str | None = None, tcg: str | None = None, set: str | No
     if card_id:
         flt["card_id"] = card_id
     rows = await svc.valuate(get_db(), flt)
+    if acquisition_type:
+        want = None if acquisition_type == "unset" else acquisition_type
+        rows = [r for r in rows if ((r["item"].get("acquired") or {}).get("type")) == want]
+    if cost_missing is not None:
+        rows = [r for r in rows if (r["cost"] is None) == cost_missing]
     if needs_price is not None:
         rows = [r for r in rows if r["needs_price"] == needs_price]
     if tcg:
@@ -107,7 +115,8 @@ async def summary():
     rows = await svc.valuate(get_db())
     value = {s: sum(r["values"][s] or 0 for r in rows) if any(r["values"][s] is not None for r in rows)
              else None for s in svc.source_ids()}
-    cost = sum(r["cost"] or 0 for r in rows)
+    costs = acquisition.cost_stats(rows)
+    cost = costs["cost"]
     best = sum(r["value"] or 0 for r in rows)
     by_source = {}
     for sid in svc.source_ids():
@@ -119,8 +128,7 @@ async def summary():
                           "vs_headline_pct": pct,  # same items only: this source vs the headline value
                           "far": pct is not None and abs(pct) > settings.outlier_pct}
     return {"by_source": by_source, "distinct": len(rows), "cards": sum(r["item"]["quantity"] for r in rows),
-            "value_by_source": value, "value": best, "cost": cost,
-            "pl": best - cost if cost else None,
+            "value_by_source": value, "value": best, **costs,
             "value_by_kind": {k: sum(r["value"] for r in rows if r["price_kind"] == k)
                               for k in {r["price_kind"] for r in rows if r["value"] is not None}},
             "unpriced": sum(1 for r in rows if r["value"] is None),
@@ -131,15 +139,49 @@ async def summary():
             "prices": await price_freshness(get_db())}
 
 
+@router.post("/bulk-acquired")
+async def bulk_acquired(body: BulkAcquiredIn):
+    return await acquisition.bulk_apply(get_db(), body.ids, body.acquired.model_dump(mode="json", exclude_unset=True))
+
+
 @router.patch("/{item_id}")
 async def patch_item(item_id: str, body: CollectionPatch):
     db = get_db()
-    upd = body.model_dump(mode="json", exclude_unset=True)
-    upd["updated_at"] = datetime.now(timezone.utc)
-    r = await db.collection_items.update_one({"_id": svc.oid(item_id)}, {"$set": upd})
-    if not r.matched_count:
+    oid = svc.oid(item_id)
+    fields = body.model_dump(mode="json", exclude_unset=True)
+    if "acquired" in fields and fields["acquired"] is None:
+        raise HTTPException(422, "acquired cannot be null; send null fields to clear them")
+    acq = fields.pop("acquired", None)
+    if fields:
+        fields["updated_at"] = datetime.now(timezone.utc)
+        if not (await db.collection_items.update_one({"_id": oid}, {"$set": fields})).matched_count:
+            raise HTTPException(404, "item not found")
+    if acq:
+        if await acquisition.apply_patch(db, oid, acq) is None:
+            raise HTTPException(404, "item not found")
+    return svc._out(await _get(db, oid))
+
+
+async def _get(db, oid):
+    it = await db.collection_items.find_one({"_id": oid})
+    if not it:
         raise HTTPException(404, "item not found")
-    return svc._out(await db.collection_items.find_one({"_id": svc.oid(item_id)}))
+    return it
+
+
+@router.get("/{item_id}/history")
+async def item_history(item_id: str):
+    db = get_db()
+    await _get(db, svc.oid(item_id))
+    return await acquisition.history(db, item_id)
+
+
+@router.post("/{item_id}/history/{edit_id}/restore")
+async def restore_edit(item_id: str, edit_id: str):
+    it = await acquisition.restore(get_db(), svc.oid(item_id), edit_id)
+    if it is None:
+        raise HTTPException(404, "item or edit not found")
+    return svc._out(it)
 
 
 @router.post("/{item_id}/remove")

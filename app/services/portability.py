@@ -7,13 +7,14 @@ from datetime import datetime, timezone
 from pydantic import ValidationError
 
 from app.db.models import CollectionIn
+from app.services import acquisition
 from app.services.collection import stack_key
 
 FORMAT, VERSION = "moc-collection", 1
 MAX_ROWS = 20000
 # `name`, `set`, `number` are for humans reading the sheet; import ignores them.
 CSV_COLUMNS = ["card_id", "name", "set", "number", "variant", "language", "condition",
-               "grade_company", "grade", "cert_number", "quantity", "acquired_price",
+               "grade_company", "grade", "cert_number", "quantity", "acquired_type", "acquired_price",
                "acquired_currency", "acquired_date", "acquired_source", "notes", "tags"]
 
 
@@ -50,7 +51,7 @@ async def to_csv(db, items: list[dict]) -> str:
             "number": c.get("number"), "variant": i["variant"], "language": i["language"],
             "condition": i["condition"], "grade_company": g.get("company"), "grade": g.get("grade"),
             "cert_number": g.get("cert_number"), "quantity": i["quantity"],
-            "acquired_price": a.get("price"), "acquired_currency": a.get("currency"),
+            "acquired_type": a.get("type"), "acquired_price": a.get("price"), "acquired_currency": a.get("currency"),
             "acquired_date": a.get("date"), "acquired_source": a.get("source"),
             "notes": i["notes"], "tags": ";".join(i["tags"])})
     return out.getvalue()
@@ -65,8 +66,8 @@ def _csv_row(r: dict) -> dict:
     if v.get("grade_company") or v.get("grade"):
         row["grading"] = {"company": v.get("grade_company"), "grade": v.get("grade"),
                           "cert_number": v.get("cert_number")}
-    if any(v.get(k) for k in ("acquired_price", "acquired_date", "acquired_source")):
-        a = {"price": v.get("acquired_price"), "date": v.get("acquired_date"),
+    if any(v.get(k) for k in ("acquired_type", "acquired_price", "acquired_date", "acquired_source")):
+        a = {"type": v.get("acquired_type"), "price": v.get("acquired_price"), "date": v.get("acquired_date"),
              "source": v.get("acquired_source")}
         if v.get("acquired_currency"):
             a["currency"] = v["acquired_currency"]
@@ -124,6 +125,11 @@ async def import_items(db, rows: list[dict], mode: str = "set") -> dict:
             continue
         key = stack_key(item)
         doc = item.model_dump(mode="json", exclude={"quantity"})
+        existing = await db.collection_items.find_one({"stack_key": key}, {"acquired": 1})
+        if mode == "set" and existing is not None and doc.get("acquired") is not None \
+                and "type" not in (r.get("acquired") or {}):
+            # file from before acquisition types: keep the type already set here
+            doc["acquired"]["type"] = (acquisition.norm(existing.get("acquired")) or {}).get("type")
         edit = ("acquired", "notes", "tags")  # mutable fields: a `set` import restores them too
         on_insert = {k: v for k, v in doc.items() if mode == "set" and k not in edit or mode == "add"}
         upd = {"$setOnInsert": {**on_insert, "stack_key": key, "created_at": created},
@@ -133,5 +139,10 @@ async def import_items(db, rows: list[dict], mode: str = "set") -> dict:
         else:
             upd["$set"].update({"quantity": item.quantity, **{k: doc[k] for k in edit}})
         out = await db.collection_items.update_one({"stack_key": key}, upd, upsert=True)
+        if mode == "set" and existing is not None:
+            before, after = acquisition.norm(existing.get("acquired")), acquisition.norm(doc["acquired"])
+            if before != after:
+                await acquisition.log_edit(db, {**existing, "stack_key": key, "card_id": item.card_id},
+                                           "import", before, after)
         res["created" if out.upserted_id else "updated"] += 1
     return res

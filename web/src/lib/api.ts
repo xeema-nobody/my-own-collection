@@ -61,6 +61,13 @@ export type WishIn = {
   target_price?: number | null; note?: string | null; alert?: boolean;
 };
 
+export type AcqType = "purchased" | "pulled" | "traded" | "gift" | "other";
+/** Cost + how a stack was acquired. `price` = cents PER COPY (null = unknown, 0 = free). */
+export type Acquired = { type?: AcqType | null; price?: number | null; currency?: string; date?: string | null; source?: string | null };
+/** Partial edit: only keys present are applied, null clears. */
+export type AcquiredPatch = Acquired;
+export type AcqEdit = { id: string; action: "edit" | "bulk" | "merge" | "import" | "restore"; at: string; before: Acquired | null; after: Acquired | null };
+
 export const api = {
   cards: (p: Record<string, unknown>) => req<any>("/api/cards" + qs(p)),
   card: (id: string) => req<any>(`/api/cards/${encodeURIComponent(id)}`),
@@ -89,6 +96,12 @@ export const api = {
     if (!r.ok) throw new ApiError(typeof body.detail === "string" ? body.detail : r.statusText, r.status);
     return body as { created: number; updated: number; errors: { row: number; error: string }[] };
   },
+  patchStack: (id: string, b: { acquired?: AcquiredPatch; notes?: string | null }) =>
+    req<any>(`/api/collection/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+  bulkAcquired: (ids: string[], acquired: AcquiredPatch) =>
+    req<{ updated: number; unchanged: number; missing: string[] }>("/api/collection/bulk-acquired", post({ ids, acquired })),
+  stackHistory: (id: string) => req<AcqEdit[]>(`/api/collection/${id}/history`),
+  restoreEdit: (id: string, editId: string) => req<any>(`/api/collection/${id}/history/${editId}/restore`, { method: "POST" }),
   collectionSummary: () => req<any>("/api/collection/summary"),
   addToCollection: (b: unknown) => req<any>("/api/collection", post(b)),
   removeFromCollection: (id: string, quantity = 1) => req<any>(`/api/collection/${id}/remove`, post({ quantity })),

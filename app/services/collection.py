@@ -4,6 +4,7 @@ from bson import ObjectId
 from fastapi import HTTPException
 
 from app.db.models import CollectionIn
+from app.services import acquisition
 from app.config import settings
 from app.providers.price import registry
 from app.services.pricing import get_rates, latest_as_of
@@ -39,13 +40,24 @@ async def add(db, i: CollectionIn) -> dict:
         raise HTTPException(404, "card not found")
     now = datetime.now(timezone.utc)
     key = stack_key(i)
+    existing = await db.collection_items.find_one({"stack_key": key})
     doc = i.model_dump(mode="json", exclude={"quantity"})
+    if existing is None:
+        await db.collection_items.update_one(
+            {"stack_key": key},
+            {"$inc": {"quantity": i.quantity},
+             "$setOnInsert": {**doc, "stack_key": key, "created_at": now}, "$set": {"updated_at": now}},
+            upsert=True)
+        return _out(await db.collection_items.find_one({"stack_key": key})) | {"type_conflict": False}
+    # more copies join an existing stack: cost = weighted average, mismatches are reported not guessed
+    merged, conflict = acquisition.weighted_merge(
+        existing.get("acquired"), doc.get("acquired"), existing["quantity"], i.quantity)
     await db.collection_items.update_one(
-        {"stack_key": key},
-        {"$inc": {"quantity": i.quantity},
-         "$setOnInsert": {**doc, "stack_key": key, "created_at": now}, "$set": {"updated_at": now}},
-        upsert=True)
-    return _out(await db.collection_items.find_one({"stack_key": key}))
+        {"_id": existing["_id"]}, {"$inc": {"quantity": i.quantity}, "$set": {"acquired": merged, "updated_at": now}})
+    before = acquisition.norm(existing.get("acquired"))
+    if merged != before:
+        await acquisition.log_edit(db, existing, "merge", before, merged)
+    return _out(await db.collection_items.find_one({"_id": existing["_id"]})) | {"type_conflict": conflict}
 
 
 def _out(d: dict) -> dict:

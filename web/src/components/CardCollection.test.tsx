@@ -67,3 +67,19 @@ describe("CardCollection add", () => {
     expect(JSON.parse(calls[0])).toMatchObject({ condition: null, grading: { company: "PSA", grade: 9, cert_number: null } });
   });
 });
+
+describe("CardCollection cost", () => {
+  it("shows the acquisition type and the pencil edits cost via PATCH", async () => {
+    const patches: unknown[] = [];
+    base({ "PATCH /api/collection/s1": (init?: RequestInit) => { patches.push(JSON.parse(String(init?.body))); return {}; } });
+    renderPage(<CardCollection card={card([stack({ acquired: { type: "gift", price: 0, currency: "EUR" } })])} />);
+    expect(await screen.findByText("Gift")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Edit cost of NM stack" }));
+    const price = await screen.findByLabelText("Price");
+    await userEvent.clear(price);
+    await userEvent.type(price, "4");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(patches).toEqual([{ acquired: { type: "gift", price: 400, currency: "EUR", date: null, source: null } }]));
+  });
+});
+
