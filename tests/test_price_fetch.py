@@ -405,6 +405,7 @@ async def test_pause_resume_cancel_and_rerun_skips_succeeded(db, monkeypatch):
     monkeypatch.setattr(pf, "CONTROL_POLL_S", 0.01)
     ids = await seed(db, "1", "2", "3", "4")
     gate = asyncio.Event()
+    gate3 = asyncio.Event()
 
     class Slow(FakeProvider):
         started = 0
@@ -413,6 +414,8 @@ async def test_pause_resume_cancel_and_rerun_skips_succeeded(db, monkeypatch):
             Slow.started += 1
             if Slow.started == 2:
                 await gate.wait()
+            if Slow.started == 3:           # hold 3rd in flight so cancel lands before the 4th pair's checkpoint
+                await gate3.wait()
             return await super().fetch(card, client, known_url, today)
     p = Slow("pricecharting")
     task = asyncio.create_task(pf.fetch_prices(ids, ["pricecharting"], provider_for=providers(pricecharting=p),
@@ -429,10 +432,11 @@ async def test_pause_resume_cancel_and_rerun_skips_succeeded(db, monkeypatch):
     await _wait_for(paused)
     assert (await job_q())["status"] == "running" and len(p.calls) == 2   # parked between pairs
     assert await jobs.set_control(db, "price_fetch", "resume")
-    async def moving():
-        return len(p.calls) >= 3
-    await _wait_for(moving)
+    async def third_in_flight():
+        return Slow.started == 3
+    await _wait_for(third_in_flight)
     await jobs.set_control(db, "price_fetch", "cancel")
+    gate3.set()
     stats = await task
     job = await job_q()
     assert job["status"] == "cancelled" and stats["done"] < stats["total"] and stats["paused_s"] > 0
