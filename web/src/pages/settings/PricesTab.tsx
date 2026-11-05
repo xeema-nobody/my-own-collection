@@ -4,12 +4,12 @@ import { api, ApiError, FETCHER_START_CMD, SCRAPED_SOURCES } from "../../lib/api
 import { errorText } from "../../components/QueryState";
 import FetcherBadge from "../../components/FetcherBadge";
 import FetchProgress from "../../components/FetchProgress";
+import BulkFetch from "../../components/BulkFetch";
 import { Badge, Button, Checkbox, Chip, Section, SegmentedControl, Table, THead, Td, Th, Tr } from "../../components/ui";
 
-type Scope = "sets" | "owned" | "missing";
+type Scope = "sets" | "missing";
 const SCOPE_HINT: Record<Scope, string> = {
   sets: "Every card of the sets selected on the Catalog tab.",
-  owned: "Every card in your collection.",
   missing: "Owned cards whose graded stack has no graded price yet.",
 };
 
@@ -20,7 +20,7 @@ export default function PricesTab({ status, jobs, picked }: { status: UseQueryRe
   const [force, setForce] = useState(false);
   const ids = [...picked];
   const fetchAll = useMutation({
-    mutationFn: () => api.fetchPrices({ ...(scope === "owned" ? { owned: true } : scope === "missing" ? { missing: true } : { sets: ids }), sources, force }),
+    mutationFn: () => api.fetchPrices({ ...(scope === "missing" ? { missing: true } : { sets: ids }), sources, force }),
     onSettled: () => qc.invalidateQueries({ queryKey: ["jobs"] }),
   });
   const fetching = !!jobs.data?.find((j: any) => j.type === "price_fetch" && j.status === "running");
@@ -31,12 +31,15 @@ export default function PricesTab({ status, jobs, picked }: { status: UseQueryRe
   const s = status.data;
   return (
     <div className="space-y-4">
+      <Section title="Fetch all prices">
+        <BulkFetch />
+      </Section>
       <Section title="Price fetching" actions={<FetcherBadge />}>
         <p className="mb-3 text-sm text-muted">Sold and graded prices from PriceCharting, Cardmarket and alt.xyz through the host fetcher (24 h cache). Runs on demand only.</p>
         <div className="space-y-3">
           <div>
             <SegmentedControl label="Scope" value={scope} onChange={setScope} options={[
-              { value: "sets", label: `Selected sets (${ids.length})` }, { value: "owned", label: "Owned collection" }, { value: "missing", label: "Missing prices" }]} />
+              { value: "sets", label: `Selected sets (${ids.length})` }, { value: "missing", label: "Missing prices" }]} />
             <p className="mt-1 text-xs text-muted">{SCOPE_HINT[scope]}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Sources">

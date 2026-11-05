@@ -18,3 +18,11 @@ export function usePriceFetchJob(onFinish?: (job: any) => void) {
   }, [running, latest?.id, latest?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   return { running, latest };
 }
+
+/** "~6 min left" from the job's `eta_s`; null while there is no pace yet. */
+export function etaText(s?: number | null): string | null {
+  if (s == null) return null;
+  if (s < 60) return "<1 min left";
+  const m = Math.round(s / 60);
+  return m < 90 ? `~${m} min left` : `~${(m / 60).toFixed(1)} h left`;
+}

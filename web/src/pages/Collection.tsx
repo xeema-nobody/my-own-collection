@@ -5,7 +5,7 @@ import { Bell, ChevronRight, TriangleAlert } from "lucide-react";
 import { api, money } from "../lib/api";
 import { QueryError } from "../components/QueryState";
 import SourceCompare from "../components/SourceCompare";
-import FetchProgress from "../components/FetchProgress";
+import BulkFetch, { fetchErrorText } from "../components/BulkFetch";
 import FetcherBadge from "../components/FetcherBadge";
 import ValueChart from "../components/ValueChart";
 import { usePriceFetchJob } from "../lib/fetchJob";
@@ -45,6 +45,9 @@ const detail = (i: any) => `${i.variant ? `${i.variant} · ` : ""}${i.language.t
 
 function Details({ i }: { i: any }) {
   const why = whyEstimated(i);
+  const qc = useQueryClient();
+  const fetchStack = useMutation({ mutationFn: () => api.fetchPrices({ mode: "stack", stack_id: i.id }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["jobs"] }) });
   return (
     <div className="space-y-4">
       <div className="flex gap-4">
@@ -59,7 +62,10 @@ function Details({ i }: { i: any }) {
           <div className="flex gap-2 pt-1">
             <Link to={`/cards/${encodeURIComponent(i.card_id)}`}><Button variant="secondary" size="sm">Open card</Button></Link>
             <Link to={`/alerts?stack=${i.id}`}><Button variant="secondary" size="sm"><Bell size={12} />Create alert</Button></Link>
+            <Button variant="secondary" size="sm" disabled={fetchStack.isPending} onClick={() => fetchStack.mutate()}>Fetch prices for this stack</Button>
           </div>
+          {fetchStack.error && <div className="text-danger">{fetchErrorText(fetchStack.error)}</div>}
+          {fetchStack.isSuccess && <div className="text-muted">Fetch started: progress shows at the top of the page.</div>}
         </div>
       </div>
       <SourceCompare row={i} />
@@ -80,7 +86,7 @@ export default function Collection() {
     sort: f.sort, order: f.order, page: f.page, page_size: f.size };
   const list = useQuery({ queryKey: ["collection", query], queryFn: () => api.collection(query), placeholderData: (p) => p });
   const s = sum.data;
-  const { running, latest } = usePriceFetchJob(() => qc.invalidateQueries({ queryKey: ["collection"] }));
+  const { running } = usePriceFetchJob(() => qc.invalidateQueries({ queryKey: ["collection"] }));
   const fetchMissing = useMutation({ mutationFn: () => api.fetchPrices({ missing: true }),
     onSettled: () => qc.invalidateQueries({ queryKey: ["jobs"] }) });
   const dirty = (["q", "graded", "language", "condition", "needs_price"] as const).some((k) => f[k] !== "");
@@ -108,7 +114,8 @@ export default function Collection() {
           <Button disabled={!!running || fetchMissing.isPending} onClick={() => fetchMissing.mutate()}>Fetch missing prices</Button>
           <FetcherBadge />
           {fetchMissing.error && <span className="text-danger">{String((fetchMissing.error as Error).message)}</span>}</div>
-        <FetchProgress job={running ?? (fetchMissing.isSuccess ? latest : undefined)} live={!!running} /></Card>}
+      </Card>}
+      <Card><BulkFetch /></Card>
 
       <ValueChart />
 

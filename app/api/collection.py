@@ -8,6 +8,7 @@ from app.config import settings
 from app.db.models import CollectionIn, CollectionPatch, RemoveIn
 from app.services import collection as svc
 from app.services import portability
+from app.services.price_fetch import price_freshness
 
 router = APIRouter(prefix="/api/collection", tags=["collection"])
 
@@ -126,7 +127,8 @@ async def summary():
             "needs_price": sum(1 for r in rows if r["needs_price"]),
             "no_data": sum(1 for r in rows if r["value"] is None and not r["needs_price"]),
             "ref_raw_value": sum(r["ref_raw_value"] or 0 for r in rows),
-            "estimated": sum(1 for r in rows if r["estimated"])}
+            "estimated": sum(1 for r in rows if r["estimated"]),
+            "prices": await price_freshness(get_db())}
 
 
 @router.patch("/{item_id}")

@@ -89,12 +89,22 @@ class FetchIn(CardFetchIn):
     owned: bool = False
     missing: bool = False  # owned cards with a graded stack that has no graded price
     wishlist: bool = False
+    # Bulk collection refresh: selects + orders owned cards (see price_fetch.resolve_bulk).
+    mode: Literal["all", "never", "stale", "valuable", "stack"] | None = None
+    stale_days: int = Field(7, ge=1, le=365)
+    stack_id: str | None = None
 
     @model_validator(mode="after")
     def _target(self):
-        if not (self.cards or self.sets or self.owned or self.missing or self.wishlist):
-            raise ValueError("give cards, sets, owned, missing or wishlist")
+        if not (self.cards or self.sets or self.owned or self.missing or self.wishlist or self.mode):
+            raise ValueError("give cards, sets, owned, missing, wishlist or mode")
+        if self.mode == "stack" and not self.stack_id:
+            raise ValueError("mode 'stack' needs stack_id")
         return self
+
+
+class FetchControlIn(BaseModel):
+    action: Literal["pause", "resume", "cancel"]
 
 
 class WishIn(BaseModel):

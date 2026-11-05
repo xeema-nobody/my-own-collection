@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { api, money } from "../lib/api";
 import { QueryError } from "../components/QueryState";
-import FetchProgress from "../components/FetchProgress";
+import BulkFetch from "../components/BulkFetch";
 import FetcherBadge from "../components/FetcherBadge";
 import ValueChart from "../components/ValueChart";
 import { usePriceFetchJob } from "../lib/fetchJob";
@@ -49,7 +49,7 @@ export default function Dashboard() {
   const mov = useQuery({ queryKey: ["movers"], queryFn: () => api.movers(7) });
   const top = useQuery({ queryKey: ["collection", "top"], queryFn: () => api.collection({ sort: "value", order: "desc", page_size: 8 }) });
   const jobs = useQuery({ queryKey: ["jobs"], queryFn: api.jobs, refetchInterval: 5000 });
-  const { running, latest } = usePriceFetchJob(() => qc.invalidateQueries());
+  const { running } = usePriceFetchJob(() => qc.invalidateQueries());
   const refresh = useMutation({ mutationFn: () => api.refreshPrices("collection"), onSuccess: () => qc.invalidateQueries() });
   const snap = useMutation({ mutationFn: api.snapshot, onSuccess: () => qc.invalidateQueries({ queryKey: ["history"] }) });
   const fetchMissing = useMutation({ mutationFn: () => api.fetchPrices({ missing: true }), onSettled: () => qc.invalidateQueries({ queryKey: ["jobs"] }) });
@@ -143,13 +143,21 @@ export default function Dashboard() {
                 <li className="flex justify-between"><span className="text-muted">Need a graded price (not counted)</span><span className="num">{s.needs_price ?? 0}</span></li>
                 <li className="flex justify-between"><span className="text-muted">No data</span><span className="num">{s.no_data ?? 0}</span></li>
               </ul>
+              {s.prices && (
+                <div>
+                  <div className="flex justify-between"><span>Fresh prices (≤ {s.prices.fresh_days} d)</span>
+                    <span className="num font-medium">{s.prices.fresh} / {s.prices.owned_cards} cards</span></div>
+                  <div className="mt-1 h-1.5 rounded-full bg-surface-2"><div role="presentation" className="h-full rounded-full bg-ok"
+                    style={{ width: `${s.prices.owned_cards ? Math.round((s.prices.fresh / s.prices.owned_cards) * 100) : 0}%` }} /></div>
+                  <p className="mt-1 text-xs text-muted">{s.prices.stale} stale · {s.prices.never} never fetched (scraped sources).</p>
+                </div>)}
               {s.needs_price > 0 && (
                 <div className="flex flex-wrap items-center gap-3">
                   <Button size="sm" disabled={!!running || fetchMissing.isPending} onClick={() => fetchMissing.mutate()}>Fetch missing prices</Button>
                   <FetcherBadge />
                   {fetchMissing.error && <span className="text-danger">{String((fetchMissing.error as Error).message)}</span>}
                 </div>)}
-              <FetchProgress job={running ?? (fetchMissing.isSuccess ? latest : undefined)} live={!!running} />
+              <BulkFetch />
             </div>)}
         </Section>
       </div>

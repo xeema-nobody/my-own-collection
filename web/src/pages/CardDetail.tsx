@@ -47,7 +47,7 @@ export default function CardDetail() {
           <PriceMatrix pg={pg} />
         </Section>
 
-        <Section title="Sources" collapsible id="card-sources" defaultOpen={false}><SourceStatus cardId={id} sales={c.sales ?? []} /></Section>
+        <Section title="Sources" collapsible id="card-sources" defaultOpen={location.hash === "#card-sources"}><SourceStatus cardId={id} sales={c.sales ?? []} /></Section>
 
         <SalesList sales={c.sales ?? []} stats={c.sales_stats ?? []} />
 

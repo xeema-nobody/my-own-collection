@@ -105,7 +105,8 @@ async def test_needs_match_recorded_and_user_url_passed(db):
     kw = dict(client=FakeClient())
     stats = await pf.fetch_prices([c], ["pricecharting"], provider_for=providers(pricecharting=p), **kw)
     assert stats["needs_match"] == 1 and stats["failed"] == 0
-    assert stats["needs_match_list"] == [{"card_id": c, "source": "pricecharting"}]
+    [nm] = stats["needs_match_list"]
+    assert (nm["card_id"], nm["source"], nm["reason"]) == (c, "pricecharting", "no match")
     assert (await matching.get_matches(db, c))["pricecharting"]["candidates"][0]["url"] == PC_URL
     await matching.confirm(db, c, "pricecharting", PC_URL)
     await pf.fetch_prices([c], ["pricecharting"], provider_for=providers(pricecharting=p), **kw)
@@ -293,3 +294,185 @@ async def test_missing_targets_only_graded_stacks_without_graded_price(db):
     await db.collection_items.insert_many([stack(ids[0], 9), stack(ids[1], 9), stack(ids[2], None)])
     # [0]: slab without graded price -> needs fetch; [1]: slab priced; [2]: raw copy
     assert await pf.resolve_targets(db, missing=True) == [ids[0]]
+
+
+# --- Step 1: bulk refresh ---
+
+from app.db.models import CollectionIn   # noqa: E402
+from app.services import collection as coll   # noqa: E402
+
+
+async def own(db, *ids):
+    for c in ids:
+        await coll.add(db, CollectionIn(card_id=c, condition="NM"))
+
+
+async def log_ok(db, card_id, days_ago, source="pricecharting", status="ok"):
+    await db.fetch_log.insert_one({"_id": f"{card_id}|{source}", "card_id": card_id, "source": source,
+                                   "status": status, "fetched_at": datetime.now(timezone.utc) - timedelta(days=days_ago)})
+
+
+async def test_resolve_bulk_modes(db):
+    a, b, c = await seed(db, "1", "2", "3")
+    await own(db, a, b, c)
+    await log_ok(db, a, 1)                 # fresh
+    await log_ok(db, b, 20)                # stale
+    await log_ok(db, c, 0, status="error")  # tried but never ok
+    assert await pf.resolve_bulk(db, "all") == [a, b, c]
+    assert await pf.resolve_bulk(db, "never") == [c]
+    assert await pf.resolve_bulk(db, "stale", 7) == [c, b]          # never first, then oldest
+    assert await pf.resolve_bulk(db, "stale", 30) == [c]
+    item = await db.collection_items.find_one({"card_id": b})
+    assert await pf.resolve_bulk(db, "stack", stack_id=str(item["_id"])) == [b]
+    assert sorted(await pf.resolve_bulk(db, "valuable")) == [a, b, c]
+
+
+async def test_resolve_bulk_valuable_orders_by_value(db):
+    a, b = await seed(db, "1", "2")
+    await db.cards.update_one({"_id": b}, {"$set": {"price_base": {"cardmarket": {"market": 99999}}}})
+    await own(db, a, b)
+    from app.services.collection import valuate
+    vals = {v["item"]["card_id"]: v["value"] for v in await valuate(db)}
+    expect = sorted([a, b], key=lambda x: -(vals[x] if vals[x] is not None else -1))
+    assert await pf.resolve_bulk(db, "valuable") == expect
+
+
+async def test_price_freshness_counts(db):
+    a, b, c = await seed(db, "1", "2", "3")
+    await own(db, a, b, c)
+    await log_ok(db, a, 1)
+    await log_ok(db, b, 10)
+    out = await pf.price_freshness(db, 7)
+    assert out == {"owned_cards": 3, "fresh": 1, "stale": 1, "never": 1, "fresh_days": 7}
+
+
+async def test_reasons_and_attention_summary(db):
+    a, b, c = await seed(db, "1", "2", "3")
+    p = FakeProvider("pricecharting", {
+        a: AdapterResult("blocked", detail="cf"), b: AdapterResult("error", detail="no price table"),
+        c: AdapterResult("needs_match")})
+    stats = await pf.fetch_prices([b, c, a], ["pricecharting"], provider_for=providers(pricecharting=p),
+                                  client=FakeClient(), mode="all")
+    assert {f["card_id"]: f["reason"] for f in stats["failures"]} == {a: "blocked", b: "layout changed"}
+    assert stats["needs_match_list"][0]["reason"] == "no match"
+    assert pf.summary_text(stats) == "0 cards updated, 3 need attention"
+    [e] = await db.alert_events.find({"type": "system"}).to_list(None)
+    assert "need attention" in e["rule"] and e["key"].startswith("price_fetch_done:")
+
+
+async def test_summary_notification_only_for_bulk_and_counts_cards(db):
+    a, b = await seed(db, "1", "2")
+    p = FakeProvider("pricecharting")
+    await pf.fetch_prices([a], ["pricecharting"], provider_for=providers(pricecharting=p), client=FakeClient())
+    assert await db.alert_events.count_documents({"type": "system"}) == 0
+    stats = await pf.fetch_prices([a, b], ["pricecharting"], provider_for=providers(pricecharting=p),
+                                  client=FakeClient(), mode="all")
+    assert stats["ok_cards"] == 1 and stats["skipped_cached"] == 1      # a is cache-fresh: skipped, b fetched
+    [e] = await db.alert_events.find({"type": "system"}).to_list(None)
+    assert "1 cards updated" in e["rule"]
+
+
+async def test_error_streak_skips_source(db):
+    ids = await seed(db, "1", "2", "3", "4", "5")
+    p = FakeProvider("pricecharting", default=AdapterResult("error", detail="layout"))
+    stats = await pf.fetch_prices(ids, ["pricecharting"], provider_for=providers(pricecharting=p),
+                                  client=FakeClient())
+    assert len(p.calls) == pf.ERROR_STREAK_MAX and stats["skipped_site"] == 2
+    assert stats["done"] == stats["total"] == 5
+
+
+async def test_eta_from_pace_excludes_cached():
+    stats = {"fetched": 0, "total": 10, "done": 0}
+    assert pf._eta(stats, 5.0) is None
+    stats.update(fetched=4, done=4)
+    assert pf._eta(stats, 40.0) == 60            # 6 left x 10 s/fetch
+
+
+async def _wait_for(pred, tries=200):
+    import asyncio
+    for _ in range(tries):
+        if await pred():
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("condition never met")
+
+
+async def test_pause_resume_cancel_and_rerun_skips_succeeded(db, monkeypatch):
+    import asyncio
+    from app.services import jobs
+    monkeypatch.setattr(pf, "CONTROL_POLL_S", 0.01)
+    ids = await seed(db, "1", "2", "3", "4")
+    gate = asyncio.Event()
+
+    class Slow(FakeProvider):
+        started = 0
+
+        async def fetch(self, card, client, known_url=None, today=None):
+            Slow.started += 1
+            if Slow.started == 2:
+                await gate.wait()
+            return await super().fetch(card, client, known_url, today)
+    p = Slow("pricecharting")
+    task = asyncio.create_task(pf.fetch_prices(ids, ["pricecharting"], provider_for=providers(pricecharting=p),
+                                               client=FakeClient(), mode="all"))
+    job_q = lambda: db.jobs.find_one({"type": "price_fetch"})   # noqa: E731
+
+    async def calling():
+        return Slow.started == 2
+    await _wait_for(calling)                        # second fetch in flight (blocked on gate)
+    assert await jobs.set_control(db, "price_fetch", "pause")
+    gate.set()
+    async def paused():
+        return (await job_q())["stats"]["paused"] is True
+    await _wait_for(paused)
+    assert (await job_q())["status"] == "running" and len(p.calls) == 2   # parked between pairs
+    assert await jobs.set_control(db, "price_fetch", "resume")
+    async def moving():
+        return len(p.calls) >= 3
+    await _wait_for(moving)
+    await jobs.set_control(db, "price_fetch", "cancel")
+    stats = await task
+    job = await job_q()
+    assert job["status"] == "cancelled" and stats["done"] < stats["total"] and stats["paused_s"] > 0
+    done_ok = stats["ok"]
+    # re-run: what succeeded is skipped, the rest fetched
+    p2 = FakeProvider("pricecharting")
+    s2 = await pf.fetch_prices(ids, ["pricecharting"], provider_for=providers(pricecharting=p2), client=FakeClient())
+    assert s2["skipped_cached"] == done_ok and len(p2.calls) == len(ids) - done_ok
+
+
+async def test_set_control_without_running_job(db):
+    from app.services import jobs
+    assert await jobs.set_control(db, "price_fetch", "pause") is False
+
+
+async def test_api_bulk_mode_and_control(client, db, fetcher_up):
+    a, b = await seed(db, "1", "2")
+    await own(db, a, b)
+    await log_ok(db, a, 1)
+    r = await client.post("/api/admin/prices/fetch", json={"mode": "never"})
+    assert r.status_code == 202 and r.json()["cards"] == 1
+    assert (await client.post("/api/admin/prices/fetch", json={"mode": "stack"})).status_code == 422
+    assert (await client.post("/api/admin/prices/fetch/control", json={"action": "pause"})).status_code == 404
+    assert (await client.post("/api/admin/prices/fetch/control", json={"action": "nope"})).status_code == 422
+    await db.jobs.insert_one({"type": "price_fetch", "status": "running", "started_at": datetime.now(timezone.utc), "stats": {}})
+    assert (await client.post("/api/admin/prices/fetch/control", json={"action": "pause"})).json()["action"] == "pause"
+    cur = (await client.get("/api/admin/prices/fetch/current")).json()
+    assert cur["status"] == "running" and cur["control"] == "pause"
+
+
+async def test_api_retry_failures(client, db, fetcher_up):
+    a = (await seed(db, "1"))[0]
+    assert (await client.post("/api/admin/prices/fetch/retry")).status_code == 422
+    await db.jobs.insert_one({"type": "price_fetch", "status": "partial", "started_at": datetime.now(timezone.utc),
+                              "stats": {"failures": [{"card_id": a, "source": "altxyz", "status": "blocked"}]}})
+    r = await client.post("/api/admin/prices/fetch/retry")
+    assert r.status_code == 202 and fetcher_up[-1] == ([a], ["altxyz"], False)
+
+
+async def test_summary_has_price_freshness(client, db):
+    [a] = await seed(db, "1")
+    await own(db, a)
+    await log_ok(db, a, 1)
+    r = await client.get("/api/collection/summary")
+    assert r.json()["prices"] == {"owned_cards": 1, "fresh": 1, "stale": 0, "never": 0, "fresh_days": 7}

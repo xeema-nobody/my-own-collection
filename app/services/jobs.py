@@ -49,3 +49,24 @@ async def last_success(db, type_: str) -> datetime | None:
     """Finish time of the latest ok/partial run of this type (any trigger)."""
     d = await db.jobs.find_one({"type": type_, "status": {"$in": ["ok", "partial"]}}, sort=[("finished_at", -1)])
     return d["finished_at"] if d else None
+
+
+async def set_control(db, type_: str, action: str) -> bool:
+    """Ask the running job of this type to pause / resume / cancel; False when none is running.
+
+    The job polls it between work items (`get_control`), so it stays `running` (and keeps the
+    one-at-a-time guard) while paused."""
+    r = await db.jobs.update_one({"type": type_, "status": "running"}, {"$set": {"control": action}})
+    return r.matched_count > 0
+
+
+async def get_control(db, job_id) -> str | None:
+    d = await db.jobs.find_one({"_id": job_id}, {"control": 1})
+    return d.get("control") if d else None
+
+
+async def current(db, type_: str) -> dict | None:
+    """Running job of this type, else the latest one."""
+    d = await db.jobs.find_one({"type": type_, "status": "running"}) \
+        or await db.jobs.find_one({"type": type_}, sort=[("started_at", -1)])
+    return {**{k: v for k, v in d.items() if k != "_id"}, "id": str(d["_id"])} if d else None

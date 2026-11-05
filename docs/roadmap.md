@@ -1,35 +1,262 @@
-# Roadmap
+# my-own-collection — roadmap
 
-## Done (phases 0-8)
-Catalog + collection (0-1), price model v2 (2), scraped fetch + sold sales (3), graded valuation (4), dashboard (5), compare sources (5b), scheduler + catch-up (6), price alerts (7), hardening (8: export/import, mongo backup, perf, FE error states + tests, backend gap tests, security review, alert prune, alt.xyz paging, unread label).
+**Created:** 2026-11-05 · **Last updated:** 2026-11-05
+**How to use:** give this file to the project's Claude agent. Work one step at a time, in order. When a step is done (or changes), tick it, add a line to the **Progress log** at the bottom, and bring the update back to socio so this copy stays current.
 
-## Pending operator tasks (yours, not code)
-Do in this order; the app works without them but runs manual-only until they are done.
+Functional descriptions only — no technical design. The project agent decides _how_.
 
-1. **Restart the host fetcher after every pull** so it picks up new fetcher code (`pages`/`next_label` one-navigation alt.xyz paging, `unattended` flag): `scripts/fetcher.sh stop && scripts/fetcher.sh start`. The fetcher is a separate process, `docker compose restart app` does not touch it. Stale fetcher symptom: alt.xyz returns only the first page of sales (old fetcher ignores `pages`). If `scripts/fetcher.sh stop` says "no pidfile" but `status` is up, kill the process on :8110 by hand.
-2. **Install the backup schedule** (`backup.md`, section "Schedule"): one cron line or launchd plist on the host, daily 05:30. Then run `scripts/restore.sh backups/<file> --to-scratch` once to prove a dump restores. The docker volume is the only copy of your data until this exists.
-3. **Run the scheduler for a few days**: `SCHEDULER_ENABLED=true` in `.env`, `docker compose restart app`, keep `scripts/fetcher.sh` running and the Mac awake around 03:00-06:30 UTC (missed runs catch up at boot). Watch Settings -> Jobs (trigger column) and the Alerts inbox for `skipped` warnings. Sites that need a login are skipped unattended: do a manual fetch now and then to refresh the session. Purpose: shake out real-world failures before trusting it.
+**Status legend:** `[ ]` not started · `[~]` in progress · `[x]` done
 
-## Decided: `ALTXYZ_MAX_PAGES` (2026-11-02)
-Closed by one-navigation paging: the fetcher loads the alt.xyz list once and clicks "Go to next page" in the same tab, returning one snapshot per page. Live check (Mew ex 205, 3 pages): 19 s, 30 distinct listings, was ~66 s. Default stays 3; no per-trigger cap needed. Raise it only if a card's useful sales still sit past page 3 (the 180 d recency stop usually ends paging first).
+---
 
-## Done 2026-11-03: verification pass
-PriceCharting star match verified live and fixed (see `pricing.md`), all 16 stacks priced (`needs_price` 0), card page + wishlist screenshots reviewed in dark and light at 1600 px (no layout fixes needed). Direct work on `main` (trunk-based, user decision 2026-11-03).
+## Why this order
 
-## Phase 9: fix and polish what exists (priority, before the backlog)
-Triggered by first real use (2026-10-29). Detail and root causes: `temp/follow_up.md`.
-1. **DONE (9.1)** Catalog completeness: Unified Minds (`sm11`) had 100 of 260 cards, pokemontcg.io fails on page 2+. Adaptive paging, per-set completeness, retry incomplete.
-2. **DONE (9.2)** Valuation correctness: a graded stack with no graded price is not counted (today it falls back to the raw price and inflates the total, 8 of 15 stacks); fetch prices automatically when a card is added.
-3. **DONE (9.3)** Design foundation: CSS-variable tokens (neutral + emerald), Inter (@fontsource), light/dark/system toggle, wide sticky shell, `web/src/components/ui/` kit (Button, Card/Section, Badge, Field/Input/Checkbox, Select, Tabs/SegmentedControl, Kpi, Skeleton/EmptyState; radix + lucide). Default theme dark. Search + Card page shell restyled as preview.
-4. Screens, in this order (user decision 2026-10-29): Collection (pagination, sort, filters, value chart; DONE 2026-10-29), Dashboard (insights vs inventory; DONE 2026-10-29), Alerts (explained, guided form; DONE 2026-10-29), Settings (tabs, set browser, readable jobs; DONE 2026-10-29), then PriceMatrix + price chart on card detail (DONE 2026-10-29); Card page Owned + Add panels (DONE 2026-10-30), Search polish (DONE 2026-10-29: Combobox set filter, filter chips + clear all, sort Select, selection bar, set symbol/header). **Phase 9 complete 2026-10-31** (legacy classes removed, final screenshots in `docs/screenshots/`).
+1. **Phase 1 (steps 1–4)** fixes daily friction in what already exists. Cheap, high value, and everything later (scanning many cards, selling) makes it worse if the collection list and price refresh stay slow/manual.
+2. **Phase 2 (step 5)** is the big intake unlock — scanning. Collection will grow fast after it.
+3. **Phase 3 (step 6)** turns the collection into cash: photos + selling tracker.
+4. **Phase 4 (step 7)** sealed products — new asset type, and the source of pulls.
+5. **Phase 5 (step 8)** deck/bulk products — needs a large, well-identified collection, so last.
 
-## Backlog (after Phase 9, in order)
-a. **DONE 2026-10-31 (branch feat/wishlist)** **Wishlist**: cards you want but do not own. Target price, optional alert when the price falls below it (reuse the alert engine), shown in a Wishlist page and as a flag on search/card detail. Needs: `wishlist` collection, API, page, alert scope.
-b. **DONE 2026-11-02 (branch feat/toolchain-bump: vite 8, vitest 4, react-router-dom 7, npm audit = 0)** **Toolchain bump** for the 8 `npm audit` findings (vitest 4, vite 8, react-router 7). All fixes are semver-major. Findings are dev-only except react-router, whose advisories do not apply here (see `decisions.md`, Phase 8 review). Do it as one branch, re-run `npm audit`, typecheck and `npm test`. Low urgency while nothing is deployed.
-c. **One-navigation multi-page fetch** for alt.xyz: the fetcher clicks through pages inside a single page load and returns every page's HTML in one response, instead of one navigation per page. Removes most of the cost in the open decision above, makes 3+ pages cheap, and then the cap question goes away. Needs a fetcher response shape change (list of HTML snapshots) and adapter update.
+---
 
-## Later / ideas (unscheduled)
-- Notification outside the UI (host fetcher polls `/api/alerts/events?unread=true` and shows a macOS notification).
-- **Provider built 2026-11-03, not switched**: `CATALOG_PROVIDER=tcgdex` (see `decisions.md`). Before flipping it (deadline 2027-03-01): `scripts/backup.sh`, set the env var, `docker compose restart app`, run Settings -> Catalog import for one owned set and check prices. TCGplayer prices stop updating after the switch.
-- Other TCGs via new catalog providers (schema is already generic).
-- Auth, non-root containers, rate limiting, prod image: only if the app is ever deployed beyond localhost.
+# Phase 1 — Fix daily friction
+
+## Step 1 — Bulk price refresh for the whole collection `[x]`
+
+**Problem:** scraped prices only fetchable card by card from the card page.
+
+**Wanted:**
+
+- One button ("Fetch all prices") that fetches scraped prices for every card in the collection, from the Dashboard, Collection page and Settings → Prices.
+- Runs in the background; user can leave the page. Visible progress: "42 / 120 done, 3 failed, ~6 min left".
+- Can pause/cancel. Safe to re-run: resumes, doesn't redo what just succeeded.
+- Prioritisation options: all / only never-fetched / only stale (older than N days) / only most valuable first / only selected stack.
+- Politeness built in: spaced-out requests so the three sites don't block or ban. Slow is fine; blocked is not.
+- Failures listed clearly (card, source, reason: "no match", "blocked", "layout changed") with one-click retry, and a link to the card's match picker for "no match".
+- Finishes with a summary ("118 updated, 2 need attention") and a macOS notification, consistent with existing alerts.
+- Feeds the existing data-quality card (how many cards have fresh prices).
+
+**Done when:** one click refreshes the 16-stack collection (and a 500-stack one) without babysitting, and failures are understandable.
+
+## Step 2 — Bulk price refresh for the wishlist `[ ]`
+
+**Wanted:**
+
+- Same "Fetch all prices" behaviour, on the Wishlist page.
+- Manual by default (button); also included as an option in the existing scheduler once that is switched on.
+- Wishlist target-price alerts re-evaluate right after a refresh, so "below target" notifications fire without waiting.
+- Option to refresh collection + wishlist together in a single run, with the collection first.
+
+**Done when:** wishlist prices refresh in one click and target alerts fire from fresh data.
+
+## Step 3 — Edit purchase value (and how it was acquired) `[ ]`
+
+**Problem:** cost can't be changed after adding a card; some cards were bought, some were just pulled.
+
+**Wanted:**
+
+- Edit cost on any stack/copy after creation.
+- Acquisition type per stack/copy: **Purchased**, **Pulled** (cost 0, or optionally an allocated share of the sealed product — see step 7), **Traded**, **Gift**, **Other**.
+- Fields: price paid, currency, date, where bought (free text, e.g. "Cardmarket", "local shop"), notes.
+- Stack with mixed costs (e.g. 3 copies, bought at different prices): can record per-copy cost, or show an average — pick the simplest that keeps P/L correct.
+- Bulk edit: select several stacks → set acquisition type / date / source at once.
+- P/L and dashboard treat "Pulled" distinctly: show P/L both with and without pulled cards, so profit isn't flattering or misleading.
+- Existing 16 stacks: easy way to fix their cost retroactively.
+- Editing is logged (previous value kept) so a mistaken edit is recoverable.
+
+**Done when:** every card in the collection has a correct, editable cost and acquisition type, and P/L reflects it.
+
+## Step 4 — Collection list: pagination, filters, speed `[ ]`
+
+**Wanted:**
+
+- **Pagination** (or infinite scroll) with page size choice. Must stay fast at 5,000+ stacks.
+- **Filters:** set, rarity, type, language, condition, raw/graded, grader, grade, acquisition type, price range, P/L positive/negative, "needs price", "price stale", on-sale/listed (after step 6), has photos (after step 6).
+- **Search** within the collection by name/number.
+- **Sort:** value, cost, P/L, name, set, date added, last price update.
+- **Views:** table and image grid; choice remembered.
+- **Saved filter presets** ("graded only", "cheap bulk < €1", "needs attention").
+- Filter state in the page address so back-button and bookmarks work.
+- **Speed/caching:** returning to the collection is instant; the list doesn't refetch everything each visit; stale data refreshes quietly in the background. Totals (count, value, P/L) shown for the _filtered_ set.
+- Same treatment for the Wishlist list (lighter).
+
+**Done when:** a large synthetic collection (e.g. 5,000 stacks) pages, filters and sorts with no visible waiting.
+
+---
+
+# Phase 2 — Intake by camera
+
+## Step 5 — Scan cards with the phone camera `[ ]`
+
+**Goal:** add a card to the collection in a few seconds by pointing the phone at it. "Super easy" is the acceptance bar.
+
+### 5a. Getting the phone connected
+
+- On laptop/desktop browser, an "Add by scanning" button shows a **QR code**. Scanning it with the phone opens the scan screen on the phone, already linked to the user's own collection — no login, no typing.
+- On the phone, the scan screen can also be added to the home screen and opened directly later.
+- Laptop and phone stay in sync: card added on the phone appears on the laptop immediately (a small "added: Charizard, Base Set" confirmation).
+- If the link/QR is no longer valid or the phone is on another network, the screen says what's wrong in plain words.
+- **Decision needed first (see Decisions D1):** phone browsers only allow camera use on secure connections. This is the point where "does it ever leave localhost?" gets answered at least for the home network.
+
+### 5b. Identify the card
+
+Order of attempts, most forgiving first:
+
+1. **Name** — read the card name from the photo.
+2. **Number + set** — read the collector number (e.g. 4/102) and set symbol/code to narrow.
+3. **Whole-card image match** as a helper when text is unreadable (glare, foil, other language).
+
+- Live camera view with a framing guide; auto-captures when steady and in focus, or tap to capture.
+- Works in poor light/foil glare as well as it can; tells the user "move closer / less glare" rather than failing silently.
+- Manual fallback always one tap away: type the name, or pick from search.
+- Languages: at least English and Dutch first; others later (ties to open question on other TCGs).
+
+### 5c. Choose the exact version
+
+- Never auto-add on a guess. After identifying, show **all plausible matches** side by side as images with set, number, rarity, year, language and current price — e.g. Charizard: Base Set, Base Set 1st Edition, Base Set Shadowless, Base Set 2, Evolutions, reprints/promos.
+- Most likely match first, with a confidence hint; user taps the right one.
+- Edition/variant markers (1st Edition stamp, Shadowless, reverse holo, holo, promo stamp) are highlighted in the comparison, because that's what separates a €5 card from a €5,000 one.
+- "None of these" → refine search or add as a manual entry.
+
+### 5d. Capture details
+
+- After picking: set **condition** (NM / LP / MP / HP / DMG — with a short visual guide), **language**, **quantity**, and **acquisition** (purchased / pulled / cost — from step 3; remember the last choice).
+- **Batch mode:** after adding, camera is immediately ready for the next card; session shows a running list ("12 added this session"), with undo on the last one and a review screen at the end.
+- Duplicates: scanning a card already owned offers "add copy to existing stack" by default.
+- Option to **take the intake photos at the same time** and keep them with the card (feeds step 6).
+
+### 5e. Slabs (graded cards)
+
+- Detect that the item is a slab and **read the label**: grader (**PSA, BGS, CGC, ACE**, others), grade and **cert number**.
+- Pre-fill grader, grade, cert and the card identity from the label; user confirms.
+- Unknown grader → **"Other slab"** option: pick "Other", type grader name + grade manually.
+- Cert number kept for later verification and for selling listings.
+- A slab whose price isn't known stays flagged "needs price" (existing rule), never valued at raw price.
+
+### Suggested slicing (ship in this order)
+
+1. 5a + 5b-name + 5c + 5d (single card, raw) — usable end to end.
+2. 5b-number/set + batch mode.
+3. 5e slabs.
+4. Image-match fallback, extra languages.
+
+**Done when:** from a cold start, scanning and adding a raw card with condition takes < 15 seconds on the phone, and ambiguous cards (Base Set Charizard) always show the version choices.
+
+---
+
+# Phase 3 — Turn the collection into cash
+
+## Step 6 — Photos, listings tracker and selling `[ ]`
+
+### 6a. Photos on my cards `[ ]`
+
+- Attach photos to any stack/copy: front, back, corners/surface close-ups, slab front/back. A guided capture flow from the phone ("front → back → corners") so listing photos are consistent.
+- Photos belong to a _specific copy_ (a PSA 9 and a raw copy of the same card have different photos).
+- Mark one as the cover photo; reorder; delete; replace.
+- Photos stay on the user's own machine (no cloud) and are included in backup/export.
+
+### 6b. Mark cards for sale and track their status `[ ]`
+
+- Each copy has a sale status: **Not for sale → Ready to list → Listed → Sold** (also: Reserved, Withdrawn).
+- "Listed" records **where**: Vinted, Cardmarket, eBay, Marktplaats, other — a copy can be listed in more than one place at once.
+- Per listing: asking price, listing date, link, notes, shipping cost assumed.
+- **Sold:** record sale price, date, platform, fees and shipping paid → app computes **realised profit** vs. cost. Sold copies leave the active collection value but stay in history (realised P/L, sales report).
+- When a copy sells on one platform, it's flagged to delist from the others.
+- Views: "Ready to list", "Listed (by platform)", "Sold" with totals — € listed, € sold, realised profit, average days to sell.
+- Dashboard shows listed value separately from unlisted.
+
+### 6c. Export for listing `[ ]`
+
+- Select copies → export a **listing pack**: title, description text (card, set, number, language, condition, edition, cert for slabs), suggested price, photos, in a ready-to-paste form per platform. Platform formats differ (Vinted title/limits, Cardmarket bulk-upload sheet) — start with the 2 the founder uses most.
+- Suggested price from market data with a choice of strategy (match market / slightly under / floor price), always editable.
+- After export, offer to mark them "Listed" with the platform and date.
+
+### 6d. Price sync with platforms `[ ]` _(stretch — high value, uncertain feasibility)_
+
+- Goal: keep asking prices of listed items aligned with market. Minimum useful version, no integration needed: a **"Reprice suggestions"** view — listed items whose market price moved > X% since listing, with "suggested new price" and a one-tap "I've updated it" confirmation.
+- Full integration only where a platform genuinely allows it. **Must be researched before committing** (Decisions D3): Vinted has no public seller API; Cardmarket's API access is restricted and needs approval; eBay has an official API. Do not build anything that violates a platform's terms or risks the founder's seller account.
+- Alert: "listed price is X% below/above market".
+
+**Done when:** a card can go from scanned → photographed → exported → listed → sold with realised profit, entirely tracked in-app.
+
+---
+
+# Phase 4 — Sealed products
+
+## Step 7 — Sealed products and openings `[ ]`
+
+**Wanted:**
+
+- New section **Products** for sealed items: booster box, booster bundle, ETB, booster pack, tin, collection box, blister, etc. Fields: name, set, type, language, quantity, purchase price/date/where, photos, notes.
+- Status per unit: **Sealed** (kept) / **Opened** / **Sold sealed**.
+- Sealed items have a **market value** (fetched like card prices where a source exists, else manual) and count toward collection value, shown separately from cards.
+- **Open a product:** one flow "I opened this" → mark opened (date) → register what came out:
+  - add pulled cards using the scanner from step 5 (or search), each linked back to that product,
+  - include promos / extras (promo card, coins, code card, sleeves, etc.) — non-card extras logged as notes/items without a value,
+  - pulled cards default to acquisition = "Pulled" with an **optional cost allocation** (spread the product price across pulls by value, or leave at 0 — user picks the method).
+- **Opening result report** per product: cost vs. value of what was pulled, best hit, hit rate. Across products: "am I net positive opening sealed vs. keeping it sealed vs. selling it sealed?" — the real business question.
+- Sealed products can also be tracked in the selling workflow (step 6): listed / sold sealed.
+- Dashboard: sealed value, opened-product ROI.
+
+**Done when:** a booster box can be bought, partly opened pack by pack, with pulls attached, and its ROI seen.
+
+---
+
+# Phase 5 — Decks and bulk products
+
+## Step 8 — Deck builder from selected collection cards `[ ]`
+
+_Future — start only after the collection is large and scanning (step 5) works well. Each sub-step is shippable alone._
+
+### 8a. Choose the pool `[ ]`
+
+- Only cards explicitly **marked "available for decks"** enter the pool; the rest of the collection is never touched.
+- Quick-mark rules: all cards cheaper than €1 / €2 / €5 (user-adjustable), by set, by type, by rarity; excludes graded, listed-for-sale and high-value cards by default.
+- Pool view with counts and total value, so "I'm giving up €37 of bulk" is visible before committing.
+
+### 8b. Build a deck `[ ]`
+
+- Choose the game/format (Pokémon first), target **difficulty** (beginner / intermediate / advanced) and **power level** (casual / mid / strong), and the theme (a type, an evolution line, a mechanic).
+- App proposes decks from the pool and shows **cohesion**: do the cards work together under the game's rules (legal count, enough Pokémon / energy / trainers, evolution lines complete, energy types matching, a clear strategy, no dead cards). Plain-language verdict: "Playable, beginner-friendly, 3 weak slots, missing a Stage 1".
+- Manual editing: swap cards in/out, see cohesion update live; "what's missing" list, possibly pointing to the wishlist or to cheap buys.
+- Several candidate decks can share the pool; the app warns when two decks want the same single copy.
+
+### 8c. Turn a deck into a product `[ ]`
+
+- "Create deck" **groups the chosen cards into one new Product** (type: Deck) with name, difficulty, power level, photo, cost basis (sum of the cards' cost) and market value.
+- Those cards are **moved out of the collection** into the deck product (still traceable; "dissolve deck" returns them).
+- Deck products flow into the selling workflow (step 6): list, price, sold, realised profit — including "this bulk made €X as a deck vs. as loose bulk".
+- Dashboard reflects the move: collection value drops by what moved, deck inventory value appears separately.
+
+**Done when:** €1-and-under bulk can be turned into a playable, labelled, priced deck product and sold, with the collection updated.
+
+---
+
+# Decisions to take (blocking marked)
+
+| #   | Decision                                                                 | Blocks                   | Notes                                                                                                                                                                     |
+| --- | ------------------------------------------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Phone access: home-network only, or reachable from anywhere?             | Step 5                   | Camera needs a secure connection on the phone. Home-network-only keeps "no cloud, no auth worry"; anywhere triggers auth/hardening. Recommend: home network only for now. |
+| D2  | Which marketplaces matter first (Vinted, Cardmarket, eBay, Marktplaats)? | Step 6c                  | Pick the top 2 for export formats.                                                                                                                                        |
+| D3  | Marketplace price sync: research feasibility/terms before any build      | Step 6d                  | Don't risk seller accounts. Start with reprice suggestions.                                                                                                               |
+| D4  | Other TCGs after Pokémon — which, and catalog source each                | Step 5 languages/catalog | Affects scan identification too.                                                                                                                                          |
+| D5  | Switch on scheduler + backup schedule now?                               | Step 1–2                 | Backups matter more once photos and sales history exist. Recommend: install backup schedule before step 6.                                                                |
+| D6  | Switch to TCGdex before pokemontcg.io keys end (2027-03-01)              | —                        | Hard deadline. Do not leave until Feb 2027.                                                                                                                               |
+| D7  | Scan accuracy bar: is "pick from candidates" acceptable for every scan?  | Step 5                   | Assumed yes (never auto-add).                                                                                                                                             |
+| D8  | Cost allocation method for pulled cards                                  | Step 7                   | Default 0 vs. spread by value.                                                                                                                                            |
+
+# Risks
+
+- **Scrapers break** when a site changes layout; bulk fetch (step 1) will surface this faster and louder. Show per-source health on the dashboard. Paid/official price API remains an open option.
+- **Bulk scraping gets blocked** (Cloudflare/rate limits). Keep pacing conservative; slow completion is acceptable.
+- **Scan misidentifies a variant** (1st edition vs. unlimited) → wrong value. Mitigated by never auto-adding and highlighting variant markers.
+- **Marketplace terms.** Automating Vinted/Cardmarket may violate terms. Stay with export + tracking unless an official route exists.
+- **Photos grow backups and disk.** Plan storage/backup before step 6a.
+- **Single user, no auth + phone access** = exposure if it leaves the home network (D1).
+
+# Progress log
+
+| Date       | Step | Update                                                 |
+| ---------- | ---- | ------------------------------------------------------ |
+| 2026-11-05 | —    | Roadmap created from founder request. Nothing started. |
+| 2026-11-05 | 1    | Done: "Fetch all prices" (all / never / stale / most valuable / stack) on Dashboard, Collection, Settings -> Prices; ETA, pause/resume/cancel, resume-by-skip, failure table + retry + match link, summary + macOS notification, fresh-price counts on data-quality card. Pacing unchanged (sequential, per-site fetcher limits). |

@@ -102,8 +102,12 @@ export const api = {
   retryIncompleteImports: () => req<{ started: boolean; sets: string[] }>("/api/admin/catalog/import/retry-incomplete", { method: "POST" }),
   refreshPrices: (scope = "collection", sets?: string[]) =>
     req<any>("/api/admin/prices/refresh" + qs({ scope, sets }), { method: "POST" }),
-  fetchPrices: (b: { cards?: string[]; sets?: string[]; owned?: boolean; missing?: boolean; wishlist?: boolean; sources?: string[]; force?: boolean }) =>
+  fetchPrices: (b: { cards?: string[]; sets?: string[]; owned?: boolean; missing?: boolean; wishlist?: boolean; sources?: string[]; force?: boolean;
+    mode?: FetchMode; stale_days?: number; stack_id?: string }) =>
     req<{ started: boolean; cards: number }>("/api/admin/prices/fetch", post(b)),
+  fetchControl: (action: "pause" | "resume" | "cancel") =>
+    req<{ ok: boolean }>("/api/admin/prices/fetch/control", post({ action })),
+  fetchRetry: () => req<{ started: boolean; cards: number }>("/api/admin/prices/fetch/retry", { method: "POST" }),
   fetchCardPrices: (id: string, b: { sources?: string[]; force?: boolean } = {}) =>
     req<{ started: boolean; cards: number }>(`/api/cards/${encodeURIComponent(id)}/fetch-prices`, post(b)),
   wishlist: (cardId?: string) => req<WishEntry[]>("/api/wishlist" + qs({ card_id: cardId })),
@@ -125,6 +129,9 @@ export const api = {
 
 export const money = (cents: number | null | undefined, cur = "EUR") =>
   cents == null ? "—" : new Intl.NumberFormat(undefined, { style: "currency", currency: cur }).format(cents / 100);
+
+/** Bulk refresh selections: all owned / never fetched / stale > N days / most valuable first / one stack. */
+export type FetchMode = "all" | "never" | "stale" | "valuable" | "stack";
 
 export const FETCHER_START_CMD = "cd fetcher && .venv/bin/python -m fetcher";
 /** Scraped price sources (fetched on demand through the host fetcher). Mirrors `SCRAPED` in app/providers/price. */
