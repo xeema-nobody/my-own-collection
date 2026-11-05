@@ -50,4 +50,13 @@ describe("Wishlist page", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(body).toMatchObject({ target_price: 6550, alert: true }));
   });
+  it("has Fetch all prices defaulting to the wishlist scope, plus freshness counts", async () => {
+    mockApi({ "/api/wishlist": [entry()], "/api/wishlist/prices": { cards: 4, fresh: 2, stale: 1, never: 1, fresh_days: 7 },
+      "/api/admin/jobs": [], "/api/admin/fetcher-status": { up: true, sites: {} } });
+    renderPage(<Wishlist />);
+    expect(await screen.findByRole("button", { name: "Fetch all prices" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Wishlist" })).toBeChecked();
+    expect(await screen.findByText("2 fresh (≤7 d)")).toBeInTheDocument();
+    expect(screen.getByText("1 never fetched")).toBeInTheDocument();
+  });
 });

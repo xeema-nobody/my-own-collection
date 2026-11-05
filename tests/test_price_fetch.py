@@ -63,6 +63,7 @@ async def test_resolve_targets_dedupes_in_order(db):
 
 async def test_stores_points_and_logs(db):
     [c] = await seed(db, "1")
+    await own(db, c)   # owned: the run snapshots
     p = FakeProvider("pricecharting", default=AdapterResult("ok", points=[
         pt("pricecharting", "G9", as_of=date(2026, 10, 1), kind="sold")], url=PC_URL))
     stats = await pf.fetch_prices([c], ["pricecharting"], provider_for=providers(pricecharting=p), client=FakeClient())
@@ -343,7 +344,8 @@ async def test_price_freshness_counts(db):
     await log_ok(db, a, 1)
     await log_ok(db, b, 10)
     out = await pf.price_freshness(db, 7)
-    assert out == {"owned_cards": 3, "fresh": 1, "stale": 1, "never": 1, "fresh_days": 7}
+    assert out == {"owned_cards": 3, "fresh": 1, "stale": 1, "never": 1, "fresh_days": 7,
+                   "wishlist": {"cards": 0, "fresh": 0, "stale": 0, "never": 0}}
 
 
 async def test_reasons_and_attention_summary(db):
@@ -475,4 +477,89 @@ async def test_summary_has_price_freshness(client, db):
     await own(db, a)
     await log_ok(db, a, 1)
     r = await client.get("/api/collection/summary")
-    assert r.json()["prices"] == {"owned_cards": 1, "fresh": 1, "stale": 0, "never": 0, "fresh_days": 7}
+    assert r.json()["prices"] == {"owned_cards": 1, "fresh": 1, "stale": 0, "never": 0, "fresh_days": 7,
+                                  "wishlist": {"cards": 0, "fresh": 0, "stale": 0, "never": 0}}
+
+
+async def wish(db, *ids):
+    for c in ids:
+        await db.wishlist.insert_one({"wish_key": f"{c}||", "card_id": c})
+
+
+async def test_resolve_bulk_scopes_collection_first_and_deduped(db):
+    a, b, c, d = await seed(db, "1", "2", "3", "4")
+    await own(db, c, a)
+    await wish(db, d, a, b)                 # a is in both
+    assert await pf.resolve_bulk(db, "all") == [a, c]                              # default = collection
+    assert await pf.resolve_bulk(db, "all", scope="wishlist") == [a, b, d]
+    assert await pf.resolve_bulk(db, "all", scope="both") == [a, c, b, d]          # owned first, then wishlist-only
+    await log_ok(db, a, 1)
+    await log_ok(db, b, 20)
+    assert await pf.resolve_bulk(db, "never", scope="both") == [c, d]
+    assert await pf.resolve_bulk(db, "stale", 7, scope="wishlist") == [d, b]
+    assert sorted(await pf.resolve_bulk(db, "valuable", scope="both")) == [a, b, c, d]
+
+
+async def test_freshness_wishlist_counts(db):
+    a, b, c = await seed(db, "1", "2", "3")
+    await own(db, a)
+    await wish(db, a, b, c)
+    await log_ok(db, b, 1)
+    out = await pf.price_freshness(db, 7)
+    assert out["owned_cards"] == 1 and out["never"] == 1
+    assert out["wishlist"] == {"cards": 2, "fresh": 1, "stale": 0, "never": 1}    # a is owned: not double counted
+    assert await pf.wishlist_freshness(db, 7) == {"cards": 3, "fresh": 1, "stale": 0, "never": 2, "fresh_days": 7}
+
+
+async def test_wishlist_only_run_fires_target_alert_without_snapshot(db):
+    from app.db.models import WishIn
+    from app.services import wishlist as wl
+    from tests.test_alerts import CID, events, setup
+    await setup(db, owned=False)                                   # 90.00 EUR, not owned
+    await wl.add(db, WishIn(card_id=CID, target_price=8000))        # target 80.00: not hit yet
+    assert await events(db) == []
+    p = FakeProvider("pricecharting")                               # fetch brings a ~9.00 EUR price
+    stats = await pf.fetch_prices([CID], ["pricecharting"], provider_for=providers(pricecharting=p),
+                                  client=FakeClient(), mode="all", scope="wishlist")
+    assert stats["ok"] == 1 and stats["scope"] == "wishlist" and stats["alerts_fired"] == 1
+    assert len(await events(db)) == 1
+    assert await db.collection_snapshots.count_documents({}) == 0   # nothing owned changed
+    [e] = await db.alert_events.find({"type": "system"}).to_list(None)
+    assert "(wishlist)" in e["rule"] and "1 alert(s) fired" in e["rule"]
+
+
+async def test_owned_run_snapshots_and_alert_failure_never_fails_run(db, monkeypatch):
+    [a] = await seed(db, "1")
+    await own(db, a)
+    p = FakeProvider("pricecharting")
+    stats = await pf.fetch_prices([a], ["pricecharting"], provider_for=providers(pricecharting=p), client=FakeClient())
+    assert await db.collection_snapshots.count_documents({}) == 1 and stats["ok_cards"] == 1
+
+    async def boom(*a, **k):
+        raise RuntimeError("x")
+    monkeypatch.setattr(pf.alerts, "evaluate", boom)
+    [w] = await seed(db, "2")
+    await wish(db, w)
+    stats = await pf.fetch_prices([w], ["pricecharting"], provider_for=providers(pricecharting=p), client=FakeClient())
+    assert stats["ok"] == 1 and (await db.jobs.find_one({"type": "price_fetch"}, sort=[("started_at", -1)]))["status"] == "ok"
+
+
+async def test_stalest_owned_wishlist_flag(db):
+    a, b = await seed(db, "1", "2")
+    await own(db, a)
+    await wish(db, b)
+    assert await pf.stalest_owned(db, 10) == [a, b]
+    assert await pf.stalest_owned(db, 10, wishlist=False) == [a]
+
+
+async def test_api_scope_passed_and_validated(client, db, fetcher_up, monkeypatch):
+    a, b = await seed(db, "1", "2")
+    await own(db, a)
+    await wish(db, b)
+    r = await client.post("/api/admin/prices/fetch", json={"mode": "all", "scope": "both"})
+    assert r.status_code == 202 and r.json()["cards"] == 2 and fetcher_up[-1][0] == [a, b]
+    r = await client.post("/api/admin/prices/fetch", json={"mode": "all", "scope": "wishlist"})
+    assert r.json()["cards"] == 1 and fetcher_up[-1][0] == [b]
+    assert (await client.post("/api/admin/prices/fetch", json={"mode": "all", "scope": "nope"})).status_code == 422
+    r = await client.get("/api/wishlist/prices")
+    assert r.json() == {"cards": 1, "fresh": 0, "stale": 0, "never": 1, "fresh_days": 7}

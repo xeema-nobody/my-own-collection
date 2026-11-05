@@ -103,7 +103,7 @@ export const api = {
   refreshPrices: (scope = "collection", sets?: string[]) =>
     req<any>("/api/admin/prices/refresh" + qs({ scope, sets }), { method: "POST" }),
   fetchPrices: (b: { cards?: string[]; sets?: string[]; owned?: boolean; missing?: boolean; wishlist?: boolean; sources?: string[]; force?: boolean;
-    mode?: FetchMode; stale_days?: number; stack_id?: string }) =>
+    mode?: FetchMode; stale_days?: number; stack_id?: string; scope?: FetchScope }) =>
     req<{ started: boolean; cards: number }>("/api/admin/prices/fetch", post(b)),
   fetchControl: (action: "pause" | "resume" | "cancel") =>
     req<{ ok: boolean }>("/api/admin/prices/fetch/control", post({ action })),
@@ -111,6 +111,7 @@ export const api = {
   fetchCardPrices: (id: string, b: { sources?: string[]; force?: boolean } = {}) =>
     req<{ started: boolean; cards: number }>(`/api/cards/${encodeURIComponent(id)}/fetch-prices`, post(b)),
   wishlist: (cardId?: string) => req<WishEntry[]>("/api/wishlist" + qs({ card_id: cardId })),
+  wishlistPrices: () => req<WishPrices>("/api/wishlist/prices"),
   addWish: (b: WishIn) => req<WishEntry>("/api/wishlist", post(b)),
   patchWish: (id: string, b: { target_price?: number | null; note?: string | null; alert?: boolean }) =>
     req<WishEntry>(`/api/wishlist/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
@@ -132,6 +133,9 @@ export const money = (cents: number | null | undefined, cur = "EUR") =>
 
 /** Bulk refresh selections: all owned / never fetched / stale > N days / most valuable first / one stack. */
 export type FetchMode = "all" | "never" | "stale" | "valuable" | "stack";
+/** Which cards a bulk run covers; "both" = collection first, then wishlist-only cards. */
+export type FetchScope = "collection" | "wishlist" | "both";
+export type WishPrices = { cards: number; fresh: number; stale: number; never: number; fresh_days: number };
 
 export const FETCHER_START_CMD = "cd fetcher && .venv/bin/python -m fetcher";
 /** Scraped price sources (fetched on demand through the host fetcher). Mirrors `SCRAPED` in app/providers/price. */

@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.deps import get_db
 from app.db.models import WishIn, WishPatch
 from app.services import wishlist as svc
+from app.services.price_fetch import wishlist_freshness
 
 router = APIRouter(prefix="/api/wishlist", tags=["wishlist"])
 
@@ -10,6 +11,12 @@ router = APIRouter(prefix="/api/wishlist", tags=["wishlist"])
 @router.get("")
 async def list_wishlist(card_id: str | None = None):
     return await svc.list_(get_db(), card_id)
+
+
+@router.get("/prices")
+async def wishlist_prices():
+    """Price freshness of the wishlisted cards (fresh / stale / never fetched)."""
+    return await wishlist_freshness(get_db())
 
 
 @router.post("", status_code=201)

@@ -92,6 +92,7 @@ class FetchIn(CardFetchIn):
     # Bulk collection refresh: selects + orders owned cards (see price_fetch.resolve_bulk).
     mode: Literal["all", "never", "stale", "valuable", "stack"] | None = None
     stale_days: int = Field(7, ge=1, le=365)
+    scope: Literal["collection", "wishlist", "both"] = "collection"  # which cards a bulk `mode` covers
     stack_id: str | None = None
 
     @model_validator(mode="after")

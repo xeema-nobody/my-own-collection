@@ -11,7 +11,7 @@ from app.db.mongo import get_db
 from app.providers.fetcher import FetcherClient, FetcherUnavailable
 from app.providers.price import SCRAPED, get_provider
 from app.services import alerts, jobs, matching
-from app.services.collection import needs_price_card_ids, oid, valuate
+from app.services.collection import needs_price_card_ids, oid, valuate, valuate_wishlist
 from app.services.pricing import store_scraped_points
 from app.services.sales import store_chart_seed, store_sales
 from app.services.snapshots import take_snapshot
@@ -55,42 +55,70 @@ async def _last_ok(db) -> dict[str, datetime]:
     return last
 
 
+def _bucket(card_ids, last: dict, cutoff: datetime) -> dict:
+    fresh = sum(1 for c in card_ids if c in last and last[c] >= cutoff)
+    never = sum(1 for c in card_ids if c not in last)
+    return {"fresh": fresh, "stale": len(card_ids) - fresh - never, "never": never}
+
+
 async def price_freshness(db, fresh_days: int = 7) -> dict:
-    """Owned cards by price freshness: fresh = ok fetch within `fresh_days`, never = no ok fetch, else stale."""
+    """Cards by price freshness: fresh = ok fetch within `fresh_days`, never = no ok fetch, else stale.
+
+    Top-level keys cover owned cards; `wishlist` covers wishlisted cards not owned (no double counting)."""
     owned = await db.collection_items.distinct("card_id")
+    wish = sorted(set(await db.wishlist.distinct("card_id")) - set(owned))
     last, cutoff = await _last_ok(db), datetime.now(timezone.utc) - timedelta(days=fresh_days)
-    fresh = sum(1 for c in owned if c in last and last[c] >= cutoff)
-    never = sum(1 for c in owned if c not in last)
-    return {"owned_cards": len(owned), "fresh": fresh, "stale": len(owned) - fresh - never, "never": never,
-            "fresh_days": fresh_days}
+    return {"owned_cards": len(owned), **_bucket(owned, last, cutoff), "fresh_days": fresh_days,
+            "wishlist": {"cards": len(wish), **_bucket(wish, last, cutoff)}}
 
 
-async def resolve_bulk(db, mode: str, stale_days: int = 7, stack_id: str | None = None) -> list[str]:
-    """Owned card ids for a bulk refresh, in run order.
+async def wishlist_freshness(db, fresh_days: int = 7) -> dict:
+    """All wishlisted cards (owned or not) by price freshness, for the Wishlist page."""
+    wish = sorted(await db.wishlist.distinct("card_id"))
+    last, cutoff = await _last_ok(db), datetime.now(timezone.utc) - timedelta(days=fresh_days)
+    return {"cards": len(wish), **_bucket(wish, last, cutoff), "fresh_days": fresh_days}
 
+
+async def _order_pool(db, pool: list[str], mode: str, stale_days: int, wishlist: bool) -> list[str]:
+    """Order / filter one pool of card ids by bulk mode (see resolve_bulk)."""
+    pool = sorted(pool)
+    if mode == "all":
+        return pool
+    if mode == "valuable":
+        best: dict[str, int] = {}
+        for v in await (valuate_wishlist if wishlist else valuate)(db):
+            best[v["item"]["card_id"]] = max(best.get(v["item"]["card_id"], -1), v["value"] or -1)
+        return sorted(pool, key=lambda c: -best.get(c, -1))   # sorted is stable: ties keep id order
+    last = await _last_ok(db)
+    if mode == "never":
+        return [c for c in pool if c not in last]
+    epoch = datetime.min.replace(tzinfo=timezone.utc)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=stale_days)
+    return sorted((c for c in pool if last.get(c, epoch) < cutoff), key=lambda c: last.get(c, epoch))
+
+
+async def resolve_bulk(db, mode: str, stale_days: int = 7, stack_id: str | None = None,
+                       scope: str = "collection") -> list[str]:
+    """Card ids for a bulk refresh, in run order.
+
+    scope: collection (owned), wishlist, or both (owned first, then wishlist-only cards; deduped).
     all = sorted ids; never = no ok fetch yet; stale = never or last ok older than `stale_days`
-    (oldest first); valuable = highest stack value first, unvalued last; stack = that stack's card."""
+    (oldest first); valuable = highest value first, unvalued last; stack = that stack's card (scope ignored)."""
     if mode == "stack":
         it = await db.collection_items.find_one({"_id": oid(stack_id)}, {"card_id": 1}) if stack_id else None
         return [it["card_id"]] if it else []
-    owned = sorted(await db.collection_items.distinct("card_id"))
-    if mode == "all":
-        return owned
-    if mode == "valuable":
-        best: dict[str, int] = {}
-        for v in await valuate(db):
-            best[v["item"]["card_id"]] = max(best.get(v["item"]["card_id"], -1), v["value"] or -1)
-        return sorted(owned, key=lambda c: -best.get(c, -1))   # sorted is stable: ties keep id order
-    last = await _last_ok(db)
-    if mode == "never":
-        return [c for c in owned if c not in last]
-    epoch = datetime.min.replace(tzinfo=timezone.utc)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=stale_days)
-    return sorted((c for c in owned if last.get(c, epoch) < cutoff), key=lambda c: last.get(c, epoch))
+    owned = set(await db.collection_items.distinct("card_id"))
+    out: list[str] = []
+    if scope in ("collection", "both"):
+        out += await _order_pool(db, list(owned), mode, stale_days, False)
+    if scope in ("wishlist", "both"):
+        wish = set(await db.wishlist.distinct("card_id"))
+        out += await _order_pool(db, list(wish - owned if scope == "both" else wish), mode, stale_days, True)
+    return out
 
 
-async def stalest_owned(db, limit: int) -> list[str]:
-    """Owned + wishlisted card ids, least recently tried first (never tried = oldest); first `limit`.
+async def stalest_owned(db, limit: int, wishlist: bool = True) -> list[str]:
+    """Owned (+ wishlisted unless `wishlist` is false) card ids, least recently tried first (never tried = oldest); first `limit`.
 
     Cards fetched today are cache-fresh and sort last, so a capped run resumes where the last stopped."""
     epoch = datetime.min.replace(tzinfo=timezone.utc)
@@ -98,7 +126,10 @@ async def stalest_owned(db, limit: int) -> list[str]:
     async for d in db.fetch_log.find({}, {"card_id": 1, "fetched_at": 1}):
         t = d["fetched_at"].replace(tzinfo=timezone.utc) if d["fetched_at"].tzinfo is None else d["fetched_at"]
         last[d["card_id"]] = max(t, last.get(d["card_id"], t))   # last attempt on any source, any outcome
-    owned = sorted(set(await db.collection_items.distinct("card_id")) | set(await db.wishlist.distinct("card_id")))
+    owned = set(await db.collection_items.distinct("card_id"))
+    if wishlist:
+        owned |= set(await db.wishlist.distinct("card_id"))
+    owned = sorted(owned)
     owned.sort(key=lambda c: last.get(c, epoch))
     return owned[:limit]
 
@@ -159,12 +190,13 @@ async def _checkpoint(db, job, stats: dict, clock=time.monotonic) -> bool:
 
 def summary_text(stats: dict) -> str:
     n = stats["failed"] + stats["needs_match"]
-    return f"{stats['ok_cards']} cards updated" + (f", {n} need attention" if n else "")
+    return (f"{stats['ok_cards']} cards updated" + (f", {n} need attention" if n else "")
+            + (f", {stats['alerts_fired']} alert(s) fired" if stats.get("alerts_fired") else ""))
 
 
 async def fetch_prices(card_ids: list[str], sources: list[str] | None = None, force: bool = False,
                        provider_for=get_provider, client: FetcherClient | None = None, trigger: str = "manual",
-                       mode: str | None = None) -> dict:
+                       mode: str | None = None, scope: str | None = None) -> dict:
     db = get_db()
     client = client or FetcherClient()
     sources = [s for s in SCRAPED if not sources or s in sources]
@@ -174,8 +206,10 @@ async def fetch_prices(card_ids: list[str], sources: list[str] | None = None, fo
              "not_found": 0, "sales_new": 0, "seeded": 0, "skipped_cached": 0, "skipped_site": 0, "current": None,
              "waiting_login": [], "failures": [], "needs_match_list": [], "mode": mode, "cards": len(card_ids),
              "started_at": now.isoformat(), "fetched": 0, "eta_s": None, "paused": False, "paused_s": 0.0,
-             "ok_cards": 0}
+             "ok_cards": 0, "scope": scope, "alerts_fired": 0}
     t_start = time.monotonic()
+    owned = set(await db.collection_items.distinct("card_id"))
+    owned_ok = False
     skip_sites: set[str] = set()
     streak: dict[str, int] = {}
     watcher = asyncio.create_task(_watch_login(db, job, client, stats))
@@ -223,13 +257,15 @@ async def fetch_prices(card_ids: list[str], sources: list[str] | None = None, fo
                 if aborted:
                     break
             stats["ok_cards"] += card_ok
+            owned_ok = owned_ok or (card_ok and card_id in owned)
         stats["current"], stats["waiting_login"], stats["eta_s"] = None, [], None
         if stats["ok"]:
-            await take_snapshot(db)
+            await _after_run(db, owned_ok, now, stats)
         status = "cancelled" if cancelled else "error" if error else "partial" if stats["failed"] else "ok"
         await jobs.finish(db, job, status, stats, error)
         if mode:   # bulk run: the fetcher's notifier turns this inbox item into a macOS notification
             prefix = "Price fetch cancelled" if cancelled else "Price fetch finished"
+            prefix += f" ({scope})" if scope in ("wishlist", "both") else ""
             await alerts.notify_system(db, f"price_fetch_done:{job}", f"{prefix}: {summary_text(stats)}")
     except Exception as e:  # noqa: BLE001
         await jobs.finish(db, job, "error", stats, str(e))
@@ -237,6 +273,19 @@ async def fetch_prices(card_ids: list[str], sources: list[str] | None = None, fo
     finally:
         watcher.cancel()
     return stats
+
+
+async def _after_run(db, owned_ok: bool, since: datetime, stats: dict):
+    """Fresh prices -> collection snapshot (only if an owned card changed; it evaluates alerts itself),
+    else evaluate alerts directly so wishlist target alerts fire without waiting. Never fails the run."""
+    try:
+        if owned_ok:
+            await take_snapshot(db)
+        else:
+            await alerts.evaluate(db)
+        stats["alerts_fired"] = await db.alert_events.count_documents({"type": "alert", "fired_at": {"$gte": since}})
+    except Exception:  # noqa: BLE001
+        log.exception("post-fetch snapshot/alert evaluation failed")
 
 
 async def _fetch_one(db, client, provider, card: dict, source: str, stats: dict) -> str:

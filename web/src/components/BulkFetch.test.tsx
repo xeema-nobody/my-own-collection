@@ -29,7 +29,24 @@ describe("BulkFetch", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fetch all prices" }));
     await waitFor(() => expect(fn.mock.calls.some(([u, i]) => String(u).endsWith("/prices/fetch") && (i as RequestInit)?.method === "POST")).toBe(true));
     const call = fn.mock.calls.find(([u, i]) => String(u).endsWith("/prices/fetch") && (i as RequestInit)?.method === "POST")!;
-    expect(JSON.parse((call[1] as RequestInit).body as string)).toEqual({ mode: "stale", stale_days: 14 });
+    expect(JSON.parse((call[1] as RequestInit).body as string)).toEqual({ mode: "stale", scope: "collection", stale_days: 14 });
+  });
+
+  it("wishlist page default scope, and a switch to both, is sent with the run", async () => {
+    const fn = mockApi(routes([], { "POST /api/admin/prices/fetch": { started: true, cards: 3 } }));
+    const body = () => JSON.parse((fn.mock.calls.find(([u, i]) => String(u).endsWith("/prices/fetch") && (i as RequestInit)?.method === "POST")![1] as RequestInit).body as string);
+    const { unmount } = renderPage(<BulkFetch defaultScope="wishlist" />);
+    expect(screen.getByRole("radio", { name: "Wishlist" })).toBeChecked();
+    expect(screen.getByText(/Every card on the wishlist/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Fetch all prices" }));
+    await waitFor(() => expect(body()).toEqual({ mode: "all", scope: "wishlist" }));
+    unmount();
+    fn.mockClear();
+    renderPage(<BulkFetch />);
+    fireEvent.click(screen.getByRole("radio", { name: "Both" }));
+    expect(screen.getByText(/collection first/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Fetch all prices" }));
+    await waitFor(() => expect(body()).toEqual({ mode: "all", scope: "both" }));
   });
 
   it("shows pace of a job already running (after leaving and returning) and disables the button", async () => {
@@ -71,6 +88,7 @@ describe("FetchProgress", () => {
       needs_match_list: [{ card_id: "pokemon:a-2", name: "Umbreon", source: "pricecharting", reason: "no match" }] } };
     renderPage(<FetchProgress job={job} live={false} />);
     expect(screen.getByRole("status")).toHaveTextContent("118 cards updated, 2 need attention");
+    expect(screen.queryByText(/alert.* fired/)).not.toBeInTheDocument();
     expect(screen.getByText("layout changed")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Choose match" })).toHaveAttribute("href", "/cards/pokemon%3Aa-2#card-sources");
     fireEvent.click(screen.getByRole("button", { name: "Retry failed" }));

@@ -47,10 +47,10 @@ async def prices_fetch(body: FetchIn):
     db = get_db()
     cards = await resolve_targets(db, body.cards, body.sets, body.owned, body.missing, body.wishlist)
     if body.mode:
-        cards = list(dict.fromkeys(cards + await resolve_bulk(db, body.mode, body.stale_days, body.stack_id)))
+        cards = list(dict.fromkeys(cards + await resolve_bulk(db, body.mode, body.stale_days, body.stack_id, body.scope)))
     if not cards:
         raise HTTPException(422, "no cards match the given targets")
-    spawn(fetch_prices(cards, body.sources, body.force, mode=body.mode))
+    spawn(fetch_prices(cards, body.sources, body.force, mode=body.mode, scope=body.scope if body.mode else None))
     return {"started": True, "cards": len(cards)}
 
 

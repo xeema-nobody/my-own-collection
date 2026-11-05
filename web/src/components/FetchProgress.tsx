@@ -40,7 +40,8 @@ export default function FetchProgress({ job, live }: { job: any; live: boolean }
         <p className="rounded border-l-2 border-warn bg-surface-2 p-2">
           Waiting for login ({s.waiting_login.join(", ")}) – look at the Chrome window.</p>)}
       <p className={live ? "text-warn" : "text-muted"}>
-        {live ? (s.paused ? "Paused" : "Fetching") : `Last fetch (${job.status})`}{" "}
+        {live ? (s.paused ? "Paused" : "Fetching") : `Last fetch (${job.status})`}
+        {s.scope && s.scope !== "collection" ? ` · ${s.scope}` : ""}{" "}
         <span className="num">{s.done} / {s.total} done, {s.failed} failed{eta ? `, ${eta}` : ""}</span>
         {live && s.current && !s.paused && <> · now {s.current.card_id} · {s.current.source}</>}
         <span className="text-muted"> · needs match {s.needs_match} · not found {s.not_found} · cached {s.skipped_cached}
@@ -55,7 +56,8 @@ export default function FetchProgress({ job, live }: { job: any; live: boolean }
         </div>)}
       {!live && job.status !== "running" && s.mode && (
         <p className="font-medium" role="status">
-          {s.ok_cards ?? 0} cards updated{attention.length > 0 ? `, ${attention.length} need attention` : ""}</p>)}
+          {s.ok_cards ?? 0} cards updated{attention.length > 0 ? `, ${attention.length} need attention` : ""}
+          {s.alerts_fired > 0 ? `, ${s.alerts_fired} alert${s.alerts_fired === 1 ? "" : "s"} fired` : ""}</p>)}
       {!live && attention.length > 0 && (
         <details open={attention.length <= 10}><summary className="cursor-pointer">Needs attention ({attention.length})</summary>
           <div className="mt-2 space-y-2">

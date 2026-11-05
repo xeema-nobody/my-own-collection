@@ -26,7 +26,7 @@ async def _refresh(trigger: str):
 
 
 async def _fetch(trigger: str):
-    """Scraped prices for the stalest owned cards. Unattended: sites needing login are skipped."""
+    """Scraped prices for the stalest owned (+ wishlisted) cards. Unattended: sites needing login are skipped."""
     db = get_db()
     client = FetcherClient(unattended=True)
     try:
@@ -36,7 +36,7 @@ async def _fetch(trigger: str):
         await alerts.notify_system(db, f"fetch_skipped:{datetime.now(timezone.utc):%Y-%m-%d}",
                                    f"Scheduled fetch skipped: fetcher not running ({e})")
         return
-    cards = await stalest_owned(db, settings.scheduler_fetch_cap)
+    cards = await stalest_owned(db, settings.scheduler_fetch_cap, settings.scheduler_fetch_wishlist)
     if cards:
         await fetch_prices(cards, client=client, trigger=trigger)
 

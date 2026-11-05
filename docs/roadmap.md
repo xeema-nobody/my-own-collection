@@ -38,7 +38,7 @@ Functional descriptions only — no technical design. The project agent decides 
 
 **Done when:** one click refreshes the 16-stack collection (and a 500-stack one) without babysitting, and failures are understandable.
 
-## Step 2 — Bulk price refresh for the wishlist `[ ]`
+## Step 2 — Bulk price refresh for the wishlist `[x]`
 
 **Wanted:**
 
@@ -260,3 +260,4 @@ _Future — start only after the collection is large and scanning (step 5) works
 | ---------- | ---- | ------------------------------------------------------ |
 | 2026-11-05 | —    | Roadmap created from founder request. Nothing started. |
 | 2026-11-05 | 1    | Done: "Fetch all prices" (all / never / stale / most valuable / stack) on Dashboard, Collection, Settings -> Prices; ETA, pause/resume/cancel, resume-by-skip, failure table + retry + match link, summary + macOS notification, fresh-price counts on data-quality card. Pacing unchanged (sequential, per-site fetcher limits). |
+| 2026-11-05 | 2    | Done: "Fetch all prices" on the Wishlist page via a scope picker (Collection / Wishlist / Both, collection first, deduped) in the shared BulkFetch; alerts re-evaluated right after a run (wishlist target alerts fire at once, wishlist-only run writes no snapshot); scheduler option `SCHEDULER_FETCH_WISHLIST`; wishlist freshness counts on the Wishlist page and data-quality card. Same sequential pacing. |

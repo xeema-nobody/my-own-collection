@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     alert_prune_cron: str = "30 6 * * *"
     # max cards per scheduled scraped fetch; stalest first, the rest resumes next run
     scheduler_fetch_cap: int = 300
+    # include wishlisted cards in the scheduled scraped fetch (false = collection only)
+    scheduler_fetch_wishlist: bool = True
     # read alert events older than this many days are deleted by the scheduler; 0 keeps them all
     alert_events_keep_days: int = 90
     # alt.xyz sold-list pages read per card (page 1 + more while listings stay inside the sold window)

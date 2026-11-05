@@ -114,3 +114,25 @@ async def test_fetch_task_caps_and_passes_trigger(db, monkeypatch):
 async def test_prune_task_registered_without_catch_up(db):
     assert "daily_prune" in sch.TASKS
     assert "daily_prune" not in await sch.overdue(db, NOW)
+
+
+async def test_fetch_task_wishlist_toggle(db, monkeypatch):
+    await db.cards.insert_one(make_card("s", "1"))
+    await db.cards.insert_one(make_card("s", "2"))
+    await db.collection_items.insert_one({"stack_key": "1", "card_id": "pokemon:s-1"})
+    await db.wishlist.insert_one({"wish_key": "w", "card_id": "pokemon:s-2"})
+
+    class Up:
+        def __init__(self, *a, **k): pass
+        async def status(self): return {}
+    seen = {}
+
+    async def fake_fetch(cards, **kw):
+        seen["cards"] = cards
+    monkeypatch.setattr(sch, "FetcherClient", Up)
+    monkeypatch.setattr(sch, "fetch_prices", fake_fetch)
+    await sch._fetch("scheduler")
+    assert sorted(seen["cards"]) == ["pokemon:s-1", "pokemon:s-2"]
+    monkeypatch.setattr(settings, "scheduler_fetch_wishlist", False)
+    await sch._fetch("scheduler")
+    assert seen["cards"] == ["pokemon:s-1"]

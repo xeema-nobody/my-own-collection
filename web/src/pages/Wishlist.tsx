@@ -4,8 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Trash2 } from "lucide-react";
 import { api, money, type WishEntry } from "../lib/api";
 import { eurosToCents, filterWishes, wantLabel, type WishFilter } from "../lib/wishlist";
+import BulkFetch from "../components/BulkFetch";
 import { QueryError } from "../components/QueryState";
-import { Badge, Button, Checkbox, Chip, Drawer, EmptyState, Field, Input, Kpi, Skeleton, Table, THead, Td, Th, Tr } from "../components/ui";
+import { Badge, Button, Card, Checkbox, Chip, Drawer, EmptyState, Field, Input, Kpi, Skeleton, Table, THead, Td, Th, Tr } from "../components/ui";
 
 const KIND_TONE = { sold: "ok", market: "neutral", ask: "warn" } as const;
 
@@ -70,6 +71,7 @@ export default function Wishlist() {
     mutationFn: (id: string) => api.removeWish(id),
     onSuccess: () => { setConfirm(null); qc.invalidateQueries({ queryKey: ["wishlist"] }); qc.invalidateQueries({ queryKey: ["alerts"] }); },
   });
+  const fresh = useQuery({ queryKey: ["wishlist", "prices"], queryFn: api.wishlistPrices });
   const all = q.data ?? [];
   const rows = filterWishes(all, filter);
   const hits = all.filter((w) => w.hit).length;
@@ -82,6 +84,16 @@ export default function Wishlist() {
         <Kpi label="Cost to buy all hits" value={money(all.filter((w) => w.hit).reduce((n, w) => n + (w.value ?? 0), 0))}
           hint={`${priced.length} of ${all.length} have a target and a price`} />
       </div>
+      {all.length > 0 && (
+        <Card>
+          <BulkFetch defaultScope="wishlist" />
+          {fresh.data && (
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+              Price freshness ({fresh.data.cards} cards):
+              <Badge tone="ok">{fresh.data.fresh} fresh (≤{fresh.data.fresh_days} d)</Badge>
+              <Badge tone={fresh.data.stale ? "warn" : "neutral"}>{fresh.data.stale} stale</Badge>
+              <Badge tone={fresh.data.never ? "warn" : "neutral"}>{fresh.data.never} never fetched</Badge></p>)}
+        </Card>)}
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter">
         <Chip active={filter === "all"} onClick={() => setFilter("all")}>All</Chip>
         <Chip active={filter === "hit"} onClick={() => setFilter(filter === "hit" ? "all" : "hit")}>Target hit</Chip>

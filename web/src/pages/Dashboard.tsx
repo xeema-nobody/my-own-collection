@@ -149,7 +149,8 @@ export default function Dashboard() {
                     <span className="num font-medium">{s.prices.fresh} / {s.prices.owned_cards} cards</span></div>
                   <div className="mt-1 h-1.5 rounded-full bg-surface-2"><div role="presentation" className="h-full rounded-full bg-ok"
                     style={{ width: `${s.prices.owned_cards ? Math.round((s.prices.fresh / s.prices.owned_cards) * 100) : 0}%` }} /></div>
-                  <p className="mt-1 text-xs text-muted">{s.prices.stale} stale · {s.prices.never} never fetched (scraped sources).</p>
+                  <p className="mt-1 text-xs text-muted">{s.prices.stale} stale · {s.prices.never} never fetched (scraped sources).
+                    {s.prices.wishlist?.cards > 0 && <> Wishlist (not owned): {s.prices.wishlist.fresh} / {s.prices.wishlist.cards} fresh, {s.prices.wishlist.stale} stale, {s.prices.wishlist.never} never.</>}</p>
                 </div>)}
               {s.needs_price > 0 && (
                 <div className="flex flex-wrap items-center gap-3">
