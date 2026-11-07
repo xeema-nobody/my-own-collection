@@ -6,7 +6,7 @@ from fastapi.responses import Response
 from app.services import valuation_cache
 from app.api.deps import get_db
 from app.config import settings
-from app.db.models import BulkAcquiredIn, CollectionIn, CollectionPatch, PresetIn, RemoveIn
+from app.db.models import BulkAcquiredIn, BulkRemoveIn, CollectionIn, CollectionPatch, PresetIn, RemoveIn
 from app.services import acquisition
 from app.services import collection_query as cq
 from app.services import presets
@@ -174,6 +174,11 @@ async def restore_edit(item_id: str, edit_id: str):
     if it is None:
         raise HTTPException(404, "item or edit not found")
     return svc._out(it)
+
+
+@router.post("/bulk-remove")
+async def bulk_remove(body: BulkRemoveIn):
+    return await svc.remove_many(get_db(), body.ids, body.reason, body.note)
 
 
 @router.post("/{item_id}/remove")

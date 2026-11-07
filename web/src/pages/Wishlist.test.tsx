@@ -79,3 +79,22 @@ describe("Wishlist page", () => {
     expect(screen.getByText("1 never fetched")).toBeInTheDocument();
   });
 });
+
+describe("Wishlist bulk actions", () => {
+  it("Fetch prices sends the selected cards, Remove posts the selected ids", async () => {
+    const calls: Record<string, any> = {};
+    mockApi({ "/api/wishlist": [entry(), entry({ id: "w2", card_id: "pokemon:b-2" }), entry({ id: "w3", card_id: "pokemon:c-3" })],
+      "/api/admin/jobs": [],
+      "POST /api/admin/prices/fetch": (i?: RequestInit) => { calls.fetch = JSON.parse(String(i?.body)); return { started: true, cards: 2 }; },
+      "POST /api/wishlist/bulk-remove": (i?: RequestInit) => { calls.rm = JSON.parse(String(i?.body)); return { removed: 2, failed: 0, results: [] }; } });
+    renderPage(<Wishlist />);
+    const boxes = await screen.findAllByRole("checkbox", { name: /^Select Charizard/ });
+    await userEvent.click(boxes[0]); await userEvent.click(boxes[1]);
+    expect(screen.getByText("2 entries selected")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Fetch prices" }));
+    await waitFor(() => expect(calls.fetch).toEqual({ cards: ["pokemon:a-1", "pokemon:b-2"] }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Remove 2" }));
+    await waitFor(() => expect(calls.rm).toEqual({ ids: ["w1", "w2"] }));
+  });
+});

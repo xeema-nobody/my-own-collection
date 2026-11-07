@@ -223,3 +223,9 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - The laptop page works for scanning (camera or photo upload) without `lan.sh up`; `lan.sh up` is only for the phone over Tailscale and must be re-run after frontend changes (it rebuilds the phone page, so a phone will not show the slab form until then).
 - Bulk actions on selected stacks wanted: fetch prices for the selection only and remove the selection (roadmap 4b). Removal keeps going through exit history, never a silent delete.
 - Next step chosen by the user: use the private scan samples to measure and fix systematically.
+
+## Bulk actions on selected stacks (2026-11-07, roadmap Step 4b)
+- **Remove = one backend pass, not N client calls.** `POST /api/collection/bulk-remove` loops the existing `remove` (whole stack, one `collection_exits` row each, valuation cache bumped per stack) and returns per-stack results; a bad id is reported and the rest proceed. Rejected: one Mongo transaction (single-node dev Mongo, and a partial result is more useful than all-or-nothing here). One reason and note for all; no sale price in bulk (a per-copy price is a single-stack job).
+- **Wishlist remove** has no history (never had); the bulk endpoint also deletes the entries' alert rules, same as the single delete.
+- **Fetch prices for a selection** reuses `POST /api/admin/prices/fetch {cards}` with the distinct card ids of the picked rows, so no backend change. The Collection keeps card id + copies of every picked stack when it is picked, so a selection can span pages. Disabled while a price fetch job runs (the API would answer 409).
+- Not built: "select all N matching the filter" across pages.

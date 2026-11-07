@@ -82,13 +82,15 @@ Functional descriptions only — no technical design. The project agent decides 
 
 **Done when:** a large synthetic collection (e.g. 5,000 stacks) pages, filters and sorts with no visible waiting.
 
-### 4b. Bulk actions on selected stacks `[ ]` (user request 2026-11-07)
+### 4b. Bulk actions on selected stacks `[x]` built 2026-11-07 (user request same day; awaiting the user's test)
 
 Row checkboxes and "Select all on this page" already exist, but the only bulk action is "Edit cost & type". Wanted on the same selection bar:
 - **Fetch prices for the selected stacks only** (so a few new cards do not trigger a fetch of the whole collection). The fetch API already takes a `cards` list (`POST /api/admin/prices/fetch`), so this is mostly a UI action that reuses `usePriceFetchJob` / `BulkFetch` progress.
 - **Remove the selected stacks** with a confirm that shows the count and total copies; goes through the same exit history as the single-stack "Sell / remove" (reason removed / gifted / sold, one reason for all), so nothing is silently deleted. A bulk endpoint with one transaction-like pass (per-stack result, partial failures reported).
 - Same selection bar on the Wishlist page (fetch prices, remove).
 - Select across pages ("select all N matching the filter"), with the count shown before any destructive action.
+
+**Built:** selection bar on Collection and Wishlist has "Fetch prices" (`POST /api/admin/prices/fetch {cards}` with the distinct cards of the picked rows, disabled while a fetch runs; progress in the existing box) and "Remove" (drawer with count + total copies, one reason, per-entry result; `POST /api/collection/bulk-remove` writes one `collection_exits` row per stack, `POST /api/wishlist/bulk-remove` also deletes the entries' alerts; a bad id is reported and the rest still go through). Selection survives page changes on the Collection. Not built: "select all N matching the filter" across pages, sale price per stack in bulk (use Sell / remove).
 
 **Done when:** pick 3 stacks, tap "Fetch prices" and only those 3 cards are fetched; pick 5, remove them with one confirm and see them in Settings > Data > exits.
 
@@ -283,3 +285,4 @@ _Future — start only after the collection is large and scanning (step 5) works
 | 2026-11-07 | — | Sell / gift / remove: "Sell / remove" on a stack (reason, copies, optional sale price, note), history in `collection_exits` with the cost snapshot, list in Settings > Data. Old silent delete now logs too. Realized P/L report is Step 7. |
 | 2026-11-06 | 5 | Phone setup done on the user's Mac and iPhone (Tailscale, `lan.sh setup/up`, `tailscale serve`); page opens and asks for camera. First real scan failed to read the name -> new sub-step 1b (real-photo OCR calibration), waiting on the user's sample photos. Slice 1 still uncommitted on `feat/scan-slice1`. The 14 no-cost stacks were filled in by the user (some set to Pulled with no cost; P/L counts only stacks with a cost above 0, by design). |
 | 2026-11-07 | 5 | Slice 3 (5e slabs) built as an assisted flow: slab label OCR (`providers/ocr/slab.py`, `slabfields.py`), "This is a slab" switch, Raw / Slab add sheet with grader chips, grade, cert and Other grader name, duplicate cert guard, slab never valued at raw. Label read measured weak on 24 photos (label 13/24, cert 11/24, grade 5/24). **User test the same day: raw scans fine (right print in the list, ranking can improve), slabs not recognised from the laptop page (always the raw card).** Open: reproduce + fix slab detection, scan accuracy pass over all sample photos, Step 4b bulk actions. |
+| 2026-11-07 | 4b | Bulk actions built: Collection and Wishlist selection bars get "Fetch prices" (selected stacks' cards only) and "Remove" (confirm with count + copies, one reason, `POST /api/collection/bulk-remove` = one exit row per stack, per-stack results; `POST /api/wishlist/bulk-remove` also drops alerts). Tests: 3 backend, 3 vitest. Slice 3 committed (b01ca34). Not yet done from the same brief: slab detection fix (baseline measure script `tests/private/measure_slab_modes.py`: full photo vs guide crop, switch off/on) and the scan accuracy pass. |

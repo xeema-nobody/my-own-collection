@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, ChevronRight, ScanLine, TriangleAlert } from "lucide-react";
@@ -19,6 +19,7 @@ import { useStoredState } from "../lib/storedState";
 import { BUILTIN_PRESETS, COLLECTION_DEFAULTS, DEFAULT_DESC, PRESET_KEYS, activeFilterCount, toApiQuery } from "../lib/collectionList";
 import ValueChart from "../components/ValueChart";
 import { usePriceFetchJob } from "../lib/fetchJob";
+import BulkRemoveDrawer from "../components/BulkRemoveDrawer";
 import RemoveStack from "../components/collection/RemoveStack";
 import { Badge, Button, Card, Checkbox, Drawer, EmptyState, Kpi, Pagination, Skeleton, SortTh, Table, THead, Td, Th, Tr, ViewToggle, VIEWS } from "../components/ui";
 
@@ -110,6 +111,15 @@ export default function Collection() {
     onSettled: () => qc.invalidateQueries({ queryKey: ["jobs"] }) });
   const bulk = useMutation({ mutationFn: (acquired: any) => api.bulkAcquired([...picked], acquired),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["collection"] }); qc.invalidateQueries({ queryKey: ["stack-history"] }); } });
+  // card id + copies of every picked stack, kept as they are picked so a selection can span pages
+  const info = useRef(new Map<string, { card_id: string; quantity: number }>());
+  const remember = (x: any) => info.current.set(x.id, { card_id: x.card_id, quantity: x.quantity });
+  const pickedIds = [...picked];
+  const pickedCards = [...new Set(pickedIds.map((id) => info.current.get(id)?.card_id).filter(Boolean) as string[])];
+  const pickedCopies = pickedIds.reduce((n, id) => n + (info.current.get(id)?.quantity ?? 0), 0);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const fetchPicked = useMutation({ mutationFn: () => api.fetchPrices({ cards: pickedCards }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["jobs"] }) });
   const dirty = activeFilterCount(f) > 0;
   const dir: "asc" | "desc" = f.order ? (f.order as "asc" | "desc") : DEFAULT_DESC.includes(f.sort) ? "desc" : "asc";
   const sort = (key: string) => key && set(f.sort === key ? { order: dir === "desc" ? "asc" : "desc" } : { sort: key, order: "" });
@@ -117,6 +127,7 @@ export default function Collection() {
   const items: any[] = list.data?.items ?? [];
   const cur = sel ? items.find((x) => x.id === sel.id) ?? sel : null;  // refreshed row after an edit
   const allOnPage = items.length > 0 && items.every((x) => picked.has(x.id));
+  items.forEach(remember);
   const toggle = (id: string) => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const togglePage = () => setPicked((p) => { const n = new Set(p); items.forEach((x) => allOnPage ? n.delete(x.id) : n.add(x.id)); return n; });
 
@@ -170,7 +181,11 @@ export default function Collection() {
       {picked.size > 0 && <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface-2 px-3 py-2 text-sm" role="status">
         <span>{picked.size} stack{picked.size === 1 ? "" : "s"} selected</span>
         <Button size="sm" onClick={() => { bulk.reset(); setBulkOpen(true); }}>Edit cost &amp; type</Button>
+        <Button size="sm" variant="secondary" disabled={!!running || fetchPicked.isPending} onClick={() => fetchPicked.mutate()}>Fetch prices</Button>
+        <Button size="sm" variant="secondary" onClick={() => setRemoveOpen(true)}>Remove</Button>
         <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>Clear selection</Button>
+        {fetchPicked.isSuccess && <span className="text-muted">Fetching {fetchPicked.data.cards} card{fetchPicked.data.cards === 1 ? "" : "s"}: progress shows at the top of the page.</span>}
+        {fetchPicked.error && <span role="alert" className="text-danger">{fetchErrorText(fetchPicked.error)}</span>}
       </div>}
       {items.length > 0 && <>
         {view === "grid" ? <Grid items={items} picked={picked} onToggle={toggle} onOpen={setSel} /> : <Table>
@@ -206,6 +221,9 @@ export default function Collection() {
           onPage={(p) => set({ page: String(p) }, true)} onPageSize={(n) => set({ size: String(n) })} />
       </>}
       <Drawer open={!!sel} onClose={() => setSel(null)} title={cur?.card?.name ?? "Details"}>{cur && <Details i={cur} onGone={() => setSel(null)} />}</Drawer>
+      <BulkRemoveDrawer kind="stacks" ids={pickedIds} copies={pickedCopies} open={removeOpen} onClose={() => setRemoveOpen(false)}
+        onDone={() => setPicked(new Set())}
+        onChanged={() => { qc.invalidateQueries({ queryKey: ["collection"] }); qc.invalidateQueries({ queryKey: ["dashboard"] }); qc.invalidateQueries({ queryKey: ["exits"] }); }} />
       <Drawer open={bulkOpen} onClose={() => { setBulkOpen(false); if (bulk.isSuccess) setPicked(new Set()); }} title={`Edit cost & type · ${picked.size} stack${picked.size === 1 ? "" : "s"}`}>
         <AcquiredForm bulk busy={bulk.isPending} submitLabel={`Apply to ${picked.size}`} onSubmit={(p) => bulk.mutate(p)} />
         {bulk.error && <p role="alert" className="mt-2 text-sm text-danger">{String((bulk.error as Error).message)}</p>}

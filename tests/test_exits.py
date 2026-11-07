@@ -58,3 +58,33 @@ async def test_delete_is_logged_not_silent(db, client):
 async def test_bad_reason_rejected(db, client):
     sid = await stack(db)
     assert (await client.post(f"/api/collection/{sid}/remove", json={"reason": "stolen"})).status_code == 422
+
+
+async def test_bulk_remove_logs_each_stack_and_reports_bad_ids(db, client):
+    a = await stack(db, qty=3)
+    r2 = await db.collection_items.insert_one({"stack_key": "k2", "card_id": CID, "variant": None, "language": "en",
+        "condition": "LP", "grading": None, "quantity": 2, "acquired": None, "created_at": datetime.now(timezone.utc)})
+    b = str(r2.inserted_id)
+    r = await client.post("/api/collection/bulk-remove", json={"ids": [a, b, "nope", "0" * 24, a], "reason": "gifted", "note": "to a friend"})
+    out = r.json()
+    assert (out["removed"], out["copies"], out["failed"]) == (2, 5, 2)
+    assert [x["ok"] for x in out["results"]] == [True, True, False, False]  # duplicate id counted once
+    assert await db.collection_items.count_documents({}) == 0
+    ex = (await client.get("/api/collection/exits")).json()
+    assert len(ex) == 2 and {e["reason"] for e in ex} == {"gifted"} and {e["quantity"] for e in ex} == {3, 2}
+
+
+async def test_bulk_remove_needs_ids(client):
+    assert (await client.post("/api/collection/bulk-remove", json={"ids": []})).status_code == 422
+    assert (await client.post("/api/collection/bulk-remove", json={"ids": ["x"], "reason": "stolen"})).status_code == 422
+
+
+async def test_wishlist_bulk_remove_drops_alerts(db, client):
+    await db.cards.insert_one(make_card("a", "1"))
+    ids = []
+    for k in ("w1", "w2"):
+        ids.append(str((await db.wishlist.insert_one({"card_id": CID, "wish_key": k, "created_at": datetime.now(timezone.utc)})).inserted_id))
+    await db.alerts.insert_one({"scope": "wish", "wish_id": ids[0]})
+    r = await client.post("/api/wishlist/bulk-remove", json={"ids": ids + ["bad"]})
+    assert (r.json()["removed"], r.json()["failed"]) == (2, 1)
+    assert await db.wishlist.count_documents({}) == 0 and await db.alerts.count_documents({}) == 0

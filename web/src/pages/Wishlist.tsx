@@ -7,7 +7,9 @@ import { eurosToCents, filterWishes, searchWishes, sortWishes, wantLabel, wishDi
 import { useUrlState } from "../lib/urlState";
 import { useStoredState } from "../lib/storedState";
 import PresetBar from "../components/collection/PresetBar";
-import BulkFetch from "../components/BulkFetch";
+import BulkFetch, { fetchErrorText } from "../components/BulkFetch";
+import BulkRemoveDrawer from "../components/BulkRemoveDrawer";
+import { usePriceFetchJob } from "../lib/fetchJob";
 import { QueryError } from "../components/QueryState";
 import { Badge, Button, Card, Checkbox, Chip, Drawer, EmptyState, Field, Input, Kpi, SegmentedControl, Select, Skeleton, SortTh, Table, THead, Td, Th, Tr, ViewToggle, VIEWS } from "../components/ui";
 
@@ -84,10 +86,20 @@ export default function Wishlist() {
     mutationFn: (id: string) => api.removeWish(id),
     onSuccess: () => { setConfirm(null); qc.invalidateQueries({ queryKey: ["wishlist"] }); qc.invalidateQueries({ queryKey: ["alerts"] }); },
   });
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const { running } = usePriceFetchJob(() => qc.invalidateQueries({ queryKey: ["wishlist"] }));
+  const toggle = (id: string) => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const fresh = useQuery({ queryKey: ["wishlist", "prices"], queryFn: api.wishlistPrices });
   const all = q.data ?? [];
   const rows = sortWishes(searchWishes(filterWishes(all, filter), f.q), f.sort, f.order);
   const dir = wishDir(f.sort, f.order);
+  const pickedIds = all.filter((w) => picked.has(w.id)).map((w) => w.id);   // ignore ids that are gone
+  const pickedCards = [...new Set(all.filter((w) => picked.has(w.id)).map((w) => w.card_id))];
+  const allShown = rows.length > 0 && rows.every((w) => picked.has(w.id));
+  const toggleShown = () => setPicked((p) => { const n = new Set(p); rows.forEach((w) => allShown ? n.delete(w.id) : n.add(w.id)); return n; });
+  const fetchPicked = useMutation({ mutationFn: () => api.fetchPrices({ cards: pickedCards }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["jobs"] }) });
   const sortBy = (key: string) => set(f.sort === key ? { order: dir === "desc" ? "asc" : "desc" } : { sort: key, order: "" });
   const hits = all.filter((w) => w.hit).length;
   const priced = all.filter((w) => w.value != null && w.target_price != null);
@@ -120,6 +132,14 @@ export default function Wishlist() {
           <ViewToggle value={view} onChange={setView} />
         </div>
       </div>
+      {pickedIds.length > 0 && <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface-2 px-3 py-2 text-sm" role="status">
+        <span>{pickedIds.length} entr{pickedIds.length === 1 ? "y" : "ies"} selected</span>
+        <Button size="sm" variant="secondary" disabled={!!running || fetchPicked.isPending} onClick={() => fetchPicked.mutate()}>Fetch prices</Button>
+        <Button size="sm" variant="secondary" onClick={() => setRemoveOpen(true)}>Remove</Button>
+        <Button size="sm" variant="ghost" onClick={() => setPicked(new Set())}>Clear selection</Button>
+        {fetchPicked.isSuccess && <span className="text-muted">Fetching {fetchPicked.data.cards} card{fetchPicked.data.cards === 1 ? "" : "s"}: progress shows in the box above.</span>}
+        {fetchPicked.error && <span role="alert" className="text-danger">{fetchErrorText(fetchPicked.error)}</span>}
+      </div>}
       <PresetBar scope="wishlist" state={f} defaults={WISH_DEFAULTS} keys={WISH_KEYS} builtins={WISH_PRESETS} onApply={set} />
       <QueryError q={q} label="Wishlist" />
       {q.isLoading && <Skeleton className="h-40" />}
@@ -128,7 +148,9 @@ export default function Wishlist() {
       {rows.length > 0 && view === "grid" && (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6" aria-label="Wishlist grid">
           {rows.map((w) => (
-            <li key={w.id} className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface p-2 text-sm">
+            <li key={w.id} className="relative flex flex-col gap-1.5 rounded-lg border border-line bg-surface p-2 text-sm">
+              <span className="absolute left-2.5 top-2.5 z-10 rounded bg-surface/80 p-0.5">
+                <Checkbox aria-label={`Select ${w.card?.name} ${wantLabel(w)}`} label="" checked={picked.has(w.id)} onChange={() => toggle(w.id)} /></span>
               <Link to={`/cards/${encodeURIComponent(w.card_id)}`} className="flex flex-col gap-1.5 hover:text-accent">
                 {w.card?.images?.small ? <img src={w.card.images.small} alt="" loading="lazy" className="aspect-[5/7] w-full rounded object-contain" /> : <div className="aspect-[5/7] w-full rounded bg-surface-2" />}
                 <span className="truncate font-medium">{w.card?.name ?? w.card_id} {w.card?.number && `#${w.card.number}`}</span></Link>
@@ -142,13 +164,14 @@ export default function Wishlist() {
         </ul>)}
       {rows.length > 0 && view === "table" && (
         <Table>
-          <THead><Th>Card</Th><Th>Version</Th>
+          <THead><Th className="w-8"><Checkbox aria-label="Select all shown" label="" checked={allShown} onChange={toggleShown} /></Th><Th>Card</Th><Th>Version</Th>
             <SortTh label="Price now" num active={f.sort === "value"} dir={dir} onSort={() => sortBy("value")} />
             <SortTh label="Target" num active={f.sort === "target"} dir={dir} onSort={() => sortBy("target")} />
             <Th>Status</Th><Th>Note</Th><Th className="text-right">Actions</Th></THead>
           <tbody>
             {rows.map((w) => (
               <Tr key={w.id}>
+                <Td><Checkbox aria-label={`Select ${w.card?.name} ${wantLabel(w)}`} label="" checked={picked.has(w.id)} onChange={() => toggle(w.id)} /></Td>
                 <Td><Link to={`/cards/${encodeURIComponent(w.card_id)}`} className="flex items-center gap-3 hover:text-accent">
                   {w.card?.images?.small && <img src={w.card.images.small} alt="" loading="lazy" className="h-12 object-contain" />}
                   <span><span className="block font-medium">{w.card?.name ?? w.card_id} {w.card?.number && `#${w.card.number}`}</span>
@@ -165,6 +188,8 @@ export default function Wishlist() {
               </Tr>))}
           </tbody>
         </Table>)}
+      <BulkRemoveDrawer kind="wishes" ids={pickedIds} open={removeOpen} onClose={() => setRemoveOpen(false)} onDone={() => setPicked(new Set())}
+        onChanged={() => { qc.invalidateQueries({ queryKey: ["wishlist"] }); qc.invalidateQueries({ queryKey: ["alerts"] }); }} />
       <EditDrawer w={edit} onClose={() => setEdit(null)} />
       <Drawer open={!!confirm} onClose={() => setConfirm(null)} title="Remove from wishlist?">
         <p className="mb-4 text-sm text-muted">{confirm?.card?.name} ({confirm && wantLabel(confirm)}). Its target alert is deleted too.</p>

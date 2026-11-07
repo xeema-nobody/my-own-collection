@@ -101,3 +101,15 @@ async def remove(db, id_: str) -> None:
     if not r.deleted_count:
         raise HTTPException(404, "wishlist entry not found")
     await db.alerts.delete_many({"scope": "wish", "wish_id": id_})   # rules of a gone entry would never evaluate
+
+
+async def remove_many(db, ids: list[str]) -> dict:
+    """Remove several wishlist entries (and their alerts); unknown ids are reported, the rest still go through."""
+    results = []
+    for id_ in dict.fromkeys(ids):
+        try:
+            await remove(db, id_)
+            results.append({"id": id_, "ok": True})
+        except HTTPException as e:
+            results.append({"id": id_, "ok": False, "error": e.detail})
+    return {"removed": sum(r["ok"] for r in results), "failed": sum(not r["ok"] for r in results), "results": results}

@@ -213,6 +213,23 @@ async def remove(db, item_id: str, quantity: int = 1, reason: str = "removed", p
     return {"deleted": left <= 0, "quantity": max(left, 0), "removed": qty}
 
 
+async def remove_many(db, ids: list[str], reason: str = "removed", note: str | None = None) -> dict:
+    """Remove whole stacks, one exit row each. A bad or missing id is reported, the rest still go through."""
+    results, copies = [], 0
+    for item_id in dict.fromkeys(ids):
+        try:
+            it = await db.collection_items.find_one({"_id": oid(item_id)}, {"quantity": 1})
+            if not it:
+                raise HTTPException(404, "item not found")
+            r = await remove(db, item_id, quantity=it["quantity"], reason=reason, note=note)
+            copies += r["removed"]
+            results.append({"id": item_id, "ok": True, "removed": r["removed"]})
+        except HTTPException as e:
+            results.append({"id": item_id, "ok": False, "error": e.detail})
+    return {"removed": sum(r["ok"] for r in results), "copies": copies,
+            "failed": sum(not r["ok"] for r in results), "results": results}
+
+
 async def exits(db, limit: int = 100) -> list[dict]:
     """Recent exits with a card label, newest first."""
     rows = [r async for r in db.collection_exits.find().sort("created_at", -1).limit(limit)]

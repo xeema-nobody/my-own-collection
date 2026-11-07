@@ -51,6 +51,18 @@ class AcquiredPatch(BaseModel):
         return self
 
 
+class BulkRemoveIn(BaseModel):
+    """Take whole stacks out of the collection, one reason for all (history is kept in `collection_exits`).
+    Sold carries no price here: a per-copy sale price belongs to the single-stack form."""
+    ids: list[str] = Field(min_length=1, max_length=500)
+    reason: Literal["sold", "gifted", "removed"] = "removed"
+    note: str | None = Field(default=None, max_length=300)
+
+
+class BulkIdsIn(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=500)
+
+
 class BulkAcquiredIn(BaseModel):
     ids: list[str] = Field(min_length=1, max_length=500)
     acquired: AcquiredPatch

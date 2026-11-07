@@ -34,6 +34,7 @@ const post = (b: unknown): RequestInit => ({ method: "POST", body: JSON.stringif
 
 export type ExitReason = "sold" | "gifted" | "removed";
 export type RemoveExtra = { reason?: ExitReason; price?: number | null; currency?: string; note?: string | null };
+export type BulkRemoveResult = { removed: number; copies?: number; failed: number; results: { id: string; ok: boolean; removed?: number; error?: string }[] };
 export type CollectionExit = { id: string; card_id: string; quantity: number; reason: ExitReason; price: number | null; currency: string; date: string; note: string | null; created_at: string; card: { name: string; number: string; set: string; image: string | null } | null };
 
 /** One card version offered by the phone scanner (`/api/scan/*`). Money = cents in the base currency. */
@@ -145,6 +146,8 @@ export const api = {
   addToCollection: (b: unknown) => req<any>("/api/collection", post(b)),
   removeFromCollection: (id: string, quantity = 1, extra: RemoveExtra = {}) =>
     req<{ deleted: boolean; quantity: number; removed: number }>(`/api/collection/${id}/remove`, post({ quantity, ...extra })),
+  bulkRemoveStacks: (ids: string[], reason: ExitReason, note?: string | null) =>
+    req<BulkRemoveResult>("/api/collection/bulk-remove", post({ ids, reason, note: note || null })),
   collectionExits: () => req<CollectionExit[]>("/api/collection/exits"),
   deleteItem: (id: string) => req<void>(`/api/collection/${id}`, { method: "DELETE" }),
   history: (days: number) => req<any[]>(`/api/dashboard/history?days=${days}`),
@@ -169,6 +172,7 @@ export const api = {
   addWish: (b: WishIn) => req<WishEntry>("/api/wishlist", post(b)),
   patchWish: (id: string, b: { target_price?: number | null; note?: string | null; alert?: boolean }) =>
     req<WishEntry>(`/api/wishlist/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+  bulkRemoveWishes: (ids: string[]) => req<BulkRemoveResult>("/api/wishlist/bulk-remove", post({ ids })),
   removeWish: (id: string) => req<void>(`/api/wishlist/${id}`, { method: "DELETE" }),
   alerts: () => req<AlertRule[]>("/api/alerts"),
   createAlert: (b: AlertIn) => req<AlertRule>("/api/alerts", post(b)),
