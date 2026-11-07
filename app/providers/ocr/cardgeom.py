@@ -127,7 +127,25 @@ def flats(img: Image.Image, quad: np.ndarray, insets: tuple[float, ...] = (0.05,
         inner = None
     if inner is not None:
         out.append(warp(out[0], inner))
+    out += sleeve_crops(out[0])
     out += [warp(img, quad, inset) for inset in insets]
+    return out
+
+
+# Where the card sits inside the flat sleeve / toploader (shares x0, y0, x1, y1), measured on Vault-X sleeves. The inner
+# quad search is flaky there (glare, the card's own art frame); a fixed box, also shifted up and down because the card
+# sits at different heights in the sleeve, is enough to read the number line.
+SLEEVE_BOX = (0.10, 0.155, 0.895, 0.915)
+SLEEVE_SHIFTS = (0.0, -0.075, 0.03)
+
+
+def sleeve_crops(flat: Image.Image) -> list[Image.Image]:
+    w, h = flat.size
+    x0, y0, x1, y1 = SLEEVE_BOX
+    out = []
+    for dy in SLEEVE_SHIFTS:
+        box = (int(x0 * w), int((y0 + dy) * h), int(x1 * w), int((y1 + dy) * h))
+        out.append(flat.crop(box).resize((CARD_W, CARD_H), Image.LANCZOS))
     return out
 
 

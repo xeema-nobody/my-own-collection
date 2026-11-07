@@ -119,3 +119,11 @@ def test_warp_is_flat_and_upright(deg):
     top = (a[: int(0.2 * cardgeom.CARD_H)] < 60).sum()
     bottom = (a[int(0.8 * cardgeom.CARD_H):] < 60).sum()
     assert top > 0 or bottom > 0
+
+
+def test_flats_adds_fixed_sleeve_crops_at_card_size():
+    from PIL import Image
+    flat = Image.new("L", (cardgeom.CARD_W, cardgeom.CARD_H), 128)
+    crops = cardgeom.sleeve_crops(flat)
+    assert len(crops) == len(cardgeom.SLEEVE_SHIFTS)
+    assert all(c.size == (cardgeom.CARD_W, cardgeom.CARD_H) for c in crops)

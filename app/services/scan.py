@@ -2,6 +2,7 @@
 
 Never auto-adds: `identify` only proposes cards, `add_scanned` runs when the user taps one."""
 import asyncio
+import dataclasses
 import difflib
 import logging
 import re
@@ -172,10 +173,33 @@ def signals_for(c: dict, fields: CardFields | None, name_hit: bool, codes: set[s
     code = (fields.set_code or "").lower()
     if code and code in codes and (s.get("ptcgo_code") or "").lower() == code:
         sig.append("set")
+    if fields.hp and str(c.get("hp") or "").strip() == str(fields.hp):
+        sig.append("hp")
     return sig
 
 
-SIGNAL_TEXT = {"name": "name", "number": "number", "total": "printed total", "set": "set code"}
+SIGNAL_TEXT = {"name": "name", "number": "number", "total": "printed total", "set": "set code", "hp": "HP"}
+# How much each agreeing signal counts when ranking prints. The collector number is the strongest read, the printed
+# total and set code say which set, HP only separates prints of one name (and the ex / non-ex forms).
+WEIGHT = {"name": 1.0, "number": 4.0, "total": 3.0, "set": 3.0, "hp": 1.0}
+
+
+def score(sig: list[str]) -> float:
+    return sum(WEIGHT[x] for x in sig)
+
+
+async def trusted(db, fields: CardFields | None) -> CardFields | None:
+    """The read without its printed total when no catalog card carries that number / total pair: the total is the
+    weaker read ("137/412" for 137/128) and a wrong one would rank another set's print first. The number stays."""
+    if not fields or not fields.number:
+        return fields
+    if not fields.printed_total:
+        return fields
+    hit = await db.cards.find_one({"tcg": "pokemon", "set.printed_total": fields.printed_total,
+                                   "number": {"$in": _number_forms(fields.number)}}, {"_id": 1})
+    if hit:
+        return fields
+    return dataclasses.replace(fields, printed_total=None)
 
 
 def label_for(sig: list[str]) -> str | None:
@@ -235,6 +259,8 @@ async def identify_card(db, ocr, image: bytes) -> dict:
     text = " | ".join(ln.text for ln in lines)
     keep = [m for m in matches if m[1] >= matches[0][1] - 0.08][:3] if matches else []
     keep += with_suffix_variants(await card_names(db), keep)
+    read = fields
+    fields = await trusted(db, fields)
     codes = await set_codes(db) if fields and fields.set_code else set()
     rank = {n: i for i, (n, _) in enumerate(keep)}
     stamp = lambda c: str((c.get("set") or {}).get("release_date") or "")  # noqa: E731
@@ -254,21 +280,22 @@ async def identify_card(db, ocr, image: bytes) -> dict:
     else:
         found, sigs = [], {}
     # Most agreeing signals first; the stable sort keeps best name, then newest set, inside a tie.
-    found.sort(key=lambda c: -len(sigs[c["_id"]]))
+    found.sort(key=lambda c: -score(sigs[c["_id"]]))
     total = len(found)
     top = found[:MAX_CARDS]
     cards = await views(db, top)
     for c, v in zip(top, cards):
         v["signals"] = sigs[c["_id"]]
         v["match_label"] = label_for(v["signals"])
-    cards.sort(key=lambda v: (-len(v["signals"]), rank.get(norm(v["name"]), 0), -v["owned_qty"]))
-    best = len(cards[0]["signals"]) if cards else 0
-    exact = bool(cards) and best >= 2 and ("number" in cards[0]["signals"] or "set" in cards[0]["signals"]) and (
-        len(cards) == 1 or len(cards[1]["signals"]) < best)
+    cards.sort(key=lambda v: (-score(v["signals"]), rank.get(norm(v["name"]), 0), -v["owned_qty"]))
+    best = score(cards[0]["signals"]) if cards else 0
+    exact = bool(cards) and len(cards[0]["signals"]) >= 2 and (
+        "number" in cards[0]["signals"] or "set" in cards[0]["signals"]) and (
+        len(cards) == 1 or score(cards[1]["signals"]) < best)
     names = [n for n, _ in keep]
     conf = confidence(matches, lines) if keep else ("low" if cards else "none")
     return {"text": text, "confidence": conf, "names": names, "total": total, "cards": cards,
-            "read": read_view(fields), "exact": exact}
+            "read": read_view(read), "exact": exact}
 
 
 def _number_forms(n: str) -> list[str]:

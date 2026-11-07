@@ -115,3 +115,24 @@ def test_parse_set_code(text, want):
 @pytest.mark.parametrize("text,want", [("70", 70), ("HP 190", 190), ("7", None), ("77", None), ("", None)])
 def test_parse_hp(text, want):
     assert parse_hp(text) == want
+
+
+async def test_total_no_catalog_card_carries_is_dropped_but_the_number_still_ranks(cat):
+    # "4/412": no card has that pair (the total was misread), the number 4 is still a real signal
+    res = await scan.identify(cat, FieldOcr("Charizard", CardFields(number="4", printed_total=412)), b"x")
+    assert "total" not in res["cards"][0]["signals"] and "number" in res["cards"][0]["signals"]
+    assert res["read"]["printed_total"] == 412  # the user-facing read is reported as read
+
+
+async def test_hp_separates_prints_of_one_name_but_never_makes_exact(cat):
+    await cat.cards.update_one({"_id": "pokemon:xy12-11"}, {"$set": {"hp": "180"}})
+    await cat.cards.update_one({"_id": "pokemon:base1-4"}, {"$set": {"hp": "120"}})
+    res = await scan.identify(cat, FieldOcr("Charizard", CardFields(hp=180)), b"x")
+    assert ids(res)[0] == "xy12" and res["cards"][0]["signals"] == ["name", "hp"]
+    assert res["exact"] is False  # HP alone is not a print match
+
+
+async def test_number_outweighs_total_and_hp(cat):
+    await cat.cards.update_one({"_id": "pokemon:xy12-11"}, {"$set": {"hp": "180"}})
+    res = await scan.identify(cat, FieldOcr("Charizard", CardFields(number="4", printed_total=108, hp=180)), b"x")
+    assert ids(res)[0] in {"base1", "base2"}  # number (4) beats total (108) + HP (180)
