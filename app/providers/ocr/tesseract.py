@@ -150,6 +150,10 @@ def parse_words(tsv: str) -> list[tuple[str, float, int, int, int, int]]:
     return out
 
 
+class ReadFailed(OcrUnavailable):
+    """tesseract exited non-zero on one crop (it does that on blank or degenerate crops). Not a broken install."""
+
+
 async def _tsv(img: Image.Image, psm: int, whitelist: str | None = None) -> tuple[str, int]:
     buf = io.BytesIO()
     img.save(buf, "PNG")
@@ -167,12 +171,15 @@ async def _tsv(img: Image.Image, psm: int, whitelist: str | None = None) -> tupl
             raise OcrUnavailable("text reader timed out") from e
     if proc.returncode != 0:
         log.warning("tesseract failed: %s", err.decode(errors="ignore")[:200])
-        raise OcrUnavailable("text reader failed")
+        raise ReadFailed("text reader failed")
     return out.decode(errors="ignore"), img.height
 
 
 async def _run(img: Image.Image, psm: int, whitelist: str | None = None) -> list[OcrLine]:
-    tsv, height = await _tsv(img, psm, whitelist)
+    try:
+        tsv, height = await _tsv(img, psm, whitelist)
+    except ReadFailed:  # one bad crop must not fail the whole photo; "not installed" and timeouts still raise
+        return []
     return parse_tsv(tsv, height)
 
 

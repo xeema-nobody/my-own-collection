@@ -109,3 +109,13 @@ async def test_reads_the_name_from_the_top_band(name):
 async def test_reads_a_jpeg_photo_too():
     lines = await TesseractOcr().read_lines(card_image("Charizard", fmt="JPEG"))
     assert "charizard" in " ".join(ln.text for ln in lines).lower()
+
+
+async def test_one_failed_crop_read_is_no_text_not_a_failed_photo(monkeypatch):
+    from PIL import Image
+    from app.providers.ocr import tesseract as t
+
+    async def boom(img, psm, whitelist=None):
+        raise t.ReadFailed("text reader failed")
+    monkeypatch.setattr(t, "_tsv", boom)
+    assert await t._run(Image.new("L", (10, 10)), 7) == []
