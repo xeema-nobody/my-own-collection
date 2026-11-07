@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, Image as ImageIcon } from "lucide-react";
 import { Button } from "../ui";
-import { CARD_RATIO, cropToJpeg, guideRect, resizePhoto } from "../../lib/scan";
+import { CARD_RATIO, SLAB_RATIO, cropToJpeg, guideRect, resizePhoto, slabGuideRect, type ScanMode } from "../../lib/scan";
 
 const canStream = () => typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia && (typeof window === "undefined" || window.isSecureContext !== false);
 
 /** Live rear camera with a card-shaped guide and tap to capture. Without a camera (or on a page that is not
  *  https) the native camera app is used through a file input; both paths hand one JPEG to `onPhoto`. */
-export default function CameraCapture({ onPhoto, busy }: { onPhoto: (photo: Blob) => void; busy?: boolean }) {
+export default function CameraCapture({ onPhoto, busy, mode = "raw" }: { onPhoto: (photo: Blob) => void; busy?: boolean; mode?: ScanMode }) {
   const video = useRef<HTMLVideoElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const [live, setLive] = useState(false);
@@ -32,7 +32,7 @@ export default function CameraCapture({ onPhoto, busy }: { onPhoto: (photo: Blob
   const snap = async () => {
     const v = video.current;
     if (!v || !v.videoWidth) return;
-    onPhoto(await cropToJpeg(v, guideRect(v.videoWidth, v.videoHeight)));
+    onPhoto(await cropToJpeg(v, (mode === "slab" ? slabGuideRect : guideRect)(v.videoWidth, v.videoHeight)));
   };
   const picked = async (f?: File) => { if (f) onPhoto(await resizePhoto(f)); };
 
@@ -40,10 +40,13 @@ export default function CameraCapture({ onPhoto, busy }: { onPhoto: (photo: Blob
     <div className="space-y-3">
       <div className="relative mx-auto aspect-[3/4] w-full max-w-sm overflow-hidden rounded-lg bg-surface-2">
         <video ref={video} playsInline muted aria-label="Camera view" className="h-full w-full object-cover" />
-        {live && <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-xl border-2 border-accent/90 shadow-[0_0_0_999px_rgba(0,0,0,0.45)]" style={{ aspectRatio: String(CARD_RATIO) }} />}
+        {live && <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl border-2 border-accent/90 shadow-[0_0_0_999px_rgba(0,0,0,0.45)]"
+          data-guide={mode} style={mode === "slab" ? { height: "92%", aspectRatio: String(SLAB_RATIO) } : { width: "70%", aspectRatio: String(CARD_RATIO) }} />}
         {!live && <p className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-muted">{note ?? "Starting camera…"}</p>}
       </div>
-      {live && <p className="text-center text-xs text-muted">Fit the card in the frame, name at the top. Less glare reads better.</p>}
+      {live && <p className="text-center text-xs text-muted">{mode === "slab"
+        ? "Fit the whole case in the frame, label at the top. Less glare reads better."
+        : "Fit the card in the frame, name at the top. Less glare reads better."}</p>}
       <div className="mx-auto flex max-w-sm gap-2">
         {live && <Button className="flex-1 py-3 text-base" disabled={busy} onClick={snap}><Camera size={18} />Scan</Button>}
         <Button variant="secondary" className={live ? "py-3" : "flex-1 py-3 text-base"} disabled={busy} onClick={() => file.current?.click()}>

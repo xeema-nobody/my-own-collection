@@ -216,14 +216,16 @@ async def read_slab(ocr, image: bytes) -> dict | None:
 
 
 async def identify(db, ocr, image: bytes, slab: bool = False) -> dict:
-    """Card candidates from the photo; `slab` (the user said it is a slab) also reads the label in parallel. Without
-    it the label is only read when the card itself was not an exact hit, so a bare raw card stays fast."""
+    """Card candidates from the photo; `slab` (slab mode) always reads the label, in parallel. In raw mode the label is
+    only read when the card itself was not an exact hit, so a bare raw card stays fast; a label found there sets
+    `detected` so the UI can offer to switch to slab mode (never switches silently)."""
     if slab:
         res, label = await asyncio.gather(identify_card(db, ocr, image), read_slab(ocr, image))
     else:
         res = await identify_card(db, ocr, image)
         label = None if res["exact"] else await read_slab(ocr, image)
     res["slab"] = label
+    res["detected"] = bool(label) and not slab
     return res
 
 

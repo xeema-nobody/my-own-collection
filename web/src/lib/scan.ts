@@ -25,6 +25,25 @@ export function guideRect(w: number, h: number, fill = 0.82): Rect {
   return { sx: Math.round((w - sw) / 2), sy: Math.round((h - sh) / 2), sw: Math.round(sw), sh: Math.round(sh) };
 }
 
+/** Slab case ratio (PSA-like, width / height). The label sits above the card, so the guide is taller than a card. */
+export const SLAB_RATIO = 0.6;
+
+/** The slab framing guide in source pixels: case-shaped, label at the top. */
+export function slabGuideRect(w: number, h: number, fill = 0.92): Rect {
+  let sh = h * fill, sw = sh * SLAB_RATIO;
+  if (sw > w * fill) { sw = w * fill; sh = sw / SLAB_RATIO; }
+  return { sx: Math.round((w - sw) / 2), sy: Math.round((h - sh) / 2), sw: Math.round(sw), sh: Math.round(sh) };
+}
+
+export type ScanMode = "raw" | "slab";
+const MODE_KEY = "scan.mode";
+export function loadMode(): ScanMode {
+  try { return localStorage.getItem(MODE_KEY) === "slab" ? "slab" : "raw"; } catch { return "raw"; }
+}
+export function saveMode(m: ScanMode) {
+  try { localStorage.setItem(MODE_KEY, m); } catch { /* ignore */ }
+}
+
 export function fitWidth(sw: number, sh: number, maxW: number): { w: number; h: number } {
   const k = Math.min(1, maxW / sw);
   return { w: Math.round(sw * k), h: Math.round(sh * k) };

@@ -47,3 +47,20 @@ describe("remembered choice", () => {
     expect(loadChoice().condition).toBe("NM");
   });
 });
+
+import { slabGuideRect, loadMode, saveMode } from "./scan";
+describe("slab guide and mode", () => {
+  it("slab guide is taller than a card guide and centred", () => {
+    const s = slabGuideRect(1000, 1000), c = guideRect(1000, 1000);
+    expect(s.sh).toBeGreaterThan(c.sh);
+    expect(s.sw / s.sh).toBeCloseTo(0.6, 1);
+    expect(s.sx * 2 + s.sw).toBe(1000);
+  });
+  it("mode defaults to raw and is remembered", () => {
+    localStorage.clear();
+    expect(loadMode()).toBe("raw");
+    saveMode("slab");
+    expect(loadMode()).toBe("slab");
+    localStorage.clear();
+  });
+});

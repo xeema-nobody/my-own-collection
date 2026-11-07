@@ -51,6 +51,23 @@ async def test_label_only_read_when_card_is_not_an_exact_hit(cat):
     assert (await scan.identify(cat, SlabOcr(None), b"x"))["slab"] is None  # raw card: no slab key content
 
 
+async def test_raw_mode_flags_a_slab_it_found_but_slab_mode_does_not(cat):
+    raw = await scan.identify(cat, SlabOcr(), b"x")
+    assert raw["detected"] is True and raw["slab"]["grade"] == 9.0
+    assert (await scan.identify(cat, SlabOcr(), b"x", slab=True))["detected"] is False  # already in slab mode
+    assert (await scan.identify(cat, SlabOcr(None), b"x"))["detected"] is False  # bare raw card
+
+
+async def test_slab_mode_always_reads_the_label_even_on_an_exact_hit(cat):
+    class Exact(SlabOcr):
+        async def read_fields(self, image):
+            from app.providers.ocr import CardFields
+            return CardFields(number="4", printed_total=102)
+    ocr = Exact()
+    res = await scan.identify(cat, ocr, b"x", slab=True)
+    assert ocr.slab_calls == 1 and res["slab"] is not None
+
+
 async def test_reader_without_slab_support_still_identifies(cat):
     class Plain:
         async def read_lines(self, image):

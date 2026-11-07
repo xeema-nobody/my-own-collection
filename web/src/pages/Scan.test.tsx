@@ -113,4 +113,39 @@ describe("Scan page", () => {
     renderPage(<Scan />, "/scan");
     expect(await screen.findByText(/Linked to your computer/)).toBeInTheDocument();
   });
+
+  it("scan mode defaults to raw, is remembered, and slab mode sends slab=1", async () => {
+    const api = mockApi({ "POST /api/scan/identify": IDENT });
+    const user = userEvent.setup();
+    renderPage(<Scan />, "/scan");
+    expect(screen.getByRole("radio", { name: "Scan raw" })).toHaveAttribute("aria-checked", "true");
+    await user.click(screen.getByRole("radio", { name: "Scan slab" }));
+    expect(localStorage.getItem("scan.mode")).toBe("slab");
+    await user.upload(screen.getByLabelText("Take a photo of the card"), new File(["x"], "c.jpg", { type: "image/jpeg" }));
+    await screen.findByText(/Tap the one you hold/);
+    expect(String(api.mock.calls.find(([u]) => String(u).includes("/api/scan/identify"))![0])).toContain("slab=1");
+  });
+
+  it("starts in slab mode when that was the remembered choice", () => {
+    localStorage.setItem("scan.mode", "slab");
+    mockApi({});
+    renderPage(<Scan />, "/scan");
+    expect(screen.getByRole("radio", { name: "Scan slab" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("raw scan that found a slab label shows a visible prompt, and its button switches mode and retakes", async () => {
+    mockApi({ "POST /api/scan/identify": { ...IDENT, detected: true, slab: { grader: "PSA", grade: 9, cert: "56941091", tier: "MINT", grader_seen: false } } });
+    const user = await scanPhoto();
+    expect(await screen.findByText(/Looks like a slab/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Switch to slab and retake/ }));
+    expect(localStorage.getItem("scan.mode")).toBe("slab");
+    expect(await screen.findByRole("radio", { name: "Scan slab" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("no prompt for a bare raw card", async () => {
+    mockApi({ "POST /api/scan/identify": { ...IDENT, detected: false } });
+    await scanPhoto();
+    await screen.findByText(/Tap the one you hold/);
+    expect(screen.queryByText(/Looks like a slab/)).not.toBeInTheDocument();
+  });
 });

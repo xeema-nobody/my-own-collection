@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, Laptop, ScanLine, Undo2 } from "lucide-react";
 import { api, type ScanCard, type ScanIdentify } from "../lib/api";
-import { friendlyScanError, loadChoice, saveChoice } from "../lib/scan";
+import { friendlyScanError, loadChoice, loadMode, saveChoice, saveMode, type ScanMode } from "../lib/scan";
 import CameraCapture from "../components/scan/CameraCapture";
 import CandidatePicker from "../components/scan/CandidatePicker";
 import AddSheet from "../components/scan/AddSheet";
@@ -21,7 +21,9 @@ export default function Scan() {
   const [card, setCard] = useState<ScanCard | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [slabMode, setSlabMode] = useState(false); // "this is a slab": also read the label, open the slab form
+  const [mode, setModeState] = useState<ScanMode>(loadMode); // remembered; slab = taller guide, label always read, slab form
+  const slabMode = mode === "slab";
+  const setMode = (m: ScanMode) => { setModeState(m); saveMode(m); };
   const choice = useRef(loadChoice());
   const [batch, setBatchState] = useState(() => { try { return localStorage.getItem(BATCH_KEY) === "1"; } catch { return false; } });
   const [rows, setRows] = useState<Row[]>([]);
@@ -58,7 +60,7 @@ export default function Scan() {
       const row: Row = { eventId: r.event.id, label: r.label, condition: r.event.grading ? null : v.c.condition, quantity: r.stack.quantity };
       setDone(r.stack.duplicate ? `${r.label}: already in your collection, nothing changed` : r.label + (r.stack.quantity > 1 ? ` (now ${r.stack.quantity})` : "")); setErr(null);
       if (!r.stack.duplicate) { setLast(row); setRows((o) => [...o, row]); }
-      setCard(null); setRes(EMPTY); setSlabMode(false);
+      setCard(null); setRes(EMPTY);
       setStep(batch ? "camera" : "done"); // batch: straight back to the camera for the next card
     },
     onError: (e) => setErr(friendlyScanError(e)),
@@ -83,15 +85,18 @@ export default function Scan() {
       {err && step !== "details" && <p role="alert" className="rounded bg-danger/15 px-3 py-2 text-sm text-danger">{err}</p>}
       {step === "camera" && (identify.isPending
         ? <p className="py-16 text-center text-muted" role="status">Reading the card…</p>
-        : <CameraCapture onPhoto={(b) => identify.mutate(b)} />)}
+        : <div className="space-y-3">
+          <div role="radiogroup" aria-label="Scan mode" className="mx-auto flex max-w-sm gap-1 rounded-lg bg-surface-2 p-1 text-sm">
+            {(["raw", "slab"] as const).map((m) => (
+              <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => setMode(m)}
+                className={`flex-1 rounded-md px-3 py-2 font-medium ${mode === m ? "bg-accent text-accent-fg" : "text-muted"}`}>{m === "raw" ? "Scan raw" : "Scan slab"}</button>))}
+          </div>
+          <CameraCapture mode={mode} onPhoto={(b) => identify.mutate(b)} />
+        </div>)}
       {step === "camera" && !identify.isPending && <CandidateSearchLink onSearch={(q) => search.mutate({ q, page: 1 })} busy={search.isPending} />}
       {step === "camera" && !identify.isPending && <ManualEntry busy={lookup.isPending} onLookup={(number, set) => lookup.mutate({ number, set })} />}
       {step === "camera" && !identify.isPending && (
         <div className="space-y-2 border-t border-line pt-3">
-          <label className="flex items-center justify-between gap-3 text-sm">
-            <span><b>This is a slab</b><span className="block text-xs text-muted">Graded card in a case: also reads the label (grader, grade, cert).</span></span>
-            <input type="checkbox" role="switch" aria-label="This is a slab" className="h-5 w-5" checked={slabMode} onChange={(e) => setSlabMode(e.target.checked)} />
-          </label>
           <label className="flex items-center justify-between gap-3 text-sm">
             <span><b>Batch mode</b><span className="block text-xs text-muted">After each add, the camera is ready for the next card.</span></span>
             <input type="checkbox" role="switch" aria-label="Batch mode" className="h-5 w-5" checked={batch} onChange={(e) => setBatch(e.target.checked)} />
@@ -114,6 +119,11 @@ export default function Scan() {
         </div>
         <Button variant="ghost" className="w-full" onClick={again}>Keep scanning</Button>
       </div>}
+      {step === "pick" && res.detected && !slabMode && (
+        <div role="status" className="flex items-center gap-2 rounded bg-accent/15 px-3 py-2 text-sm text-accent">
+          <span className="flex-1">Looks like a slab (graded card in a case).</span>
+          <Button size="sm" onClick={() => { setMode("slab"); again(); }}>Switch to slab and retake</Button>
+        </div>)}
       {step === "pick" && <CandidatePicker cards={res.cards} total={res.total} confidence={res.confidence} text={res.text} read={res.read} searching={search.isPending}
         canMore={!!more && res.cards.length < res.total}
         onPick={(c) => { setCard(c); setErr(null); setStep("details"); }}
