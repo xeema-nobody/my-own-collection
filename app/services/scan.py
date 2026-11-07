@@ -1,6 +1,7 @@
 """Phone scanning: read a card name from a photo, list every plausible version, add the chosen one.
 
 Never auto-adds: `identify` only proposes cards, `add_scanned` runs when the user taps one."""
+import asyncio
 import difflib
 import logging
 import re
@@ -203,8 +204,8 @@ def read_view(f: CardFields | None) -> dict | None:
 
 
 async def identify(db, ocr, image: bytes) -> dict:
-    lines, matches = await read_until_match(db, ocr, image)
-    fields = await read_fields(ocr, image)
+    # the name stages and the number/set reads are independent: run them side by side (separate tesseract processes)
+    (lines, matches), fields = await asyncio.gather(read_until_match(db, ocr, image), read_fields(ocr, image))
     text = " | ".join(ln.text for ln in lines)
     keep = [m for m in matches if m[1] >= matches[0][1] - 0.08][:3] if matches else []
     keep += with_suffix_variants(await card_names(db), keep)

@@ -208,19 +208,41 @@ class TesseractOcr:
             quad = None
         if quad is not None:
             full = (0, 0, cardgeom.CARD_W, cardgeom.CARD_H)
-            for inset in (0.0, 0.05):  # second pass trims a sleeve / toploader border
-                flat = await asyncio.to_thread(cardgeom.warp, img, quad, inset)
-                async for lines in self._name_stages(flat, full, False):
-                    yield lines
+            # sleeve / toploader: inner card quad and insets; sideways cards may come out upside down: try both ways
+            for flat in await asyncio.to_thread(cardgeom.flats, img, quad):
+                for turned in (flat, cardgeom.upside_down(flat)):
+                    async for lines in self._name_stages(turned, full, False):
+                        yield lines
         box = await asyncio.to_thread(find_card, img) or (0, 0, img.width, img.height)
         located = box != (0, 0, img.width, img.height)
         async for lines in self._name_stages(img, box, located):
             yield lines
 
     async def read_fields(self, image: bytes) -> CardFields:
-        """Collector number, printed total, set code and HP from fixed regions of the flat card."""
+        """Collector number, printed total, set code and HP from fixed regions of the flat card. Sleeved or sideways
+        cards: tries the other flat readings (inner card, insets, upside down) until a number is read."""
         img = await asyncio.to_thread(prepare, image)
         flat, is_flat = await asyncio.to_thread(_flat_or_box, img)
+        cands = [flat]
+        if is_flat:
+            try:
+                quad = await asyncio.to_thread(cardgeom.find_quad, img)
+                cands = await asyncio.to_thread(cardgeom.flats, img, quad, ()) if quad is not None else [flat]  # no insets: too slow
+            except Exception:  # noqa: BLE001
+                cands = [flat]
+        best = CardFields(flat=is_flat)
+        for cand in cands:
+            for turned in (cand, cardgeom.upside_down(cand)):
+                got = await self._fields_of(turned, is_flat)
+                if got.number:
+                    return got
+                if not best.set_code and got.set_code:
+                    best = got
+                elif best.hp is None and got.hp is not None and not best.set_code:
+                    best = got
+        return best
+
+    async def _fields_of(self, flat: Image.Image, is_flat: bool) -> CardFields:
         full = (0, 0, flat.width, flat.height)
         out = CardFields(flat=is_flat)
         votes: dict[tuple[str, int], int] = {}

@@ -114,3 +114,22 @@ def warp(img: Image.Image, quad: np.ndarray, inset: float = 0.0) -> Image.Image:
     arr = np.asarray(img)
     flat = cv2.warpPerspective(arr, m, (CARD_W, CARD_H), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
     return Image.fromarray(flat)
+
+
+def flats(img: Image.Image, quad: np.ndarray, insets: tuple[float, ...] = (0.05, 0.10)) -> list[Image.Image]:
+    """Flat readings of one found quad, best guess first. A sleeve / toploader makes the quad bigger than the card
+    (border, tab): add the inner card quad found inside the flat sleeve, then insets as a fallback."""
+    out = [warp(img, quad)]
+    try:
+        inner = find_quad(out[0])
+    except Exception:  # noqa: BLE001 - geometry must never break scanning
+        inner = None
+    if inner is not None:
+        out.append(warp(out[0], inner))
+    out += [warp(img, quad, inset) for inset in insets]
+    return out
+
+
+def upside_down(flat: Image.Image) -> Image.Image:
+    """The same flat card turned 180 degrees (a card held sideways can be warped either way up)."""
+    return flat.rotate(180)
