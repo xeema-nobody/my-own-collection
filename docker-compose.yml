@@ -18,7 +18,10 @@ services:
     build: .
     container_name: moc-app
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - .env
+      - path: lan/lan.env   # phone mode secrets, written by scripts/lan.sh (absent = phone mode off)
+        required: false
     environment:
       MONGO_URL: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin
       MONGO_DB: owncollection
@@ -56,6 +59,23 @@ services:
       timeout: 5s
       retries: 5
       start_period: 120s
+
+  # Phone gate, opt-in: `scripts/lan.sh up` (profile "lan"). Loopback only; `tailscale serve` fronts it.
+  lan:
+    profiles: ["lan"]
+    image: caddy:2-alpine
+    container_name: moc-lan
+    restart: unless-stopped
+    env_file:
+      - path: lan/lan.env
+        required: false
+    volumes:
+      - ./lan/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./web/dist:/srv:ro
+    ports:
+      - "127.0.0.1:5443:5443"
+    depends_on:
+      app: { condition: service_healthy }
 
 volumes:
   moc_mongo_data:

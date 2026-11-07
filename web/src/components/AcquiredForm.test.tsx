@@ -43,3 +43,13 @@ describe("AcquiredForm", () => {
     expect(screen.queryByRole("radio", { name: /Total for/ })).toBeNull();
   });
 });
+
+describe("AcquiredForm controlled by a parent (onChange + hideSubmit)", () => {
+  it("reports the patch on every edit and has no submit button", async () => {
+    const onChange = vi.fn();
+    render(<AcquiredForm hideSubmit onChange={onChange} />);
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    await userEvent.type(screen.getByLabelText("Price"), "5");
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ price: 500, currency: "EUR" }));
+  });
+});

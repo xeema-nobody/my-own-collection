@@ -10,7 +10,7 @@ Personal, local, single-user web app to administer trading-card collections. Pok
 
 **Data flow**: catalog import (pokemontcg.io) -> cards/sets -> you add stacks to the collection -> price refresh (API aggregates) and scraped fetch (sold listings) -> valuation (sold-based when >=3 sales in 90 d, else market) -> daily snapshot -> dashboard, movers, alerts. Rules: `pricing.md`.
 
-**Status** (2026-11-05): phases 0-9 and the backlog are done: catalog, collection, wishlist, graded valuation, scraped sold prices, dashboard, alerts with macOS notification, scheduler, export/import, backup, TCGdex catalog provider (built, not switched). The scheduler and the backup schedule are built but not yet switched on (operator tasks in `roadmap.md`). Feature work follows `roadmap.md`: Steps 1-3 done (bulk price fetch for collection and wishlist, editable cost + acquisition type), Step 4 (collection list: pagination, filters, speed) is done; Step 5 (phone scanning) is next.
+**Status** (2026-11-05): phases 0-9 and the backlog are done: catalog, collection, wishlist, graded valuation, scraped sold prices, dashboard, alerts with macOS notification, scheduler, export/import, backup, TCGdex catalog provider (built, not switched). The scheduler and the backup schedule are built but not yet switched on (operator tasks in `roadmap.md`). Feature work follows `roadmap.md`: Steps 1-3 done (bulk price fetch for collection and wishlist, editable cost + acquisition type), Step 4 (collection list: pagination, filters, speed) is done; Step 5 (phone scanning) slice 1 is built and set up on the phone; name reading was calibrated on real photos (14 of 15 read).
 
 ## Features
 
@@ -80,6 +80,22 @@ docker compose run --rm app python -m app.scripts.demo_db drop     # delete the 
 | Alerts | ![](screenshots/alerts-dark-1600.png) | ![](screenshots/alerts-light-1600.png) |
 | Settings | ![](screenshots/settings-dark-1600.png) | ![](screenshots/settings-light-1600.png) |
 | Card | ![](screenshots/card-dark-1600.png) | ![](screenshots/card-light-1600.png) |
+
+## Scan cards with your phone
+Point the phone at a card: the app reads the name, shows every version (set, number, rarity, year, variants, price, "Own N"), you tap the one you hold, pick condition, add. Nothing is added before that last tap. A card you already own in the same condition joins that stack. The laptop refreshes by itself and shows "Added: Charizard, Base".
+
+How the phone reaches the app (decision D1, `decisions.md`): **Tailscale**. The phone opens `https://<computer>.<tailnet>.ts.net/scan` over your private tailnet. Nothing is opened on your Wi-Fi, no certificates to install, and only your Tailscale login is let in. The gate only passes four scan calls, never the rest of the API (collection list, export, admin...).
+
+One-time setup:
+1. Install Tailscale on the computer and the phone, same account. In the Tailscale admin page turn on **MagicDNS** and **HTTPS certificates**.
+2. `scripts/lan.sh setup <computer>.<tailnet>.ts.net <your-tailscale-login>` (writes the gitignored `lan/lan.env`; never touches `.env`).
+3. `scripts/lan.sh up` (restarts the app, builds the phone page, starts the gate on `127.0.0.1:5443`). It prints the line to run once: `tailscale serve --bg --https=443 http://127.0.0.1:5443`.
+4. Collection page > **Add by scanning** shows the address as a QR code. Open it on the phone (Tailscale on); optionally Add to Home Screen.
+
+Name reading: the app finds the card in the photo, reads the name area in a few passes and lists every print of that name; a wide photo from the phone camera app works as well as the live view. If nothing is read, type a few letters of the name in the search box. A blank or 0 cost counts as "no cost" (excluded from P/L).
+
+Daily use: Tailscale on, open the page, **Scan** (or **Photo**, which opens the phone's own camera app), tap the version, tap condition, **Add**. Re-run `scripts/lan.sh up` after frontend changes (it rebuilds the phone page). `scripts/lan.sh down` closes the gate; `status` shows it.
+Text is read locally with Tesseract inside the app container (no paid service, no upload outside your machine). Cards the reader cannot read: type the name. Known issue (2026-11-06): the first real-phone photo was not read; accuracy on real photos is being calibrated (`roadmap.md` Step 5, 1b). Until then expect misses and use the typed-name fallback. If the phone says it can't reach the computer: Tailscale on both, computer awake. Base Set style prints (1st Edition / Shadowless) are not separate in the catalog: the picker warns, check the stamp yourself.
 
 ## Look and theme
 Dark by default. Header toggle: light / system / dark (remembered in the browser). UI building blocks live in `web/src/components/ui`.

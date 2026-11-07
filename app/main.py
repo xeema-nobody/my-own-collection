@@ -6,10 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api import admin, alerts, cards, collection, dashboard, wishlist
+from app.api import admin, alerts, cards, collection, dashboard, scan, wishlist
 from app.config import settings
 from app.db.mongo import get_db, init_indexes
 from app.jobs.scheduler import start_scheduler
+from app.security import gate
 
 logging.basicConfig(level=logging.INFO)
 
@@ -39,9 +40,14 @@ async def origin_guard(request, call_next):
     """CSRF: a web page the user visits could POST to localhost (e.g. text/plain to the raw-body import).
     Browsers always send Origin on cross-site writes; curl/scripts send none and pass."""
     origin = request.headers.get("origin")
-    if request.method not in SAFE_METHODS and origin and origin not in allowed_origins:
+    # phone mode (set by the gate): only the tailnet origin counts, the laptop origin does not
+    ok = {settings.lan_origin} if getattr(request.state, "phone", False) else allowed_origins
+    if request.method not in SAFE_METHODS and origin and origin not in ok:
         return JSONResponse({"detail": "origin not allowed"}, status_code=403)
     return await call_next(request)
+
+
+app.middleware("http")(gate)  # phone mode allowlist; registered after origin_guard so it runs first
 
 
 @app.middleware("http")
@@ -52,7 +58,7 @@ async def security_headers(request, call_next):
     return resp
 
 
-for r in (cards.router, collection.router, dashboard.router, wishlist.router, alerts.router, admin.router):
+for r in (cards.router, collection.router, dashboard.router, wishlist.router, alerts.router, admin.router, scan.router):
     app.include_router(r)
 
 

@@ -1,0 +1,10 @@
+{
+  "name": "My Collection: add a card",
+  "short_name": "Scan card",
+  "start_url": "/scan",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0f0e",
+  "theme_color": "#0b0f0e",
+  "icons": [{ "src": "/scan-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

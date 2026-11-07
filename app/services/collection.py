@@ -144,7 +144,7 @@ async def valuate_items(db, items: list[dict], as_of: datetime | None = None) ->
         best, sources = _resolve_all(card, it, rates, sl, now)
         cost = None
         a = it.get("acquired") or {}
-        if a.get("price") is not None:
+        if (a.get("price") or 0) > 0:  # blank or 0 = "no cost" (a gift / pulled card), never a real 0 cost for P/L
             r = rates.get(a.get("currency", "EUR"))
             cost = round(a["price"] * r * it["quantity"]) if r else None
         out.append({"item": it, "card": card, "values": {s: r["value"] for s, r in sources.items()},

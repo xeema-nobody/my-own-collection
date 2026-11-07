@@ -132,18 +132,31 @@ def test_weighted_merge_edge_cases():
 async def test_summary_pl_ignores_unknown_cost_and_splits_pulled(db, client):
     await priced(db, "1", "2", "3")
     await add(client, "a-1", acquired={"type": "purchased", "price": 100})
-    await add(client, "a-2", acquired={"type": "pulled", "price": 0})
+    await add(client, "a-2", acquired={"type": "pulled", "price": 0})                # 0 = no cost, like blank
     await add(client, "a-3")                                                          # no cost at all
     rows = {r["card"]["_id"]: r for r in (await client.get("/api/collection")).json()["items"]}
     v1, v2, v3 = (rows[f"pokemon:a-{n}"]["value"] for n in (1, 2, 3))
     s = (await client.get("/api/collection/summary")).json()
     assert s["value"] == v1 + v2 + v3 and s["cost"] == 100
-    assert s["pl"] == (v1 - 100) + v2                  # stack 3 excluded, not counted as cost 0
+    assert s["pl"] == v1 - 100                         # stacks 2 (cost 0) and 3 (blank) excluded, never cost 0
     assert s["pl_ex_pulled"] == v1 - 100 and s["cost_ex_pulled"] == 100
-    assert s["cost_missing"] == 1 and s["pulled_value"] == v2
-    assert s["cost_basis_cost"] == 100 and s["cost_basis_cost_ex_pulled"] == 100 and s["cost_basis_value"] == v1 + v2
+    assert s["cost_missing"] == 2 and s["pulled_value"] == v2
+    assert s["cost_basis_cost"] == 100 and s["cost_basis_cost_ex_pulled"] == 100 and s["cost_basis_value"] == v1
     assert s["by_type"]["pulled"] == {"stacks": 1, "cards": 1, "cost": 0, "value": v2}
     assert s["by_type"]["unset"]["stacks"] == 1
+
+
+async def test_zero_and_blank_cost_are_no_cost_for_valuation(db, client):
+    await priced(db, "1", "2", "3")
+    await add(client, "a-1", acquired={"type": "purchased", "price": 0})
+    await add(client, "a-2", acquired={"type": "purchased"})
+    await add(client, "a-3", acquired={"type": "purchased", "price": 1})
+    rows = {r["card"]["_id"]: r for r in (await client.get("/api/collection")).json()["items"]}
+    assert rows["pokemon:a-1"]["cost"] is None and rows["pokemon:a-1"]["pl"] is None
+    assert rows["pokemon:a-2"]["cost"] is None and rows["pokemon:a-2"]["pl"] is None
+    assert rows["pokemon:a-3"]["cost"] > 0
+    s = (await client.get("/api/collection/summary")).json()
+    assert s["cost_missing"] == 2 and s["pl"] == rows["pokemon:a-3"]["value"] - rows["pokemon:a-3"]["cost"]
 
 
 async def test_summary_pl_null_when_no_cost_known(db, client):
@@ -158,8 +171,8 @@ async def test_snapshot_has_cost_fields(db):
     await coll.add(db, CollectionIn(card_id="pokemon:a-1", condition="NM", acquired={"type": "pulled", "price": 0}))
     await coll.add(db, CollectionIn(card_id="pokemon:a-2", condition="NM"))
     snap = await snapshots.take_snapshot(db)
-    assert snap["total_cost"] == 0 and snap["total_cost_ex_pulled"] == 0 and snap["cost_missing_count"] == 1
-    assert snap["pulled_value"] > 0 and snap["cost_basis_value"] == snap["pulled_value"]
+    assert snap["total_cost"] == 0 and snap["total_cost_ex_pulled"] == 0 and snap["cost_missing_count"] == 2
+    assert snap["pulled_value"] > 0 and snap["cost_basis_value"] == 0     # no stack has a cost above 0
 
 
 # --- list filters --------------------------------------------------------------------------------
@@ -173,8 +186,8 @@ async def test_list_filters_by_type_and_missing_cost(db, client):
         return {i["card_id"] for i in (await client.get("/api/collection?" + q)).json()["items"]}
     assert await ids("acquisition=pulled") == {"pokemon:a-1"}
     assert await ids("acquisition=unset") == {"pokemon:a-3"}
-    assert await ids("cost_missing=true") == {"pokemon:a-3"}
-    assert await ids("cost_missing=false") == {"pokemon:a-1", "pokemon:a-2"}
+    assert await ids("cost_missing=true") == {"pokemon:a-1", "pokemon:a-3"}      # cost 0 counts as missing
+    assert await ids("cost_missing=false") == {"pokemon:a-2"}
     assert (await client.get("/api/collection?acquisition=bogus")).status_code == 422
 
 

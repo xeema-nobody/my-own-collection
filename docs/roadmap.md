@@ -1,6 +1,6 @@
 # my-own-collection — roadmap
 
-**Created:** 2026-11-05 · **Last updated:** 2026-11-05
+**Created:** 2026-11-05 · **Last updated:** 2026-11-06
 **How to use:** give this file to the project's Claude agent. Work one step at a time, in order. When a step is done (or changes), tick it, add a line to the **Progress log** at the bottom, and bring the update back to socio so this copy stays current.
 
 Functional descriptions only — no technical design. The project agent decides _how_.
@@ -86,7 +86,7 @@ Functional descriptions only — no technical design. The project agent decides 
 
 # Phase 2 — Intake by camera
 
-## Step 5 — Scan cards with the phone camera `[ ]`
+## Step 5 — Scan cards with the phone camera `[~]`
 
 **Goal:** add a card to the collection in a few seconds by pointing the phone at it. "Super easy" is the acceptance bar.
 
@@ -135,7 +135,9 @@ Order of attempts, most forgiving first:
 
 ### Suggested slicing (ship in this order)
 
-1. 5a + 5b-name + 5c + 5d (single card, raw) — usable end to end.
+1. 5a + 5b-name + 5c + 5d (single card, raw) — usable end to end. **`[x]` built 2026-11-05; real-phone timing (< 15 s) and OCR accuracy on real photos still to be checked by the user.**
+   - **1b. Real-photo OCR calibration `[x]` built 2026-11-07.** Cause confirmed: the old reader cropped the top 20 % of the *photo*, and in a real phone photo that is table (the card sits in the middle, about 45 % of the width). Measured on 15 real photos (5 cards x 3, `tests/private/scan_samples/`): **3/15 (20 %) before, 14/15 (93 %) after.** Fix: find the card (Otsu threshold on a thumbnail, box of the lit area), read its top band, then a tight name strip, then binarized crops (names over busy art), then the whole card, then the whole image, stopping at the first confident exact name; ignore "Evolves from X"; a matched base name also offers its ex/V forms (the ex glyph is rarely read). The live view already crops to the framing guide; the Photo button (phone camera app) is the case that needed detection. The type-a-few-letters search was already in the picker and on the camera step. Open: IMG_2994 (Chandelure, glare on the sleeve) still misses; the picker lets the user type.
+   - **1c. Find the card as a rectangle, read name + number + set, match prints `[ ]` (user request 2026-11-07, do before slice 2).** 1b finds the card by brightness against a dark table, so it fails on light or busy tables, glare, tilted or partly cut cards. Goal: locate the card as a quadrilateral with the fixed 63:88 proportion (any position, size, tilt), warp it flat (perspective correction), then read fixed regions of the flat card (name top-left, HP top-right, collector number + set code bottom-left/right, e.g. `127/182`, `PAR EN`), and match against the db on all of them together: name + number narrows to one print per set; number + set code (when readable) often gives a single card. When several prints still fit (Charizard in Base, Base 1st Edition, Base 2, Evolutions...) show them all with image, set, number, year, price, edition note and let the user pick (never auto-add; already the rule). Include a hit-rate comparison on the 15 real photos (baseline 14/15 name-only) and add photos with light table, tilt and glare to the private test set.
 2. 5b-number/set + batch mode.
 3. 5e slabs.
 4. Image-match fallback, extra languages.
@@ -236,7 +238,7 @@ _Future — start only after the collection is large and scanning (step 5) works
 
 | #   | Decision                                                                 | Blocks                   | Notes                                                                                                                                                                     |
 | --- | ------------------------------------------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1  | Phone access: home-network only, or reachable from anywhere?             | Step 5                   | Camera needs a secure connection on the phone. Home-network-only keeps "no cloud, no auth worry"; anywhere triggers auth/hardening. Recommend: home network only for now. |
+| D1  | **ANSWERED 2026-11-05: Tailscale** (private tailnet, no LAN exposure, no CA install; see decisions.md). Was: home-network only, or reachable from anywhere? | Step 5                   | Camera needs a secure connection on the phone. Home-network-only keeps "no cloud, no auth worry"; anywhere triggers auth/hardening. Recommend: home network only for now. |
 | D2  | Which marketplaces matter first (Vinted, Cardmarket, eBay, Marktplaats)? | Step 6c                  | Pick the top 2 for export formats.                                                                                                                                        |
 | D3  | Marketplace price sync: research feasibility/terms before any build      | Step 6d                  | Don't risk seller accounts. Start with reprice suggestions.                                                                                                               |
 | D4  | Other TCGs after Pokémon — which, and catalog source each                | Step 5 languages/catalog | Affects scan identification too.                                                                                                                                          |
@@ -263,3 +265,6 @@ _Future — start only after the collection is large and scanning (step 5) works
 | 2026-11-05 | 2    | Done: "Fetch all prices" on the Wishlist page via a scope picker (Collection / Wishlist / Both, collection first, deduped) in the shared BulkFetch; alerts re-evaluated right after a run (wishlist target alerts fire at once, wishlist-only run writes no snapshot); scheduler option `SCHEDULER_FETCH_WISHLIST`; wishlist freshness counts on the Wishlist page and data-quality card. Same sequential pacing. |
 | 2026-11-05 | 3    | Done: acquisition type (Purchased/Pulled/Traded/Gift/Other) + price per copy/currency/date/where bought editable per stack (Collection details drawer, card page pencil, add form) and in bulk (row checkboxes); weighted average on merge; edit log with restore; P/L now only over stacks with a cost, plus P/L excl. pulled on Collection and Dashboard; filters Acquired how / No cost to fix the old stacks; export/import carry the type (CSV `acquired_type`). Per-copy lots not built (one type + average per stack). |
 | 2026-11-05 | 4    | Done: server-side filter / sort / paging over a cached whole-collection valuation (warm list query 5-15 ms at 5,000 synthetic stacks, 10-34 ms at 10,000; cold build ~0.4-0.8 s once per change). New filters: set, rarity, card type, grader, grade, price per copy range, P/L positive/negative, price stale (plus existing); sorts: name, set, date added, last price update (plus value, cost, P/L, qty); totals for the filtered set; table | image grid (remembered); saved presets in Mongo + built-ins; URL state; quiet background refresh. Wishlist: search, sort, presets, grid. On-sale and has-photos filters wait for Step 6. |
+| 2026-11-05 | 5 | Slice 1 built (5a + 5b-name + 5c + 5d): `/scan` phone page (live camera with guide or native camera capture), local Tesseract name reading, version picker with set/number/rarity/year/variants/price/owned and edition warning for 1st Edition / Shadowless sets, condition/language/copies/cost with remembered last choice, duplicate joins existing stack, laptop "Added: ..." toast + refresh, QR panel on Collection. Phone reaches the app over Tailscale through a Caddy gate that only passes 4 scan endpoints (D1). Not done: slices 2-4, undo, real-photo accuracy measurement, iPhone/Chrome/Add-to-Home-Screen checks. |
+| 2026-11-07 | 5 | Sub-step 1b done: real-photo OCR measured (3/15 -> 14/15), card detection + staged crops, private accuracy test set (git-ignored). Valuation now treats a blank or 0 acquisition price as "no cost" (not a real cost), so P/L counts only stacks with cost above 0. |
+| 2026-11-06 | 5 | Phone setup done on the user's Mac and iPhone (Tailscale, `lan.sh setup/up`, `tailscale serve`); page opens and asks for camera. First real scan failed to read the name -> new sub-step 1b (real-photo OCR calibration), waiting on the user's sample photos. Slice 1 still uncommitted on `feat/scan-slice1`. The 14 no-cost stacks were filled in by the user (some set to Pulled with no cost; P/L counts only stacks with a cost above 0, by design). |

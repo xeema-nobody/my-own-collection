@@ -1,4 +1,4 @@
-import { NavLink, Route, Routes } from "react-router-dom";
+import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import Search from "./pages/Search";
 import CardDetail from "./pages/CardDetail";
 import Collection from "./pages/Collection";
@@ -7,6 +7,8 @@ import Settings from "./pages/Settings";
 import Wishlist from "./pages/Wishlist";
 import Alerts from "./pages/Alerts";
 import NotFound from "./pages/NotFound";
+import Scan from "./pages/Scan";
+import ScanToast from "./components/scan/ScanToast";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./lib/api";
@@ -23,6 +25,9 @@ function AlertsLink() {
 }
 
 export default function App() {
+  // The phone page is its own shell: no laptop nav, and none of the laptop's background polling (the phone may
+  // only reach /api/scan/*).
+  if (useLocation().pathname.startsWith("/scan")) return <ErrorBoundary><Scan /></ErrorBoundary>;
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur">
@@ -49,6 +54,7 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
       </Routes></ErrorBoundary>
       </div>
+      <ScanToast />
     </div>
   );
 }

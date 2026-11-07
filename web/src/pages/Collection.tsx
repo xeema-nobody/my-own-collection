@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, ChevronRight, TriangleAlert } from "lucide-react";
+import { Bell, ChevronRight, ScanLine, TriangleAlert } from "lucide-react";
 import { api, money, ago } from "../lib/api";
 import AcquiredForm, { ACQ_TYPES, AcqBadge, acqLabel } from "../components/AcquiredForm";
 import { QueryError } from "../components/QueryState";
 import SourceCompare from "../components/SourceCompare";
 import BulkFetch, { fetchErrorText } from "../components/BulkFetch";
 import FetcherBadge from "../components/FetcherBadge";
+import PhoneLink from "../components/scan/PhoneLink";
 import Filters from "../components/collection/Filters";
 import Grid from "../components/collection/Grid";
 import PresetBar from "../components/collection/PresetBar";
@@ -90,6 +91,7 @@ export default function Collection() {
   const qc = useQueryClient();
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [phoneOpen, setPhoneOpen] = useState(false);
   const [view, setView] = useStoredState("collection.view", "table", VIEWS);
   const [f, set] = useUrlState(COLLECTION_DEFAULTS);
   const [sel, setSel] = useState<any>(null);
@@ -117,7 +119,11 @@ export default function Collection() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Collection</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">Collection</h1>
+        <Button variant="secondary" size="sm" onClick={() => setPhoneOpen(true)}><ScanLine size={14} />Add by scanning</Button>
+      </div>
+      <Drawer open={phoneOpen} onClose={() => setPhoneOpen(false)} title="Add by scanning"><PhoneLink /></Drawer>
       <QueryError q={sum} label="Summary" />
       {sum.isLoading && <div className="grid grid-cols-2 gap-3 md:grid-cols-5">{[0, 1, 2, 3, 4].map((n) => <Skeleton key={n} className="h-20" />)}</div>}
       {s && <div className="grid grid-cols-2 gap-3 md:grid-cols-6">

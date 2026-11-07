@@ -1,5 +1,6 @@
 // Single API client: all backend calls go through here.
-const BASE = (import.meta.env.VITE_API_URL as string) || "http://localhost:8100";
+// "" (set at build time for the phone page) = same origin; unset = the local API
+const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8100";
 
 /** Scraped/upstream urls end up in href: only http(s) may become a link (blocks javascript:). */
 export const safeUrl = (u: string | null | undefined): string | undefined =>
@@ -30,6 +31,19 @@ const qs = (p: Record<string, unknown>) => {
   return s ? "?" + s : "";
 };
 const post = (b: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(b) });
+
+/** One card version offered by the phone scanner (`/api/scan/*`). Money = cents in the base currency. */
+export type ScanCard = {
+  id: string; name: string; number: string | null; printed_total: number | null; set: { id: string; name: string };
+  year: number | null; rarity: string | null; image: string | null; variants: string[]; price: number | null; language: string;
+  edition_note: string | null; owned_qty: number;
+  owned: { condition: string | null; language: string; variant: string | null; grading: unknown; quantity: number }[];
+};
+export type ScanIdentify = { text: string; confidence: "high" | "medium" | "low" | "none"; names: string[]; total: number; cards: ScanCard[] };
+export type ScanSearch = { total: number; page: number; cards: ScanCard[] };
+export type ScanAdded = { label: string; stack: { id: string; quantity: number; type_conflict?: boolean }; event: ScanEvent };
+export type ScanEvent = { id: string; at: string; card_id: string; label: string; quantity_added: number; quantity_after: number; type_conflict: boolean };
+export type ScanStatus = { enabled: boolean; url: string | null; login: string | null };
 
 export type FetchLog = { status: string; detail: string | null; url: string | null; fetched_at: string | null };
 export type FetcherStatus = { up: boolean; browser?: string; sites?: Record<string, string>; last_error?: string | null; detail?: string };
@@ -153,6 +167,13 @@ export const api = {
   alertUnread: () => req<{ count: number }>("/api/alerts/unread-count"),
   evaluateAlerts: () => req<{ fired: number }>("/api/alerts/evaluate", { method: "POST" }),
   snapshot: () => req<any>("/api/admin/snapshot", { method: "POST" }),
+  scanMe: () => req<{ ok: boolean }>("/api/scan/me"),
+  scanIdentify: (photo: Blob) =>
+    req<ScanIdentify>("/api/scan/identify", { method: "POST", body: photo, headers: { "content-type": photo.type || "image/jpeg" } }),
+  scanSearch: (q: string, page = 1) => req<ScanSearch>("/api/scan/search" + qs({ q, page })),
+  scanAdd: (b: unknown) => req<ScanAdded>("/api/scan/add", post(b)),
+  scanStatus: () => req<ScanStatus>("/api/scan/status"),
+  scanEvents: (after?: string | null) => req<{ events: ScanEvent[]; latest: string | null }>("/api/scan/events" + qs({ after })),
 };
 
 export const money = (cents: number | null | undefined, cur = "EUR") =>

@@ -15,9 +15,11 @@ app/                 Python backend
   db/                mongo.py (client, init_indexes), models.py (request models)
   api/               routers per domain: cards, collection, wishlist, dashboard, alerts, admin
   services/          catalog_import, search, collection (valuation), wishlist, pricing, fx, snapshots, alerts, refresh, jobs
-  providers/         catalog/ (CatalogProvider, pokemontcg), price/ (fx)
+  providers/         catalog/ (CatalogProvider, pokemontcg), price/ (fx), ocr/ (tesseract)
+  security.py        phone-mode gate (X-Moc-Gate allowlist), see architecture.md 'Phone scanning'
   jobs/scheduler.py  APScheduler, only if SCHEDULER_ENABLED
 web/                 Vite React SPA (src/pages, src/components/ui = UI kit, src/lib/api.ts = single API client)
+lan/  scripts/lan.sh   opt-in Caddy gate for phone scanning over Tailscale (lan/lan.env = secrets, gitignored)
 tests/  docs/
 ```
 
@@ -29,6 +31,7 @@ docker compose restart app            # backend has no --reload; restart after e
 docker compose run --rm -v $PWD/tests:/code/tests -v $PWD/pytest.ini:/code/pytest.ini app sh -c "pip install -q pytest pytest-asyncio && python -m pytest"
 docker compose exec web npx tsc --noEmit   # FE typecheck
 docker compose exec web npm test         # FE vitest (jsdom, fetch mocked)
+scripts/lan.sh setup|up|down|status    # phone scanning gate (docs/README.md)
 scripts/backup.sh                     # mongodump -> backups/ (docs/backup.md)
 scripts/restore.sh <file> [--to-scratch]   # restore / verify a dump
 ```

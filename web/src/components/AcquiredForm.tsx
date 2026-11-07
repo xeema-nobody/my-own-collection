@@ -31,17 +31,23 @@ export function buildPatch(f: State, qty: number, bulk: boolean): AcquiredPatch 
 }
 
 /** Edit cost + acquisition type of a stack (`bulk` = several stacks: blank keeps the current value). */
-export default function AcquiredForm({ initial, qty = 1, bulk = false, busy, submitLabel = "Save", onSubmit }: {
-  initial?: Acquired | null; qty?: number; bulk?: boolean; busy?: boolean; submitLabel?: string; onSubmit: (p: AcquiredPatch) => void;
+export default function AcquiredForm({ initial, qty = 1, bulk = false, busy, submitLabel = "Save", onSubmit, onChange, hideSubmit }: {
+  initial?: Acquired | null; qty?: number; bulk?: boolean; busy?: boolean; submitLabel?: string; onSubmit?: (p: AcquiredPatch) => void;
+  /** Called with the current patch on every edit (and once on mount): lets a parent own the submit button. */
+  onChange?: (p: AcquiredPatch) => void; hideSubmit?: boolean;
 }) {
   const [f, setF] = useState<State>({
     type: initial?.type ?? "", price: initial?.price != null ? String(initial.price / 100) : "", total: false,
     currency: bulk ? "" : initial?.currency ?? "EUR", date: initial?.date ?? "", source: initial?.source ?? "" });
-  const up = (p: Partial<State>) => setF((o) => ({ ...o, ...p }));
+  const up = (p: Partial<State>) => {
+    const n = { ...f, ...p };
+    setF(n);
+    onChange?.(buildPatch(n, qty, bulk));
+  };
   const total = f.total && !bulk;
   const perCopy = total && f.price.trim() !== "" ? Math.round(+f.price * 100 / Math.max(qty, 1)) : null;
   return (
-    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); onSubmit(buildPatch(f, qty, bulk)); }}>
+    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); onSubmit?.(buildPatch(f, qty, bulk)); }}>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Acquired how">
           <Select aria-label="Acquired how" value={f.type} allLabel={bulk ? "Keep current" : "Not set"}
@@ -66,6 +72,6 @@ export default function AcquiredForm({ initial, qty = 1, bulk = false, busy, sub
         <span>{perCopy != null ? `= ${(perCopy / 100).toFixed(2)} per copy` : "Different prices per copy: enter the total, the average is stored."}</span>
       </div>}
       {bulk && <p className="text-xs text-muted">Only the fields you fill in change; the rest stay as they are on each stack. Price is per copy.</p>}
-      <Button type="submit" disabled={busy}>{submitLabel}</Button>
+      {!hideSubmit && <Button type="submit" disabled={busy}>{submitLabel}</Button>}
     </form>);
 }

@@ -1,0 +1,56 @@
+# Phone gate (compose profile "lan"). Listens on 127.0.0.1:5443 only; `tailscale serve` is the one thing in
+# front of it. Tailscale adds the Tailscale-User-Login header after authenticating the device, and replaces any
+# value the client sent. Everything not listed here is a 403/redirect.
+{
+	auto_https off
+	admin off
+}
+
+:5443 {
+	request_body {
+		max_size 10MB
+	}
+
+	@wrong_login not header Tailscale-User-Login {$MOC_TS_LOGIN}
+	handle @wrong_login {
+		respond "This account is not allowed." 403
+	}
+
+	@phone_api {
+		method GET POST
+		path /api/scan/me /api/scan/identify /api/scan/search /api/scan/add
+	}
+	handle @phone_api {
+		reverse_proxy app:8000 {
+			header_up X-Moc-Gate {$MOC_GATE_SECRET}
+			header_up -Tailscale-User-Login
+		}
+	}
+	handle /health {
+		reverse_proxy app:8000 {
+			header_up X-Moc-Gate {$MOC_GATE_SECRET}
+		}
+	}
+
+	handle /assets/* {
+		root * /srv
+		file_server
+	}
+	@static path /manifest.webmanifest /scan-icon.svg
+	handle @static {
+		root * /srv
+		file_server
+	}
+	handle /scan* {
+		root * /srv
+		rewrite * /index.html
+		file_server
+	}
+	# anything else under /api is refused; every other path goes to the scan page
+	handle /api/* {
+		respond "Not available from the phone." 403
+	}
+	handle {
+		redir * /scan 302
+	}
+}

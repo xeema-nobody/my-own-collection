@@ -21,7 +21,7 @@ AcqType = Literal["purchased", "pulled", "traded", "gift", "other"]
 
 class Acquired(BaseModel):
     type: AcqType | None = None  # None = not set (treated as non-pulled)
-    price: int | None = Field(default=None, ge=0, description="cents per copy; 0 = free, None = unknown")
+    price: int | None = Field(default=None, ge=0, description="cents per copy; 0 or None = no cost recorded (excluded from P/L)")
     currency: str = "EUR"
     date: dt.date | None = None
     source: str | None = None  # where it was bought

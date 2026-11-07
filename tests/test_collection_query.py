@@ -77,8 +77,8 @@ async def test_acquisition_cost_and_needs_price_filters(world, client):
     assert (await get(client, "?acquisition=purchased"))["total"] == 2
     assert (await get(client, "?acquisition=pulled"))["total"] == 1
     assert (await get(client, "?acquisition=unset"))["total"] == 1
-    assert (await get(client, "?cost_missing=true"))["total"] == 1
-    assert (await get(client, "?cost_missing=false"))["total"] == 3
+    assert (await get(client, "?cost_missing=true"))["total"] == 2   # the unset stack and the pulled one (cost 0)
+    assert (await get(client, "?cost_missing=false"))["total"] == 2
     assert (await get(client, "?needs_price=true"))["total"] == 1  # the slab has no graded price
 
 
@@ -172,11 +172,11 @@ async def test_cache_not_shared_between_databases(world, monkeypatch):
 async def test_write_paths_invalidate(world, client, monkeypatch):
     monkeypatch.setattr(settings, "valuation_cache_ttl", 60)
     valuation_cache.bump()
-    assert (await get(client))["totals"]["cost_missing"] == 1
+    assert (await get(client))["totals"]["cost_missing"] == 2
     item = next(i for i in (await get(client))["items"] if i["cost"] is None)
     r = await client.patch(f"/api/collection/{item['id']}", json={"acquired": {"type": "purchased", "price": 50}})
     assert r.status_code == 200
-    assert (await get(client))["totals"]["cost_missing"] == 0           # patch visible immediately
+    assert (await get(client))["totals"]["cost_missing"] == 1           # patch visible immediately
     await get(client)
     assert (await client.post(f"/api/collection/{item['id']}/remove", json={"quantity": 1})).status_code == 200
     assert (await get(client))["total"] == 3                            # remove visible immediately

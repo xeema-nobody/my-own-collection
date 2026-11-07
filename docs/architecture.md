@@ -31,11 +31,29 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 | `services/refresh.py` | price refresh job (collection, all, or chosen sets) then snapshot |
 | `providers/fetcher.py`, `providers/price/{pricecharting,cardmarket,altxyz,match,resolve}.py` | fetcher HTTP client; scraped-site adapters + matcher (see pricing.md) |
 | `services/price_fetch.py` | on-demand scraped fetch job `price_fetch` (cards / sets / owned x sources): adapters -> `prices` + `latest_price`, records matches, `fetch_log` (`{card_id}\|{source}`: status, detail, url, fetched_at), snapshot at end. Bulk (`mode` all/never/stale/valuable/stack via `resolve_bulk(..., scope=collection|wishlist|both)`; both = owned first then wishlist-only, deduped; stats carry `scope`, `alerts_fired`): stats carry `eta_s` (remaining x observed pace of real fetches, pause time excluded), `paused`, `ok_cards`; `failures` / `needs_match_list` entries have `{card_id, name, source, reason}` (reason = no match / blocked / layout changed / failed). Pause / resume / cancel = `control` field on the running `jobs` doc (`jobs.set_control`), polled between pairs by `_checkpoint`; a paused job stays `running` (keeps the one-at-a-time index), cancel ends as status `cancelled`. Bulk runs raise one `notify_system` inbox item (`price_fetch_done:<job>`) that the fetcher notifier shows as a macOS notification. After a run with `ok` > 0, `_after_run` takes the snapshot only if an owned card updated (it evaluates alerts) else calls `alerts.evaluate`, failures only logged. `price_freshness` (owned + `wishlist` sub-dict) feeds `/collection/summary.prices`; `wishlist_freshness` feeds `GET /api/wishlist/prices`. Endpoints `POST /api/admin/prices/fetch`, `POST /api/cards/{id}/fetch-prices` (202; 422 bad target/source; 503 fetcher down; 409 running) |
+| `providers/ocr/` | `get_ocr()` (`OCR_PROVIDER`, `tesseract`). `TesseractOcr.read_lines(image)`: Pillow decode (JPEG/PNG/WebP only, 40 Mpx cap, EXIF turn, grayscale, autocontrast, 1000 px wide), top 20 % band read in sparse mode (`--psm 11`) and line mode (`--psm 7`), whole image as fallback; subprocess with 10 s timeout, max 2 at once. Errors: `ImageError` (400), `OcrUnavailable` (503) |
+| `services/scan.py` | `identify` (OCR lines -> word windows -> exact `name_norm` match, difflib fuzzy 0.75 only when nothing is exact -> every card of the best <= 3 names, owned first then newest set, max 40, `confidence` high/medium/low/none, `edition_note` for sets with unmarked 1st Edition / Shadowless prints), `search` (typed name, same card shape), `add_scanned` (= `collection.add` stack merge + a `scan_events` row), `events_after` (cursor poll for the laptop). Never adds on its own |
+| `security.py` | phone-mode gate: a request with a valid `X-Moc-Gate` may only call `PHONE_ALLOWED` (below) from the tailnet host/origin; a wrong header is 403; no header = laptop, unchanged |
 | `services/sales.py` | `store_sales` (scraped sold listings, dedupe on listing id), `store_chart_seed` (PriceCharting monthly history as `seed` observations) |
 | `services/matching.py` | persisted card -> product URL per scraped source (`product_matches`), URL validation, user/auto precedence |
 | `jobs/scheduler.py` | APScheduler, only if `SCHEDULER_ENABLED`: tasks `daily_refresh`, `daily_fetch` (scraped, unattended, capped), `daily_snapshot`, `weekly_catalog`, `daily_prune` (deletes read alert events older than `ALERT_EVENTS_KEEP_DAYS`, 90; 0 = keep; housekeeping, never caught up), each via `run_task` (failures and busy job types are logged, never propagate). Boot `catch_up` runs overdue tasks once, in the background. `jobs` rows carry `trigger` = `manual`\|`scheduler`\|`catchup`; a scheduled fetch with the fetcher down is a `skipped` row |
 
 Long jobs run as asyncio tasks; state is persisted in the `jobs` collection (UI polls `/api/admin/jobs`). One `running` job per type: API returns 409, and a partial unique index on `jobs.type` (status=running) is the race-free backstop. Orphaned `running` jobs are marked `interrupted` on boot.
+
+## Phone scanning (Tailscale, opt-in)
+
+```
+iPhone --https--> tailscale serve (host Mac) --http--> Caddy 127.0.0.1:5443 (compose profile `lan`, off by default) --> app:8000
+```
+Caddy (`lan/Caddyfile`): needs `Tailscale-User-Login == MOC_TS_LOGIN` (Tailscale sets it after authenticating the device), serves `web/dist` for `/scan`, `/assets`, manifest, proxies only the paths below with `X-Moc-Gate: <secret>`, caps bodies at 10 MB, answers 403 on any other `/api/*`, redirects everything else to `/scan`. The app re-checks the allowlist, the Host (must be the tailnet host, which `lan/lan.env` adds to `ALLOWED_HOSTS`) and the Origin (only `LAN_ORIGIN`; the laptop origin does not work from the phone). Secrets live in gitignored `lan/lan.env` written by `scripts/lan.sh`, which is an optional second `env_file` of `app` and `lan`; without it phone mode is off and any gate header is refused.
+
+| Reachable from the phone | Laptop only (403 through the gate) |
+|---|---|
+| `GET /api/scan/me`, `POST /api/scan/identify` (raw image body, 8 MB cap), `GET /api/scan/search?q=`, `POST /api/scan/add` (body = `CollectionIn`), `GET /health` | `/api/scan/status`, `/api/scan/events`, and all of `/api/collection/*` (list, export, import, patch), `/api/cards/*`, `/api/admin/*`, wishlist, alerts, dashboard, `/docs` |
+
+`scan_events` `{at, card_id, label, stack_id, quantity_added, quantity_after, type_conflict}`: TTL `SCAN_EVENT_KEEP_DAYS` (7). The laptop (`ScanToast`, mounted in `App`) polls `GET /api/scan/events?after=<id>` every 4 s only when `/api/scan/status` says phone mode is on; the first call returns just a cursor (no history), later calls return new events, which invalidate the `collection` / `cards` / `card` queries and show "Added: ...".
+Config: `LAN_GATE_SECRET`, `LAN_ORIGIN`, `LAN_LOGIN` (display), `OCR_PROVIDER`, `TESSERACT_CMD`, `SCAN_MAX_IMAGE_MB` (8), `SCAN_EVENT_KEEP_DAYS` (7). The app image installs `tesseract-ocr` + English data; Pillow is a dependency. `api.ts` `BASE` is `VITE_API_URL ?? http://localhost:8100`; the phone build passes an empty value (same origin).
+Frontend: `/scan` (`pages/Scan.tsx`) is its own shell in `App` (no laptop nav, no laptop polling). `components/scan/`: `CameraCapture` (rear camera + card-shaped guide, tap to capture, crop to the guide, <= 1000 px JPEG; without `getUserMedia` / secure context the native camera through `<input type=file capture>`), `CandidatePicker`, `AddSheet` (condition / print / language / copies / `AcquiredForm` via its new `onChange` + `hideSubmit`; last choice remembered in localStorage `scan.choice`), `PhoneLink` (QR via `qrcode`, in a Drawer on the Collection page), `ScanToast`.
 
 ## Fetcher (host Mac, `fetcher/`)
 
@@ -94,7 +112,7 @@ Failure handling: every page query shows `QueryError` (`components/QueryState.ts
 
 ## Security posture
 
-Local single-user, no auth. API bound to 127.0.0.1, CORS limited to the web origin, cross-site writes rejected by an Origin guard, Host header allowlist (`ALLOWED_HOSTS`), Mongo not exposed on host, security headers set. Secrets only in `.env` (gitignored). Add auth before any deployment.
+Local single-user, no auth. API bound to 127.0.0.1 (phone access only through the Tailscale gate, see Phone scanning), CORS limited to the web origin, cross-site writes rejected by an Origin guard, Host header allowlist (`ALLOWED_HOSTS`), Mongo not exposed on host, security headers set. Secrets only in `.env` (gitignored). Add auth before any deployment.
 
 ## Demo database
 

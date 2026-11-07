@@ -45,6 +45,18 @@ class Settings(BaseSettings):
     outlier_pct: int = 40
     # seconds the whole-collection valuation is cached in memory (writers also drop it); 0 = off
     valuation_cache_ttl: int = 60
+    # Phone scanning over the tailnet (docs/architecture.md "Phone scanning"). Empty secret = phone mode off:
+    # a request carrying X-Moc-Gate is then refused. Set by scripts/lan.sh in lan/lan.env, never in .env.
+    lan_gate_secret: str = ""
+    # exact https origin of the tailnet host the phone uses (Origin guard, phone mode only)
+    lan_origin: str = ""
+    # Tailscale login the Caddy gate accepts; shown on the laptop, enforced by Caddy
+    lan_login: str = ""
+    # card name reader: tesseract (local, no network)
+    ocr_provider: str = "tesseract"
+    tesseract_cmd: str = "tesseract"
+    scan_max_image_mb: int = 8
+    scan_event_keep_days: int = 7
 
 
 settings = Settings()

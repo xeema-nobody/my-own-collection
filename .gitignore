@@ -10,3 +10,7 @@ web/dist/
 backups/
 temp/
 .DS_Store
+lan/lan.env
+
+# private phone photos for the local OCR accuracy test (tests/test_scan_accuracy.py)
+tests/private/

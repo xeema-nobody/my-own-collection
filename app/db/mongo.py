@@ -76,3 +76,7 @@ async def init_indexes() -> None:
     await jobs.mark_orphans(db)
     await db.jobs.create_index([("type", ASCENDING)], unique=True, name="jobs_one_running_per_type",
                                partialFilterExpression={"status": "running"})
+    # Phone-scan "added" log the laptop polls; old rows expire on their own.
+    await db.scan_events.create_index([("at", DESCENDING)])
+    await db.scan_events.create_index([("at", ASCENDING)], expireAfterSeconds=settings.scan_event_keep_days * 86400,
+                                      name="scan_events_ttl")
