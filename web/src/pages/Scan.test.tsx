@@ -76,4 +76,41 @@ describe("Scan page", () => {
     expect(await screen.findByText(/Tap the one you hold/)).toBeInTheDocument();
     await waitFor(() => expect(api.mock.calls.some(([u]) => String(u).includes("q=charizard"))).toBe(true));
   });
+
+  it("batch mode returns to the camera, counts, and undoes the last add", async () => {
+    let n = 0;
+    const api = mockApi({
+      "POST /api/scan/identify": IDENT,
+      "POST /api/scan/add": () => ({ label: "Charizard, Base", stack: { id: "s1", quantity: ++n }, event: { id: `e${n}` } }),
+      "POST /api/scan/undo": { label: "Charizard, Base", quantity: 0, deleted: true, event_id: "u1" },
+    });
+    const user = userEvent.setup();
+    renderPage(<Scan />, "/scan");
+    await user.click(screen.getByRole("switch", { name: "Batch mode" }));
+    await user.upload(screen.getByLabelText("Take a photo of the card"), new File(["x"], "c.jpg", { type: "image/jpeg" }));
+    await user.click(await screen.findByRole("button", { name: /Charizard, Base 4/ }));
+    await user.click(screen.getByRole("button", { name: /Add 1 to collection/ }));
+    expect(await screen.findByText(/1 added/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Take a photo of the card")).toBeInTheDocument(); // camera ready again
+    await user.click(screen.getByRole("button", { name: /Undo last/ }));
+    await waitFor(() => expect(screen.queryByText(/1 added/)).toBeNull());
+    expect(JSON.parse((api.mock.calls.find(([u]) => String(u).endsWith("/api/scan/undo"))![1] as RequestInit).body as string)).toEqual({ event_id: "e1" });
+  });
+
+  it("typed number + set finds the print", async () => {
+    const api = mockApi({ "GET /api/scan/lookup": { ...IDENT, total: 1, cards: [card()], exact: true } });
+    const user = userEvent.setup();
+    renderPage(<Scan />, "/scan");
+    await user.type(screen.getByLabelText("Card number"), "4/102");
+    await user.type(screen.getByLabelText("Set code or name"), "base");
+    await user.click(screen.getByRole("button", { name: "Find" }));
+    expect(await screen.findByRole("button", { name: /Charizard, Base 4/ })).toBeInTheDocument();
+    expect(String(api.mock.calls.find(([u]) => String(u).includes("/api/scan/lookup"))![0])).toContain("number=4%2F102");
+  });
+
+  it("shows the link banner when the laptop opened a session", async () => {
+    mockApi({ "GET /api/scan/session": { session: { id: "s1", created_at: "" } } });
+    renderPage(<Scan />, "/scan");
+    expect(await screen.findByText(/Linked to your computer/)).toBeInTheDocument();
+  });
 });

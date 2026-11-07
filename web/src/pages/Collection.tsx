@@ -9,6 +9,7 @@ import SourceCompare from "../components/SourceCompare";
 import BulkFetch, { fetchErrorText } from "../components/BulkFetch";
 import FetcherBadge from "../components/FetcherBadge";
 import PhoneLink from "../components/scan/PhoneLink";
+import ScanSession from "../components/scan/ScanSession";
 import Filters from "../components/collection/Filters";
 import Grid from "../components/collection/Grid";
 import PresetBar from "../components/collection/PresetBar";
@@ -18,6 +19,7 @@ import { useStoredState } from "../lib/storedState";
 import { BUILTIN_PRESETS, COLLECTION_DEFAULTS, DEFAULT_DESC, PRESET_KEYS, activeFilterCount, toApiQuery } from "../lib/collectionList";
 import ValueChart from "../components/ValueChart";
 import { usePriceFetchJob } from "../lib/fetchJob";
+import RemoveStack from "../components/collection/RemoveStack";
 import { Badge, Button, Card, Checkbox, Drawer, EmptyState, Kpi, Pagination, Skeleton, SortTh, Table, THead, Td, Th, Tr, ViewToggle, VIEWS } from "../components/ui";
 
 const COLS: { key: string; label: string; num?: boolean }[] = [
@@ -57,7 +59,7 @@ function CostSection({ i }: { i: any }) {
     </section>);
 }
 
-function Details({ i }: { i: any }) {
+function Details({ i, onGone }: { i: any; onGone?: () => void }) {
   const why = whyEstimated(i);
   const qc = useQueryClient();
   const fetchStack = useMutation({ mutationFn: () => api.fetchPrices({ mode: "stack", stack_id: i.id }),
@@ -83,6 +85,7 @@ function Details({ i }: { i: any }) {
         </div>
       </div>
       <CostSection i={i} />
+      <RemoveStack id={i.id} quantity={i.quantity} name={i.card?.name ?? "card"} onDone={onGone} />
       <SourceCompare row={i} />
     </div>);
 }
@@ -123,7 +126,7 @@ export default function Collection() {
         <h1 className="text-xl font-semibold">Collection</h1>
         <Button variant="secondary" size="sm" onClick={() => setPhoneOpen(true)}><ScanLine size={14} />Add by scanning</Button>
       </div>
-      <Drawer open={phoneOpen} onClose={() => setPhoneOpen(false)} title="Add by scanning"><PhoneLink /></Drawer>
+      <Drawer open={phoneOpen} onClose={() => setPhoneOpen(false)} title="Add by scanning"><div className="space-y-5"><ScanSession /><PhoneLink /></div></Drawer>
       <QueryError q={sum} label="Summary" />
       {sum.isLoading && <div className="grid grid-cols-2 gap-3 md:grid-cols-5">{[0, 1, 2, 3, 4].map((n) => <Skeleton key={n} className="h-20" />)}</div>}
       {s && <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
@@ -202,7 +205,7 @@ export default function Collection() {
         <Pagination page={Number(f.page)} pageSize={Number(f.size)} total={list.data?.total ?? 0}
           onPage={(p) => set({ page: String(p) }, true)} onPageSize={(n) => set({ size: String(n) })} />
       </>}
-      <Drawer open={!!sel} onClose={() => setSel(null)} title={cur?.card?.name ?? "Details"}>{cur && <Details i={cur} />}</Drawer>
+      <Drawer open={!!sel} onClose={() => setSel(null)} title={cur?.card?.name ?? "Details"}>{cur && <Details i={cur} onGone={() => setSel(null)} />}</Drawer>
       <Drawer open={bulkOpen} onClose={() => { setBulkOpen(false); if (bulk.isSuccess) setPicked(new Set()); }} title={`Edit cost & type · ${picked.size} stack${picked.size === 1 ? "" : "s"}`}>
         <AcquiredForm bulk busy={bulk.isPending} submitLabel={`Apply to ${picked.size}`} onSubmit={(p) => bulk.mutate(p)} />
         {bulk.error && <p role="alert" className="mt-2 text-sm text-danger">{String((bulk.error as Error).message)}</p>}

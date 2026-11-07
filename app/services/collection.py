@@ -174,3 +174,45 @@ def present(v: dict) -> dict:
 async def needs_price_card_ids(db) -> list[str]:
     """Owned cards with a graded stack that has no graded price (what "Fetch missing prices" targets)."""
     return sorted({v["item"]["card_id"] for v in await valuate(db) if v["needs_price"]})
+
+
+async def remove(db, item_id: str, quantity: int = 1, reason: str = "removed", price: int | None = None,
+                  currency: str = "EUR", date=None, note: str | None = None) -> dict:
+    """Take copies out of a stack (sold / gifted / removed). Always logs a `collection_exits` row with the
+    stack snapshot (cost basis included) so nothing leaves silently; asking for more than owned removes all."""
+    it = await db.collection_items.find_one({"_id": oid(item_id)})
+    if not it:
+        raise HTTPException(404, "item not found")
+    qty = min(quantity, it["quantity"])
+    now = datetime.now(timezone.utc)
+    await db.collection_exits.insert_one({
+        "card_id": it["card_id"], "stack_key": it.get("stack_key"), "variant": it.get("variant"),
+        "language": it.get("language"), "condition": it.get("condition"), "grading": it.get("grading"),
+        "acquired": it.get("acquired"), "quantity": qty, "reason": reason,
+        "price": price if reason == "sold" else None, "currency": currency,
+        "date": date.isoformat() if date else now.date().isoformat(), "note": note, "created_at": now})
+    left = it["quantity"] - qty
+    try:
+        if left <= 0:
+            await db.collection_items.delete_one({"_id": it["_id"]})
+        else:
+            await db.collection_items.update_one({"_id": it["_id"]}, {"$set": {"quantity": left, "updated_at": now}})
+    finally:
+        valuation_cache.bump()
+    return {"deleted": left <= 0, "quantity": max(left, 0), "removed": qty}
+
+
+async def exits(db, limit: int = 100) -> list[dict]:
+    """Recent exits with a card label, newest first."""
+    rows = [r async for r in db.collection_exits.find().sort("created_at", -1).limit(limit)]
+    cards = {c["_id"]: c async for c in db.cards.find({"_id": {"$in": list({r["card_id"] for r in rows})}},
+                                                       {"name": 1, "number": 1, "set.name": 1, "images": 1})}
+    out = []
+    for r in rows:
+        c = cards.get(r["card_id"]) or {}
+        out.append({"id": str(r.pop("_id")), **{k: r.get(k) for k in (
+            "card_id", "quantity", "reason", "price", "currency", "date", "note", "condition", "grading", "acquired")},
+            "created_at": r["created_at"].isoformat(),
+            "card": {"name": c.get("name"), "number": c.get("number"), "set": (c.get("set") or {}).get("name"),
+                     "image": (c.get("images") or {}).get("small")} if c else None})
+    return out

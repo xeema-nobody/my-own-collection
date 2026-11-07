@@ -1,3 +1,4 @@
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.api.deps import get_db
@@ -50,11 +51,45 @@ async def search(q: str = Query(..., min_length=2, max_length=60), page: int = Q
     return await svc.search(get_db(), q, page)
 
 
+@router.get("/lookup")
+async def lookup(number: str = Query(..., min_length=1, max_length=20), set: str | None = Query(None, max_length=60)):
+    return await svc.lookup(get_db(), number, set)
+
+
 @router.post("/add", status_code=201)
-async def add(body: CollectionIn):
-    return await svc.add_scanned(get_db(), body)
+async def add(body: CollectionIn, session_id: str | None = Query(None, max_length=40)):
+    return await svc.add_scanned(get_db(), body, session_id)
+
+
+class UndoIn(BaseModel):
+    event_id: str
+
+
+@router.post("/undo")
+async def undo(body: UndoIn):
+    try:
+        return await svc.undo(get_db(), body.event_id)
+    except svc.ScanError as e:
+        raise HTTPException(e.status, str(e))
+
+
+@router.get("/session")
+async def session():
+    """Phone polls this: the session the laptop opened, or null."""
+    return {"session": await svc.current_session(get_db())}
+
+
+@router.post("/sessions", status_code=201, dependencies=[Depends(require_laptop)])
+async def start_session():
+    return await svc.start_session(get_db())
+
+
+@router.delete("/sessions/{session_id}", status_code=204, dependencies=[Depends(require_laptop)])
+async def close_session(session_id: str):
+    if not await svc.close_session(get_db(), session_id):
+        raise HTTPException(404, "session not found")
 
 
 @router.get("/events", dependencies=[Depends(require_laptop)])
-async def events(after: str | None = None):
-    return await svc.events_after(get_db(), after)
+async def events(after: str | None = None, session_id: str | None = None):
+    return await svc.events_after(get_db(), after, session_id)

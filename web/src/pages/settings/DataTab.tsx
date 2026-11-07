@@ -1,11 +1,28 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download } from "lucide-react";
-import { api } from "../../lib/api";
+import { api, money } from "../../lib/api";
+import { exitLabel } from "../../components/collection/RemoveStack";
 import { errorText } from "../../components/QueryState";
 import { Button, FileDrop, SegmentedControl, Section } from "../../components/ui";
 
 const MODE_HINT = { set: "Sets each stack's quantity to the file value. Re-importing the same file changes nothing.", add: "Adds the file quantity to what you already own." };
+
+function ExitsSection() {
+  const q = useQuery({ queryKey: ["exits"], queryFn: api.collectionExits });
+  const rows = q.data ?? [];
+  return (
+    <Section title="Sold, gifted and removed">
+      {rows.length === 0 ? <p className="text-sm text-muted">Nothing yet. Use "Sell / remove" in a stack's details.</p> : (
+        <ul className="divide-y divide-line text-sm">
+          {rows.slice(0, 30).map((x) => (
+            <li key={x.id} className="flex items-baseline justify-between gap-3 py-1.5">
+              <span>{x.card?.name ?? x.card_id} <span className="text-muted">{x.card?.set} · ×{x.quantity}{x.note ? ` · ${x.note}` : ""}</span></span>
+              <span className="num shrink-0 text-muted">{exitLabel(x.reason)}{x.price != null ? ` ${money(x.price, x.currency)}/ea` : ""} · {x.date}</span>
+            </li>))}
+        </ul>)}
+    </Section>);
+}
 
 export default function DataTab() {
   const qc = useQueryClient();
@@ -39,5 +56,6 @@ export default function DataTab() {
           </div>)}
         {xfer.error && <p className="mt-3 text-sm text-danger">{errorText(xfer.error)}</p>}
       </Section>
+      <div className="lg:col-span-2"><ExitsSection /></div>
     </div>);
 }

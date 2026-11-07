@@ -5,7 +5,7 @@ import difflib
 import logging
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from bson import ObjectId
 
@@ -14,6 +14,7 @@ from app.db.models import CollectionIn
 from app.providers.catalog.common import norm
 from app.providers.ocr import CardFields, ImageError, OcrLine, OcrUnavailable
 from app.services import collection as collection_svc
+from app.services import valuation_cache
 from app.services.search import build_query, find_page
 
 log = logging.getLogger(__name__)
@@ -249,6 +250,48 @@ def _number_forms(n: str) -> list[str]:
     return [bare, bare.zfill(2), bare.zfill(3), n]
 
 
+def parse_number(raw: str) -> tuple[str, int | None]:
+    """"127/182" -> ("127", 182); "TG05/TG30" -> ("TG05", None); "127" -> ("127", None)."""
+    left, _, right = raw.strip().partition("/")
+    total = int(re.sub(r"\D", "", right)) if re.sub(r"\D", "", right) and right.strip().isdigit() else None
+    return left.strip(), total
+
+
+async def lookup(db, number: str, set_q: str | None = None) -> dict:
+    """Typed fallback for an unreadable photo: collector number (+ printed total) and an optional set code, set
+    id or part of the set name. Same answer shape as `identify` so the picker is reused."""
+    num, total = parse_number(number)
+    if not num:
+        return {"text": "", "confidence": "none", "names": [], "total": 0, "cards": [], "read": None, "exact": False}
+    flt: dict = {"tcg": "pokemon", "number": {"$in": _number_forms(num) + [num.upper()]}}
+    if total:
+        flt["set.printed_total"] = total
+    q = (set_q or "").strip()
+    if q:
+        rx = {"$regex": re.escape(q), "$options": "i"}
+        flt["$or"] = [{"set.ptcgo_code": {"$regex": f"^{re.escape(q)}$", "$options": "i"}},
+                      {"set.id": q.lower()}, {"set.name": rx}]
+    found = [c async for c in db.cards.find(flt, {"raw": 0}).limit(POOL)]
+    found.sort(key=lambda c: str((c.get("set") or {}).get("release_date") or ""), reverse=True)
+    sigs = {}
+    for c in found:
+        sg = ["number"]
+        if total:
+            sg.append("total")
+        if q:
+            sg.append("set")
+        sigs[c["_id"]] = sg
+    top = found[:MAX_CARDS]
+    cards = await views(db, top)
+    for c, v in zip(top, cards):
+        v["signals"] = sigs[c["_id"]]
+        v["match_label"] = label_for(v["signals"])
+    exact = len(cards) == 1
+    return {"text": "", "confidence": "high" if exact else ("medium" if cards else "none"), "names": [],
+            "total": len(found), "cards": cards, "read": {"number": num, "printed_total": total, "set_code": q or None,
+                                                          "hp": None}, "exact": exact}
+
+
 async def search(db, q: str, page: int = 1, page_size: int = 24) -> dict:
     flt = build_query(q, tcg="pokemon")
     total = await db.cards.count_documents(flt)
@@ -256,31 +299,126 @@ async def search(db, q: str, page: int = 1, page_size: int = 24) -> dict:
     return {"total": total, "page": page, "cards": await views(db, found)}
 
 
-async def add_scanned(db, body: CollectionIn) -> dict:
+SESSION_IDLE_MIN = 30  # an open session with no activity for this long is treated as closed
+UNDO_WINDOW_MIN = 10
+
+
+class ScanError(Exception):
+    """Business-rule failure; `status` is the HTTP code the router answers with."""
+    def __init__(self, status: int, msg: str):
+        super().__init__(msg)
+        self.status = status
+
+
+def _session_out(s: dict | None) -> dict | None:
+    return None if not s else {"id": str(s["_id"]), "created_at": s["created_at"].isoformat()}
+
+
+async def start_session(db) -> dict:
+    """Laptop opens a session; any older open one is closed (one at a time)."""
+    now = datetime.now(timezone.utc)
+    await db.scan_sessions.update_many({"status": "open"}, {"$set": {"status": "closed", "closed_at": now}})
+    res = await db.scan_sessions.insert_one({"status": "open", "created_at": now, "last_activity": now})
+    return _session_out({"_id": res.inserted_id, "created_at": now})
+
+
+async def current_session(db) -> dict | None:
+    """The open, not idle-expired session (what the phone polls), or None."""
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=SESSION_IDLE_MIN)
+    s = await db.scan_sessions.find_one({"status": "open", "last_activity": {"$gte": cutoff}}, sort=[("_id", -1)])
+    return _session_out(s)
+
+
+async def close_session(db, session_id: str) -> bool:
+    try:
+        oid = ObjectId(session_id)
+    except Exception:
+        return False
+    r = await db.scan_sessions.update_one({"_id": oid, "status": "open"},
+                                          {"$set": {"status": "closed", "closed_at": datetime.now(timezone.utc)}})
+    return bool(r.matched_count)
+
+
+async def add_scanned(db, body: CollectionIn, session_id: str | None = None) -> dict:
     """Add through the normal stack merge, then log it for the laptop's "added: ..." toast."""
+    key = collection_svc.stack_key(body)
+    before = await db.collection_items.find_one({"stack_key": key}, {"acquired": 1})
     stack = await collection_svc.add(db, body)
     card = await db.cards.find_one({"_id": body.card_id}, {"name": 1, "set.name": 1, "number": 1})
     label = f"{card['name']}, {(card.get('set') or {}).get('name', '?')}"
-    ev = {"at": datetime.now(timezone.utc), "card_id": body.card_id, "label": label, "stack_id": stack["id"],
+    now = datetime.now(timezone.utc)
+    ev = {"at": now, "kind": "add", "card_id": body.card_id, "label": label, "stack_id": stack["id"],
           "quantity_added": body.quantity, "quantity_after": stack["quantity"],
-          "type_conflict": bool(stack.get("type_conflict"))}
+          "type_conflict": bool(stack.get("type_conflict")), "condition": body.condition,
+          "grading": body.grading.model_dump() if body.grading else None, "language": body.language,
+          "session_id": session_id, "existed": before is not None,
+          "prev_acquired": before.get("acquired") if before else None}
     res = await db.scan_events.insert_one(ev)
+    if session_id:
+        try:
+            await db.scan_sessions.update_one({"_id": ObjectId(session_id), "status": "open"}, {"$set": {"last_activity": now}})
+        except Exception:
+            pass
     return {"stack": stack, "event": _event_out({**ev, "_id": res.inserted_id}), "label": label}
 
 
+async def undo(db, event_id: str) -> dict:
+    """Take back the most recent scanned add (only that one, only within UNDO_WINDOW_MIN). Quantity goes down by
+    what the add put in; the stack is deleted when that empties it (a mistaken add, so no exit row)."""
+    try:
+        oid = ObjectId(event_id)
+    except Exception:
+        raise ScanError(404, "nothing to undo")
+    ev = await db.scan_events.find_one({"_id": oid, "kind": {"$in": ["add", None]}})
+    if not ev:
+        raise ScanError(404, "nothing to undo")
+    if ev.get("undone"):
+        raise ScanError(409, "already undone")
+    at = ev["at"] if ev["at"].tzinfo else ev["at"].replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) - at > timedelta(minutes=UNDO_WINDOW_MIN):
+        raise ScanError(409, "too late to undo, fix it on the laptop")
+    if await db.scan_events.find_one({"_id": {"$gt": oid}, "kind": {"$in": ["add", None]}, "undone": {"$ne": True}}):
+        raise ScanError(409, "only the last card can be undone")
+    stack = await db.collection_items.find_one({"_id": ObjectId(ev["stack_id"])})
+    if not stack or stack["quantity"] < ev["quantity_added"]:
+        raise ScanError(409, "that stack changed on the laptop, fix it there")
+    left = stack["quantity"] - ev["quantity_added"]
+    try:
+        if left <= 0:
+            await db.collection_items.delete_one({"_id": stack["_id"]})
+        else:
+            fields = {"quantity": left, "updated_at": datetime.now(timezone.utc)}
+            if ev.get("existed"):
+                fields["acquired"] = ev.get("prev_acquired")  # undo the weighted-average cost merge too
+            await db.collection_items.update_one({"_id": stack["_id"]}, {"$set": fields})
+    finally:
+        valuation_cache.bump()
+    await db.scan_events.update_one({"_id": oid}, {"$set": {"undone": True}})
+    res = await db.scan_events.insert_one({
+        "at": datetime.now(timezone.utc), "kind": "undo", "card_id": ev["card_id"], "label": ev["label"],
+        "stack_id": ev["stack_id"], "quantity_added": ev["quantity_added"], "quantity_after": max(left, 0),
+        "type_conflict": False, "session_id": ev.get("session_id"), "undoes": event_id})
+    return {"label": ev["label"], "quantity": max(left, 0), "deleted": left <= 0, "event_id": str(res.inserted_id)}
+
+
 def _event_out(e: dict) -> dict:
-    return {"id": str(e["_id"]), "at": e["at"].isoformat(), "card_id": e["card_id"], "label": e["label"],
-            "quantity_added": e["quantity_added"], "quantity_after": e["quantity_after"],
-            "type_conflict": e.get("type_conflict", False)}
+    return {"id": str(e["_id"]), "at": e["at"].isoformat(), "kind": e.get("kind") or "add", "card_id": e["card_id"],
+            "label": e["label"], "quantity_added": e["quantity_added"], "quantity_after": e["quantity_after"],
+            "type_conflict": e.get("type_conflict", False), "condition": e.get("condition"),
+            "grading": e.get("grading"), "language": e.get("language"), "session_id": e.get("session_id"),
+            "undoes": e.get("undoes")}
 
 
-async def events_after(db, after: str | None) -> dict:
+async def events_after(db, after: str | None, session_id: str | None = None) -> dict:
     """Events newer than `after`. Without it only the cursor is returned, so a fresh page shows no history."""
     if after is None:
         last = await db.scan_events.find_one(sort=[("_id", -1)])
         return {"events": [], "latest": str(last["_id"]) if last else None}
     try:
-        cur = db.scan_events.find({"_id": {"$gt": ObjectId(after)}}).sort("_id", 1).limit(50)
+        q: dict = {"_id": {"$gt": ObjectId(after)}}
+        if session_id:
+            q["session_id"] = session_id
+        cur = db.scan_events.find(q).sort("_id", 1).limit(50)
     except Exception:
         return {"events": [], "latest": None}
     evs = [_event_out(e) async for e in cur]

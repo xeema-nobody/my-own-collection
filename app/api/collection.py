@@ -74,6 +74,12 @@ async def list_items(q: str | None = None, tcg: str | None = None, set: str | No
     return cq.query(await svc.valuate(get_db()), query)
 
 
+@router.get("/exits")
+async def exits(limit: int = Query(100, ge=1, le=500)):
+    """Sold / gifted / removed history, newest first."""
+    return await svc.exits(get_db(), limit)
+
+
 @router.get("/facets")
 async def facets():
     """Distinct sets / rarities / types / languages / conditions / graders / grades with stack counts."""
@@ -172,23 +178,13 @@ async def restore_edit(item_id: str, edit_id: str):
 
 @router.post("/{item_id}/remove")
 async def remove(item_id: str, body: RemoveIn):
-    db = get_db()
-    it = await db.collection_items.find_one({"_id": svc.oid(item_id)})
-    if not it:
-        raise HTTPException(404, "item not found")
-    left = it["quantity"] - body.quantity
-    if left <= 0:
-        await db.collection_items.delete_one({"_id": it["_id"]})
-        valuation_cache.bump()
-        return {"deleted": True, "quantity": 0}
-    await db.collection_items.update_one({"_id": it["_id"]}, {"$set": {"quantity": left}})
-    valuation_cache.bump()
-    return {"deleted": False, "quantity": left}
+    return await svc.remove(get_db(), item_id, **body.model_dump())
 
 
 @router.delete("/{item_id}", status_code=204)
 async def delete_item(item_id: str):
-    r = await get_db().collection_items.delete_one({"_id": svc.oid(item_id)})
-    valuation_cache.bump()
-    if not r.deleted_count:
+    db = get_db()
+    it = await db.collection_items.find_one({"_id": svc.oid(item_id)}, {"quantity": 1})
+    if not it:
         raise HTTPException(404, "item not found")
+    await svc.remove(db, item_id, quantity=it["quantity"])  # logged as 'removed', never silent
