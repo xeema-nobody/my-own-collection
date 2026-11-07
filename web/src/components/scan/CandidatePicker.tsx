@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { TriangleAlert } from "lucide-react";
-import { money, type ScanCard, type ScanIdentify } from "../../lib/api";
+import { money, type ScanCard, type ScanIdentify, type ScanRead } from "../../lib/api";
 import { Badge, Button, Input } from "../ui";
 
 const CONF: Record<ScanIdentify["confidence"], { tone: "ok" | "warn" | "neutral"; text: string }> = {
@@ -17,6 +17,7 @@ function Version({ c, first, onPick }: { c: ScanCard; first: boolean; onPick: (c
         {c.image ? <img src={c.image} alt="" loading="lazy" className="mx-auto aspect-[63/88] w-full rounded object-contain" /> : <div className="aspect-[63/88] w-full rounded bg-surface-2" />}
         <div className="flex flex-wrap gap-1">
           {first && <Badge tone="accent">Most likely</Badge>}
+          {c.match_label && (c.signals?.length ?? 0) > 1 && <Badge tone="ok">{c.match_label.replace(/ match$/, "")}</Badge>}
           {c.owned_qty > 0 && <Badge tone="ok">Own {c.owned_qty}</Badge>}
         </div>
         <div className="text-sm font-semibold leading-tight">{c.name}</div>
@@ -29,9 +30,13 @@ function Version({ c, first, onPick }: { c: ScanCard; first: boolean; onPick: (c
     </li>);
 }
 
+/** The first card is "most likely" only when it agrees on more signals than the second (or nothing was read beyond the name). */
+const leads = (cards: ScanCard[]) => cards.length < 2 || (cards[0].signals?.length ?? 0) > (cards[1].signals?.length ?? 0) || !cards[0].signals?.some((x) => x !== "name");
+const readText = (r?: ScanRead | null) => r ? [r.number ? `#${r.number}${r.printed_total ? `/${r.printed_total}` : ""}` : null, r.set_code].filter(Boolean).join(" · ") : "";
+
 /** Every plausible version side by side. Nothing is added from here: tapping a card only opens the details step. */
-export default function CandidatePicker({ cards, total, confidence, text, searching, canMore, onPick, onSearch, onMore, onRetake }: {
-  cards: ScanCard[]; total: number; confidence: ScanIdentify["confidence"]; text: string; searching?: boolean; canMore?: boolean;
+export default function CandidatePicker({ cards, total, confidence, text, read, searching, canMore, onPick, onSearch, onMore, onRetake }: {
+  cards: ScanCard[]; total: number; confidence: ScanIdentify["confidence"]; text: string; read?: ScanRead | null; searching?: boolean; canMore?: boolean;
   onPick: (c: ScanCard) => void; onSearch: (q: string) => void; onMore: () => void; onRetake: () => void;
 }) {
   const [q, setQ] = useState("");
@@ -50,9 +55,10 @@ export default function CandidatePicker({ cards, total, confidence, text, search
         : <>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               {conf.text && <Badge tone={conf.tone}>{conf.text}</Badge>}
+              {readText(read) && <Badge tone="neutral">Read {readText(read)}</Badge>}
               <span className="text-muted">{total > cards.length ? `Showing ${cards.length} of ${total} versions` : `${cards.length} version${cards.length === 1 ? "" : "s"}`}. Tap the one you hold.</span>
             </div>
-            <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">{cards.map((c, i) => <Version key={c.id} c={c} first={i === 0 && confidence !== "none"} onPick={onPick} />)}</ul>
+            <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">{cards.map((c, i) => <Version key={c.id} c={c} first={i === 0 && confidence !== "none" && leads(cards)} onPick={onPick} />)}</ul>
             {canMore && <Button variant="secondary" className="w-full" disabled={searching} onClick={onMore}>Show more versions</Button>}
           </>}
       <div className="flex gap-2">

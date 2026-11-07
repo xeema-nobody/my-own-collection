@@ -56,7 +56,7 @@ export default function Scan() {
         ? <p className="py-16 text-center text-muted" role="status">Reading the card…</p>
         : <CameraCapture onPhoto={(b) => identify.mutate(b)} />)}
       {step === "camera" && !identify.isPending && <CandidateSearchLink onSearch={(q) => search.mutate({ q, page: 1 })} busy={search.isPending} />}
-      {step === "pick" && <CandidatePicker cards={res.cards} total={res.total} confidence={res.confidence} text={res.text} searching={search.isPending}
+      {step === "pick" && <CandidatePicker cards={res.cards} total={res.total} confidence={res.confidence} text={res.text} read={res.read} searching={search.isPending}
         canMore={!!more && res.cards.length < res.total}
         onPick={(c) => { setCard(c); setErr(null); setStep("details"); }}
         onSearch={(q) => search.mutate({ q, page: 1 })} onMore={() => more && search.mutate({ q: more.q, page: more.page + 1 })} onRetake={again} />}

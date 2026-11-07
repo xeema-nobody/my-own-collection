@@ -37,9 +37,11 @@ export type ScanCard = {
   id: string; name: string; number: string | null; printed_total: number | null; set: { id: string; name: string };
   year: number | null; rarity: string | null; image: string | null; variants: string[]; price: number | null; language: string;
   edition_note: string | null; owned_qty: number;
+  signals?: string[]; match_label?: string | null;
   owned: { condition: string | null; language: string; variant: string | null; grading: unknown; quantity: number }[];
 };
-export type ScanIdentify = { text: string; confidence: "high" | "medium" | "low" | "none"; names: string[]; total: number; cards: ScanCard[] };
+export type ScanRead = { number: string | null; printed_total: number | null; set_code: string | null; hp: number | null };
+export type ScanIdentify = { text: string; confidence: "high" | "medium" | "low" | "none"; names: string[]; total: number; cards: ScanCard[]; read?: ScanRead | null; exact?: boolean };
 export type ScanSearch = { total: number; page: number; cards: ScanCard[] };
 export type ScanAdded = { label: string; stack: { id: string; quantity: number; type_conflict?: boolean }; event: ScanEvent };
 export type ScanEvent = { id: string; at: string; card_id: string; label: string; quantity_added: number; quantity_after: number; type_conflict: boolean };

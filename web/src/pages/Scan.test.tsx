@@ -42,6 +42,17 @@ describe("Scan page", () => {
     expect(JSON.parse(localStorage.getItem("scan.choice")!).condition).toBe("LP"); // remembered for the next card
   });
 
+  it("shows what was read and which signals agree, and drops 'Most likely' when the top prints tie", async () => {
+    const tied = { ...IDENT, read: { number: "4", printed_total: 102, set_code: null, hp: 120 },
+      cards: [{ ...card(), signals: ["name", "number", "total"], match_label: "name + number + printed total match" },
+              { ...base2, signals: ["name", "number", "total"], match_label: "name + number + printed total match" }] };
+    mockApi({ "POST /api/scan/identify": tied });
+    await scanPhoto();
+    expect(await screen.findByText("Read #4/102")).toBeInTheDocument();
+    expect(screen.getAllByText("name + number + printed total")).toHaveLength(2);
+    expect(screen.queryByText("Most likely")).not.toBeInTheDocument();
+  });
+
   it("shows when the copy joins an existing stack", async () => {
     mockApi({ "POST /api/scan/identify": { ...IDENT, cards: [card({ owned_qty: 2, owned: [{ condition: "NM", language: "en", variant: "holofoil", grading: null, quantity: 2 }] })] } });
     const user = await scanPhoto();
