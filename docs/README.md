@@ -84,7 +84,7 @@ docker compose run --rm app python -m app.scripts.demo_db drop     # delete the 
 ## Scan cards with your phone
 Point the phone at a card: the app reads the name, shows every version (set, number, rarity, year, variants, price, "Own N"), you tap the one you hold, pick condition, add. Nothing is added before that last tap. A card you already own in the same condition joins that stack. The laptop refreshes by itself and shows "Added: Charizard, Base".
 
-How the phone reaches the app (decision D1, `decisions.md`): **Tailscale**. The phone opens `https://<computer>.<tailnet>.ts.net/scan` over your private tailnet. Nothing is opened on your Wi-Fi, no certificates to install, and only your Tailscale login is let in. The gate only passes four scan calls, never the rest of the API (collection list, export, admin...).
+How the phone reaches the app (decision D1, `decisions.md`): **Tailscale**. The phone opens `https://<computer>.<tailnet>.ts.net/scan` over your private tailnet. Nothing is opened on your Wi-Fi, no certificates to install, and only your Tailscale login is let in. The gate only passes a handful of scan calls (identify, search, lookup, add, undo, session), never the rest of the API (collection list, export, admin...).
 
 One-time setup:
 1. Install Tailscale on the computer and the phone, same account. In the Tailscale admin page turn on **MagicDNS** and **HTTPS certificates**.
@@ -96,6 +96,17 @@ Name reading: the app finds the card in the photo, reads the name area in a few 
 
 Daily use: Tailscale on, open the page, **Scan** (or **Photo**, which opens the phone's own camera app), tap the version, tap condition, **Add**. Re-run `scripts/lan.sh up` after frontend changes (it rebuilds the phone page). `scripts/lan.sh down` closes the gate; `status` shows it.
 Text is read locally with Tesseract inside the app container (no paid service, no upload outside your machine). Cards the reader cannot read: type the name. The card is found in the photo as a rectangle (any table colour, tilt or size; a card cut off by the frame falls back to the older method), flattened, and the name, collector number (`127/182`) and set code are read from it. The picker lists every print that fits, best first, and tells you what agreed ("name + number + printed total"); you always tap the one you hold. Glare on a sleeve can still defeat the number: then you get the name's prints and pick. Set code matching only works for sets imported after 2026-11-07 (re-import a set to add it). If the phone says it can't reach the computer: Tailscale on both, computer awake. Base Set style prints (1st Edition / Shadowless) are not separate in the catalog: the picker warns, check the stamp yourself.
+
+Start from the laptop: Collection > **Add by scanning** > **Start a scan**. The phone page (already open, or opened by the QR) notices the session within a few seconds ("Linked to your computer"), and every card you add on the phone appears in the laptop panel with its picture, condition and new quantity. **Finish** closes it; a session with no activity for 30 minutes closes itself. Without a session the phone page works as before.
+
+Cannot read the photo? On the phone, under the camera, type the printed number (`127/182`, or just `127`) and a set code or part of the set name (`PAR`, `Paldea`), **Find**. Set codes only work for sets imported after 2026-11-07 (see below); a set name always works.
+
+Batch mode (switch under the camera): after **Add** the camera is ready for the next card; the strip shows "12 added", **Undo last** takes back the most recent add (only the last one, within 10 minutes; a new stack is deleted, a joined stack goes back to its old quantity and cost), **Review** lists the session, **Finish** clears the list. The single-card screen has "Undo this add" too.
+
+Backfill `ptcgo_code` (set code signal): re-import the sets you own from Settings > Catalog (as of 2026-11-07 these 11: cel25, cel25c, dp3, gym1, sv3pt5, sv6, swsh11, swsh12pt5gg, swsh6, swsh9, xy12). Old sets (gym1, dp3) may have no code in the source; the set name still works for typed entry.
+
+## Selling, gifting and removing cards
+Collection > open a stack > **Sell / remove**: choose Sold (optional price per copy), Gifted or Just remove, how many copies, optional note. The stack shrinks (or disappears if it was the last copy) and a history row is kept with the stack's cost at that time, so a later profit report can use it. History: Settings > Data > "Sold, gifted and removed". The card page +/- buttons and `DELETE /api/collection/{id}` also log a "removed" row, nothing leaves silently. API: `POST /api/collection/{id}/remove {quantity, reason, price, note}`, `GET /api/collection/exits`.
 
 ## Look and theme
 Dark by default. Header toggle: light / system / dark (remembered in the browser). UI building blocks live in `web/src/components/ui`.

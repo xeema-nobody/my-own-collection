@@ -35,7 +35,7 @@ export default function CardCollection({ card }: { card: any }) {
   const editCost = useMutation({ mutationFn: ({ sid, acquired }: { sid: string; acquired: any }) => api.patchStack(sid, { acquired }),
     onSuccess: () => { refresh(); setEditing(null); } });
   const dec = useMutation({
-    mutationFn: ({ sid, del }: { sid: string; del?: boolean }) => del ? api.deleteItem(sid) : api.removeFromCollection(sid, 1),
+    mutationFn: async ({ sid, del }: { sid: string; del?: boolean }) => { if (del) await api.deleteItem(sid); else await api.removeFromCollection(sid, 1); },
     onSuccess: refresh,
   });
   const inc = useMutation({

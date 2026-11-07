@@ -83,7 +83,13 @@ class CollectionPatch(BaseModel):
 
 
 class RemoveIn(BaseModel):
+    """Take copies out of a stack. Sold may carry the sale price per copy (cents); gifted / removed need none."""
     quantity: int = Field(default=1, ge=1)
+    reason: Literal["sold", "gifted", "removed"] = "removed"
+    price: int | None = Field(default=None, ge=0, description="cents per copy, sold only")
+    currency: str = "EUR"
+    date: dt.date | None = None
+    note: str | None = Field(default=None, max_length=300)
 
 
 class PresetIn(BaseModel):

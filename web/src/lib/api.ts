@@ -32,6 +32,10 @@ const qs = (p: Record<string, unknown>) => {
 };
 const post = (b: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(b) });
 
+export type ExitReason = "sold" | "gifted" | "removed";
+export type RemoveExtra = { reason?: ExitReason; price?: number | null; currency?: string; note?: string | null };
+export type CollectionExit = { id: string; card_id: string; quantity: number; reason: ExitReason; price: number | null; currency: string; date: string; note: string | null; created_at: string; card: { name: string; number: string; set: string; image: string | null } | null };
+
 /** One card version offered by the phone scanner (`/api/scan/*`). Money = cents in the base currency. */
 export type ScanCard = {
   id: string; name: string; number: string | null; printed_total: number | null; set: { id: string; name: string };
@@ -44,7 +48,10 @@ export type ScanRead = { number: string | null; printed_total: number | null; se
 export type ScanIdentify = { text: string; confidence: "high" | "medium" | "low" | "none"; names: string[]; total: number; cards: ScanCard[]; read?: ScanRead | null; exact?: boolean };
 export type ScanSearch = { total: number; page: number; cards: ScanCard[] };
 export type ScanAdded = { label: string; stack: { id: string; quantity: number; type_conflict?: boolean }; event: ScanEvent };
-export type ScanEvent = { id: string; at: string; card_id: string; label: string; quantity_added: number; quantity_after: number; type_conflict: boolean };
+export type ScanEvent = { id: string; at: string; kind?: "add" | "undo"; card_id: string; label: string; quantity_added: number; quantity_after: number; type_conflict: boolean;
+  condition?: string | null; language?: string | null; grading?: unknown; session_id?: string | null; undoes?: string | null };
+export type ScanSession = { id: string; created_at: string };
+export type ScanUndone = { label: string; quantity: number; deleted: boolean; event_id: string };
 export type ScanStatus = { enabled: boolean; url: string | null; login: string | null };
 
 export type FetchLog = { status: string; detail: string | null; url: string | null; fetched_at: string | null };
@@ -134,7 +141,9 @@ export const api = {
   restoreEdit: (id: string, editId: string) => req<any>(`/api/collection/${id}/history/${editId}/restore`, { method: "POST" }),
   collectionSummary: () => req<any>("/api/collection/summary"),
   addToCollection: (b: unknown) => req<any>("/api/collection", post(b)),
-  removeFromCollection: (id: string, quantity = 1) => req<any>(`/api/collection/${id}/remove`, post({ quantity })),
+  removeFromCollection: (id: string, quantity = 1, extra: RemoveExtra = {}) =>
+    req<{ deleted: boolean; quantity: number; removed: number }>(`/api/collection/${id}/remove`, post({ quantity, ...extra })),
+  collectionExits: () => req<CollectionExit[]>("/api/collection/exits"),
   deleteItem: (id: string) => req<void>(`/api/collection/${id}`, { method: "DELETE" }),
   history: (days: number) => req<any[]>(`/api/dashboard/history?days=${days}`),
   breakdown: (by: string) => req<any[]>(`/api/dashboard/breakdown?by=${by}`),
@@ -173,9 +182,14 @@ export const api = {
   scanIdentify: (photo: Blob) =>
     req<ScanIdentify>("/api/scan/identify", { method: "POST", body: photo, headers: { "content-type": photo.type || "image/jpeg" } }),
   scanSearch: (q: string, page = 1) => req<ScanSearch>("/api/scan/search" + qs({ q, page })),
-  scanAdd: (b: unknown) => req<ScanAdded>("/api/scan/add", post(b)),
+  scanAdd: (b: unknown, sessionId?: string | null) => req<ScanAdded>("/api/scan/add" + qs({ session_id: sessionId }), post(b)),
+  scanLookup: (number: string, set?: string) => req<ScanIdentify>("/api/scan/lookup" + qs({ number, set: set || undefined })),
+  scanUndo: (eventId: string) => req<ScanUndone>("/api/scan/undo", post({ event_id: eventId })),
+  scanSession: () => req<{ session: ScanSession | null }>("/api/scan/session"),
+  scanStartSession: () => req<ScanSession>("/api/scan/sessions", { method: "POST" }),
+  scanCloseSession: (id: string) => req<void>(`/api/scan/sessions/${id}`, { method: "DELETE" }),
   scanStatus: () => req<ScanStatus>("/api/scan/status"),
-  scanEvents: (after?: string | null) => req<{ events: ScanEvent[]; latest: string | null }>("/api/scan/events" + qs({ after })),
+  scanEvents: (after?: string | null, sessionId?: string | null) => req<{ events: ScanEvent[]; latest: string | null }>("/api/scan/events" + qs({ after, session_id: sessionId })),
 };
 
 export const money = (cents: number | null | undefined, cur = "EUR") =>
