@@ -13,7 +13,16 @@ Grader = Literal["PSA", "BGS", "CGC", "SGC", "ACE", "OTHER"]
 class Grading(BaseModel):
     company: Grader
     grade: float = Field(ge=1, le=10)
-    cert_number: str | None = None
+    cert_number: str | None = Field(default=None, max_length=20)
+    grader_name: str | None = Field(default=None, max_length=40, description="the grader's name when company is OTHER")
+
+    @model_validator(mode="after")
+    def _clean(self):
+        name = (self.grader_name or "").strip()
+        self.grader_name = name or None if self.company == "OTHER" else None
+        if self.cert_number is not None:
+            self.cert_number = self.cert_number.strip() or None
+        return self
 
 
 AcqType = Literal["purchased", "pulled", "traded", "gift", "other"]

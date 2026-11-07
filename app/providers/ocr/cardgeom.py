@@ -24,13 +24,13 @@ def _order(pts: np.ndarray) -> np.ndarray:
     return np.array([pts[np.argmin(s)], pts[np.argmin(d)], pts[np.argmax(s)], pts[np.argmax(d)]], dtype=np.float32)
 
 
-def _aspect_error(q: np.ndarray) -> float:
-    """Relative distance of the quad's side ratio from 63:88 (either orientation)."""
+def _aspect_error(q: np.ndarray, ratio: float = RATIO) -> float:
+    """Relative distance of the quad's side ratio from `ratio` (default 63:88, either orientation)."""
     w = (np.linalg.norm(q[1] - q[0]) + np.linalg.norm(q[2] - q[3])) / 2
     h = (np.linalg.norm(q[3] - q[0]) + np.linalg.norm(q[2] - q[1])) / 2
     if min(w, h) < 1:
         return 9.0
-    return abs(min(w, h) / max(w, h) - RATIO) / RATIO
+    return abs(min(w, h) / max(w, h) - ratio) / ratio
 
 
 def _quad_from(contour: np.ndarray) -> np.ndarray | None:
@@ -68,8 +68,9 @@ def _touching(q: np.ndarray, w: int, h: int) -> int:
     return sum(1 for x, y in q if x <= mx or y <= my or x >= w - 1 - mx or y >= h - 1 - my)
 
 
-def find_quad(img: Image.Image) -> np.ndarray | None:
-    """Corners (tl, tr, br, bl, in img pixels) of the card, or None when no card-shaped quad is found."""
+def find_quad(img: Image.Image, ratio: float = RATIO, tol: float = RATIO_TOL) -> np.ndarray | None:
+    """Corners (tl, tr, br, bl, in img pixels) of the card, or None when no card-shaped quad is found.
+    `ratio` / `tol` let the same search find a slab case (see providers/ocr/slab.py)."""
     gray = np.asarray(img.convert("L"))
     s = WORK / max(gray.shape)
     small = cv2.resize(gray, None, fx=s, fy=s, interpolation=cv2.INTER_AREA) if s < 1 else gray
@@ -85,9 +86,9 @@ def find_quad(img: Image.Image) -> np.ndarray | None:
             continue
         area = cv2.contourArea(q)
         share = area / total
-        err = _aspect_error(q)
+        err = _aspect_error(q, ratio)
         hull_fill = cv2.contourArea(cv2.convexHull(c)) / max(area, 1.0)
-        if not MIN_AREA <= share <= MAX_AREA or err > RATIO_TOL or hull_fill < 0.8 or hull_fill > 1.25:
+        if not MIN_AREA <= share <= MAX_AREA or err > tol or hull_fill < 0.8 or hull_fill > 1.25:
             continue
         if _touching(q, w, h) >= 2:  # cut off by the frame
             continue

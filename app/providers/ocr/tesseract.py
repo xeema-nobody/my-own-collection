@@ -139,7 +139,18 @@ def parse_tsv(tsv: str, height: int) -> list[OcrLine]:
             for v in lines.values()]
 
 
-async def _run(img: Image.Image, psm: int, whitelist: str | None = None) -> list[OcrLine]:
+def parse_words(tsv: str) -> list[tuple[str, float, int, int, int, int]]:
+    """TSV words as (text, conf, left, top, width, height) in the pixels of the image that was read."""
+    out = []
+    for row in tsv.splitlines()[1:]:
+        c = row.split("\t")
+        if len(c) < 12 or c[0] != "5" or not c[11].strip() or float(c[10]) < 0:
+            continue
+        out.append((c[11].strip(), float(c[10]), int(c[6]), int(c[7]), int(c[8]), int(c[9])))
+    return out
+
+
+async def _tsv(img: Image.Image, psm: int, whitelist: str | None = None) -> tuple[str, int]:
     buf = io.BytesIO()
     img.save(buf, "PNG")
     async with _slots:
@@ -157,7 +168,20 @@ async def _run(img: Image.Image, psm: int, whitelist: str | None = None) -> list
     if proc.returncode != 0:
         log.warning("tesseract failed: %s", err.decode(errors="ignore")[:200])
         raise OcrUnavailable("text reader failed")
-    return parse_tsv(out.decode(errors="ignore"), img.height)
+    return out.decode(errors="ignore"), img.height
+
+
+async def _run(img: Image.Image, psm: int, whitelist: str | None = None) -> list[OcrLine]:
+    tsv, height = await _tsv(img, psm, whitelist)
+    return parse_tsv(tsv, height)
+
+
+async def _run_words(img: Image.Image, psm: int, whitelist: str | None = None) -> list[tuple[str, float, int, int, int, int]]:
+    """Words with boxes; a failed read (tesseract chokes on blank crops) is just no words."""
+    try:
+        return parse_words((await _tsv(img, psm, whitelist))[0])
+    except OcrUnavailable:
+        return []
 
 
 async def _safe_run(img: Image.Image, psm: int, whitelist: str | None = None) -> list[OcrLine]:
@@ -262,6 +286,12 @@ class TesseractOcr:
         hp = await asyncio.to_thread(crop_rel, flat, full, *HP_BOX)
         out.hp = parse_hp(" ".join(ln.text for ln in await _safe_run(hp, 7, "0123456789HP ")))
         return out
+
+    async def read_slab(self, image: bytes):
+        """Label of a graded-card slab (see providers/ocr/slab.py), or None when the photo shows none."""
+        from app.providers.ocr import slab  # slab uses this module's reader helpers
+
+        return await slab.read_slab(await asyncio.to_thread(prepare, image))
 
     async def read_lines(self, image: bytes) -> list[OcrLine]:
         return [ln async for lines in self.stages(image) for ln in lines]

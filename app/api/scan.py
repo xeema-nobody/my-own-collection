@@ -26,7 +26,7 @@ async def status():
 
 
 @router.post("/identify")
-async def identify(request: Request):
+async def identify(request: Request, slab: bool = Query(False)):
     limit = settings.scan_max_image_mb * 1_000_000
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > limit:
@@ -39,7 +39,7 @@ async def identify(request: Request):
     if not raw:
         raise HTTPException(400, "no photo received")
     try:
-        return await svc.identify(get_db(), get_ocr(), bytes(raw))
+        return await svc.identify(get_db(), get_ocr(), bytes(raw), slab)
     except ImageError as e:
         raise HTTPException(400, str(e))
     except OcrUnavailable as e:
@@ -58,7 +58,10 @@ async def lookup(number: str = Query(..., min_length=1, max_length=20), set: str
 
 @router.post("/add", status_code=201)
 async def add(body: CollectionIn, session_id: str | None = Query(None, max_length=40)):
-    return await svc.add_scanned(get_db(), body, session_id)
+    try:
+        return await svc.add_scanned(get_db(), body, session_id)
+    except svc.ScanError as e:
+        raise HTTPException(e.status, str(e))
 
 
 class UndoIn(BaseModel):

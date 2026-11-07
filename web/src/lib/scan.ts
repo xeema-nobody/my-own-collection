@@ -77,3 +77,12 @@ export function saveChoice(c: Choice) {
 }
 
 export const LANGUAGES = [["en", "English"], ["ja", "Japanese"], ["de", "German"], ["fr", "French"], ["it", "Italian"], ["es", "Spanish"], ["pt", "Portuguese"], ["ko", "Korean"], ["zh", "Chinese"]] as const;
+
+/** Graders offered on the slab form. OTHER asks for the grader's name. */
+export const GRADERS = [["PSA", "PSA"], ["BGS", "BGS"], ["CGC", "CGC"], ["ACE", "ACE"], ["SGC", "SGC"], ["OTHER", "Other"]] as const;
+
+/** Grade as typed: 1 to 10 in half steps, or null. */
+export function parseSlabGrade(v: string): number | null {
+  const n = Number(v.replace(",", "."));
+  return v.trim() !== "" && n >= 1 && n <= 10 && Number.isInteger(n * 2) ? n : null;
+}

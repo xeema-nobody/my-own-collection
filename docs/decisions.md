@@ -208,3 +208,18 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - **Name + collector number + printed total is the main identifier; the set code is an optional bonus.** Many sets (Sword & Shield, older) print only `127/182` and a symbol, no code, and some catalog sets have no `ptcgo_code` at all. A missing or unreadable code adds no signal and never removes a print (a misread code that is not a known code is ignored), so nothing needed to change in `signals_for`.
 - **Set symbol matching rejected for now.** It would need the catalog symbol images (`set.images.symbol`), template matching at ~20 px on a photographed, sleeved, glare-lit card, and a per-set threshold; the same printed total + number already gives "exactly one print" on 14/15 bare real photos, and the picker always asks for a tap. Revisit only if real misses show up where name + number + total tie across sets (reprint sets with the same numbering), and then prefer the typed set field (already built) over image matching.
 
+
+## Slabs in scan (2026-11-07, slice 3 / 5e)
+- Assisted flow (user choice): label OCR pre-fills grader / grade / cert when it can, the user always confirms; a one-tap "This is a slab" switch covers a missed detection. Measured label read on 24 photos is weak (see roadmap 5e), so nothing is saved without the sheet.
+- Labels print a logo, not the grader name: grader is inferred (ACE = 6-digit cert, PSA = 7-9 digits, Beckett = 10 digits + subgrade words, CGC = 10 digits without) and flagged `grader_seen: false` so the sheet says it is a guess. A tier word limits the grade (GEM MINT = 10 or 9.5, MINT = 9).
+- `Grading.grader_name` (only for OTHER, max 40): different OTHER graders get separate stacks (`OTHER:<name>` in `stack_key`; existing keys unchanged). Scan add requires it; the model keeps it optional so old OTHER rows stay valid.
+- Same cert added again returns the existing stack (`duplicate`), quantity untouched, event `quantity_added` 0 (not undoable). Cert slabs stay quantity 1.
+- Valuation rule unchanged: a slab without a graded price is `needs_price`, never the raw price (OTHER has no price source at all).
+- CGC Pristine / BGS Black Label are stored as plain 10 for now.
+
+## User feedback after the first scan test (2026-11-07)
+- Raw scans: accepted as is, "good to be able to pick it from the list" even when the right print is not first. Wants better ranking, not a different flow (never auto-add stays).
+- Slabs: not recognised in the first test (always the raw card). Treated as a bug in detection, not a reason to drop the assisted flow. Likely causes and the fix plan are in roadmap 5e.
+- The laptop page works for scanning (camera or photo upload) without `lan.sh up`; `lan.sh up` is only for the phone over Tailscale and must be re-run after frontend changes (it rebuilds the phone page, so a phone will not show the slab form until then).
+- Bulk actions on selected stacks wanted: fetch prices for the selection only and remove the selection (roadmap 4b). Removal keeps going through exit history, never a silent delete.
+- Next step chosen by the user: use the private scan samples to measure and fix systematically.

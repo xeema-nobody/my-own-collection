@@ -23,12 +23,20 @@ def source_ids() -> list[str]:
     return [s.id for s in registry()]
 
 
+def _company(g: dict | None) -> str:
+    """Two different graders filed under OTHER must not merge into one stack."""
+    if not g:
+        return ""
+    name = (g.get("grader_name") or "").strip().lower() if g["company"] == "OTHER" else ""
+    return f"OTHER:{name}" if name else g["company"]
+
+
 def make_stack_key(card_id: str, variant: str | None, language: str, condition: str | None,
                    grading) -> str:
     """`grading` is a Grading model, a stored dict or None."""
     g = grading.model_dump() if hasattr(grading, "model_dump") else grading
     return "|".join(map(str, [card_id, variant or "", language, condition or "",
-                              g["company"] if g else "", g["grade"] if g else "",
+                              _company(g), g["grade"] if g else "",
                               g.get("cert_number") or "" if g else ""]))
 
 
@@ -49,6 +57,9 @@ async def _add(db, i: CollectionIn) -> dict:
     now = datetime.now(timezone.utc)
     key = stack_key(i)
     existing = await db.collection_items.find_one({"stack_key": key})
+    if existing is not None and i.grading and i.grading.cert_number:
+        # one physical slab: scanning it again changes nothing (idempotent), the caller is told
+        return _out(existing) | {"type_conflict": False, "duplicate": True}
     doc = i.model_dump(mode="json", exclude={"quantity"})
     if existing is None:
         await db.collection_items.update_one(

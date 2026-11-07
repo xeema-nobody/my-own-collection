@@ -203,7 +203,31 @@ def read_view(f: CardFields | None) -> dict | None:
     return {"number": f.number, "printed_total": f.printed_total, "set_code": f.set_code, "hp": f.hp}
 
 
-async def identify(db, ocr, image: bytes) -> dict:
+async def read_slab(ocr, image: bytes) -> dict | None:
+    """Grader / grade / cert from a graded-card label, or None (not a slab, or the reader is missing). Never fatal."""
+    if not hasattr(ocr, "read_slab"):
+        return None
+    try:
+        got = await ocr.read_slab(image)
+    except (OcrUnavailable, ImageError):
+        log.warning("slab label unreadable", exc_info=True)
+        return None
+    return got.as_dict() if got else None
+
+
+async def identify(db, ocr, image: bytes, slab: bool = False) -> dict:
+    """Card candidates from the photo; `slab` (the user said it is a slab) also reads the label in parallel. Without
+    it the label is only read when the card itself was not an exact hit, so a bare raw card stays fast."""
+    if slab:
+        res, label = await asyncio.gather(identify_card(db, ocr, image), read_slab(ocr, image))
+    else:
+        res = await identify_card(db, ocr, image)
+        label = None if res["exact"] else await read_slab(ocr, image)
+    res["slab"] = label
+    return res
+
+
+async def identify_card(db, ocr, image: bytes) -> dict:
     # the name stages and the number/set reads are independent: run them side by side (separate tesseract processes)
     (lines, matches), fields = await asyncio.gather(read_until_match(db, ocr, image), read_fields(ocr, image))
     text = " | ".join(ln.text for ln in lines)
@@ -344,12 +368,18 @@ async def add_scanned(db, body: CollectionIn, session_id: str | None = None) -> 
     """Add through the normal stack merge, then log it for the laptop's "added: ..." toast."""
     key = collection_svc.stack_key(body)
     before = await db.collection_items.find_one({"stack_key": key}, {"acquired": 1})
+    if body.grading and body.grading.company == "OTHER" and not body.grading.grader_name:
+        raise ScanError(422, "type the grader's name for an Other slab")
     stack = await collection_svc.add(db, body)
+    added = 0 if stack.get("duplicate") else body.quantity
     card = await db.cards.find_one({"_id": body.card_id}, {"name": 1, "set.name": 1, "number": 1})
     label = f"{card['name']}, {(card.get('set') or {}).get('name', '?')}"
+    if body.grading:
+        g = body.grading
+        label += f" ({(g.grader_name or 'Other') if g.company == 'OTHER' else g.company} {g.grade:g})"
     now = datetime.now(timezone.utc)
     ev = {"at": now, "kind": "add", "card_id": body.card_id, "label": label, "stack_id": stack["id"],
-          "quantity_added": body.quantity, "quantity_after": stack["quantity"],
+          "quantity_added": added, "quantity_after": stack["quantity"],
           "type_conflict": bool(stack.get("type_conflict")), "condition": body.condition,
           "grading": body.grading.model_dump() if body.grading else None, "language": body.language,
           "session_id": session_id, "existed": before is not None,
@@ -373,6 +403,8 @@ async def undo(db, event_id: str) -> dict:
     ev = await db.scan_events.find_one({"_id": oid, "kind": {"$in": ["add", None]}})
     if not ev:
         raise ScanError(404, "nothing to undo")
+    if ev.get("quantity_added") == 0:
+        raise ScanError(409, "that slab was already in the collection, nothing was added")
     if ev.get("undone"):
         raise ScanError(409, "already undone")
     at = ev["at"] if ev["at"].tzinfo else ev["at"].replace(tzinfo=timezone.utc)

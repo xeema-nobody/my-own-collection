@@ -21,6 +21,7 @@ export default function Scan() {
   const [card, setCard] = useState<ScanCard | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [slabMode, setSlabMode] = useState(false); // "this is a slab": also read the label, open the slab form
   const choice = useRef(loadChoice());
   const [batch, setBatchState] = useState(() => { try { return localStorage.getItem(BATCH_KEY) === "1"; } catch { return false; } });
   const [rows, setRows] = useState<Row[]>([]);
@@ -32,7 +33,7 @@ export default function Scan() {
 
   const show = (r: ScanIdentify, q: string | null, page: number) => { setRes(r); setMore(q ? { q, page } : null); setErr(null); setStep("pick"); };
   const identify = useMutation({
-    mutationFn: (photo: Blob) => api.scanIdentify(photo),
+    mutationFn: (photo: Blob) => api.scanIdentify(photo, slabMode),
     onSuccess: (r) => show(r, r.names[0] ?? null, 0),
     onError: (e) => setErr(friendlyScanError(e)),
   });
@@ -54,9 +55,10 @@ export default function Scan() {
     mutationFn: ({ body }: { body: Parameters<typeof api.scanAdd>[0]; c: ReturnType<typeof loadChoice> }) => api.scanAdd(body, sessionId),
     onSuccess: (r, v) => {
       saveChoice(v.c); choice.current = v.c;
-      const row: Row = { eventId: r.event.id, label: r.label, condition: v.c.condition, quantity: r.stack.quantity };
-      setDone(r.label + (r.stack.quantity > 1 ? ` (now ${r.stack.quantity})` : "")); setErr(null);
-      setLast(row); setRows((o) => [...o, row]); setCard(null); setRes(EMPTY);
+      const row: Row = { eventId: r.event.id, label: r.label, condition: r.event.grading ? null : v.c.condition, quantity: r.stack.quantity };
+      setDone(r.stack.duplicate ? `${r.label}: already in your collection, nothing changed` : r.label + (r.stack.quantity > 1 ? ` (now ${r.stack.quantity})` : "")); setErr(null);
+      if (!r.stack.duplicate) { setLast(row); setRows((o) => [...o, row]); }
+      setCard(null); setRes(EMPTY); setSlabMode(false);
       setStep(batch ? "camera" : "done"); // batch: straight back to the camera for the next card
     },
     onError: (e) => setErr(friendlyScanError(e)),
@@ -87,6 +89,10 @@ export default function Scan() {
       {step === "camera" && !identify.isPending && (
         <div className="space-y-2 border-t border-line pt-3">
           <label className="flex items-center justify-between gap-3 text-sm">
+            <span><b>This is a slab</b><span className="block text-xs text-muted">Graded card in a case: also reads the label (grader, grade, cert).</span></span>
+            <input type="checkbox" role="switch" aria-label="This is a slab" className="h-5 w-5" checked={slabMode} onChange={(e) => setSlabMode(e.target.checked)} />
+          </label>
+          <label className="flex items-center justify-between gap-3 text-sm">
             <span><b>Batch mode</b><span className="block text-xs text-muted">After each add, the camera is ready for the next card.</span></span>
             <input type="checkbox" role="switch" aria-label="Batch mode" className="h-5 w-5" checked={batch} onChange={(e) => setBatch(e.target.checked)} />
           </label>
@@ -112,11 +118,11 @@ export default function Scan() {
         canMore={!!more && res.cards.length < res.total}
         onPick={(c) => { setCard(c); setErr(null); setStep("details"); }}
         onSearch={(q) => search.mutate({ q, page: 1 })} onMore={() => more && search.mutate({ q: more.q, page: more.page + 1 })} onRetake={again} />}
-      {step === "details" && card && <AddSheet card={card} initial={choice.current} busy={add.isPending} error={err}
+      {step === "details" && card && <AddSheet card={card} initial={choice.current} busy={add.isPending} error={err} slab={res.slab ?? (slabMode ? { grader: null, grade: null, cert: null } : null)}
         onBack={() => { setErr(null); setStep("pick"); }} onAdd={(body, c) => add.mutate({ body, c })} />}
       {step === "done" && <div className="space-y-4 py-8 text-center">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-ok/15 text-ok"><Check size={28} /></div>
-        <p className="text-lg font-semibold" role="status">Added: {done}</p>
+        <p className="text-lg font-semibold" role="status">{done?.includes("already in your collection") ? done : `Added: ${done}`}</p>
         <Button className="w-full py-3 text-base" onClick={again}>Scan the next card</Button>
         {last && <Button variant="ghost" className="w-full" disabled={undo.isPending} onClick={() => undo.mutate(last)}><Undo2 size={14} />Undo this add</Button>}
       </div>}

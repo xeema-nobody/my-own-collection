@@ -45,9 +45,11 @@ export type ScanCard = {
   owned: { condition: string | null; language: string; variant: string | null; grading: unknown; quantity: number }[];
 };
 export type ScanRead = { number: string | null; printed_total: number | null; set_code: string | null; hp: number | null };
-export type ScanIdentify = { text: string; confidence: "high" | "medium" | "low" | "none"; names: string[]; total: number; cards: ScanCard[]; read?: ScanRead | null; exact?: boolean };
+/** What the slab label read as. `grader_seen` false = the grader was guessed from the label layout (confirm it). */
+export type ScanSlab = { grader: string | null; grade: number | null; cert: string | null; tier?: string | null; grader_seen?: boolean };
+export type ScanIdentify = { text: string; confidence: "high" | "medium" | "low" | "none"; names: string[]; total: number; cards: ScanCard[]; read?: ScanRead | null; exact?: boolean; slab?: ScanSlab | null };
 export type ScanSearch = { total: number; page: number; cards: ScanCard[] };
-export type ScanAdded = { label: string; stack: { id: string; quantity: number; type_conflict?: boolean }; event: ScanEvent };
+export type ScanAdded = { label: string; stack: { id: string; quantity: number; type_conflict?: boolean; duplicate?: boolean }; event: ScanEvent };
 export type ScanEvent = { id: string; at: string; kind?: "add" | "undo"; card_id: string; label: string; quantity_added: number; quantity_after: number; type_conflict: boolean;
   condition?: string | null; language?: string | null; grading?: unknown; session_id?: string | null; undoes?: string | null };
 export type ScanSession = { id: string; created_at: string };
@@ -179,8 +181,8 @@ export const api = {
   evaluateAlerts: () => req<{ fired: number }>("/api/alerts/evaluate", { method: "POST" }),
   snapshot: () => req<any>("/api/admin/snapshot", { method: "POST" }),
   scanMe: () => req<{ ok: boolean }>("/api/scan/me"),
-  scanIdentify: (photo: Blob) =>
-    req<ScanIdentify>("/api/scan/identify", { method: "POST", body: photo, headers: { "content-type": photo.type || "image/jpeg" } }),
+  scanIdentify: (photo: Blob, slab = false) =>
+    req<ScanIdentify>("/api/scan/identify" + qs({ slab: slab ? 1 : undefined }), { method: "POST", body: photo, headers: { "content-type": photo.type || "image/jpeg" } }),
   scanSearch: (q: string, page = 1) => req<ScanSearch>("/api/scan/search" + qs({ q, page })),
   scanAdd: (b: unknown, sessionId?: string | null) => req<ScanAdded>("/api/scan/add" + qs({ session_id: sessionId }), post(b)),
   scanLookup: (number: string, set?: string) => req<ScanIdentify>("/api/scan/lookup" + qs({ number, set: set || undefined })),
