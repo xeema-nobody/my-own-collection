@@ -2,6 +2,7 @@
 
 Never auto-adds: `identify` only proposes cards, `add_scanned` runs when the user taps one."""
 import difflib
+import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -11,11 +12,14 @@ from bson import ObjectId
 from app.api.deps import clean
 from app.db.models import CollectionIn
 from app.providers.catalog.common import norm
-from app.providers.ocr import OcrLine
+from app.providers.ocr import CardFields, ImageError, OcrLine, OcrUnavailable
 from app.services import collection as collection_svc
 from app.services.search import build_query, find_page
 
+log = logging.getLogger(__name__)
 MAX_CARDS = 40
+POOL = 400  # prints scored before the best MAX_CARDS are returned
+NUMBER_ONLY_MAX = 12  # prints offered when only number + printed total were read
 NAME_TTL_S = 600
 CLOSE_CUTOFF = 0.75
 EVOLVES = re.compile(r"volve|elves|\bfrom\b")  # tolerant of a half-read "Evolves from"
@@ -144,25 +148,105 @@ async def read_until_match(db, ocr, image: bytes) -> tuple[list[OcrLine], list[t
     return lines, match_names(names, windows(lines))
 
 
+def _num(n: str | None) -> str:
+    return (n or "").strip().lower().lstrip("0")
+
+
+def _digits(n: str | None) -> str:
+    return re.sub(r"\D", "", n or "").lstrip("0")
+
+
+def signals_for(c: dict, fields: CardFields | None, name_hit: bool, codes: set[str]) -> list[str]:
+    """Which of the read signals this print agrees with, in the order shown to the user."""
+    sig = ["name"] if name_hit else []
+    if not fields:
+        return sig
+    s = c.get("set") or {}
+    if fields.number and (_num(c.get("number")) == _num(fields.number)
+                          or (_digits(c.get("number")) and _digits(c.get("number")) == _digits(fields.number))):
+        sig.append("number")
+    if fields.printed_total and s.get("printed_total") == fields.printed_total:
+        sig.append("total")
+    code = (fields.set_code or "").lower()
+    if code and code in codes and (s.get("ptcgo_code") or "").lower() == code:
+        sig.append("set")
+    return sig
+
+
+SIGNAL_TEXT = {"name": "name", "number": "number", "total": "printed total", "set": "set code"}
+
+
+def label_for(sig: list[str]) -> str | None:
+    return (" + ".join(SIGNAL_TEXT[x] for x in sig) + " match") if sig else None
+
+
+async def set_codes(db) -> set[str]:
+    return {c.lower() for c in await db.cards.distinct("set.ptcgo_code", {"tcg": "pokemon"}) if c}
+
+
+async def read_fields(ocr, image: bytes) -> CardFields | None:
+    """Number / set / HP from the flat card; never fatal, the name alone still works."""
+    if not hasattr(ocr, "read_fields"):
+        return None
+    try:
+        return await ocr.read_fields(image)
+    except (OcrUnavailable, ImageError):
+        log.warning("card fields unreadable", exc_info=True)
+        return None
+
+
+def read_view(f: CardFields | None) -> dict | None:
+    if not f:
+        return None
+    return {"number": f.number, "printed_total": f.printed_total, "set_code": f.set_code, "hp": f.hp}
+
+
 async def identify(db, ocr, image: bytes) -> dict:
     lines, matches = await read_until_match(db, ocr, image)
+    fields = await read_fields(ocr, image)
     text = " | ".join(ln.text for ln in lines)
     keep = [m for m in matches if m[1] >= matches[0][1] - 0.08][:3] if matches else []
     keep += with_suffix_variants(await card_names(db), keep)
-    cards: list[dict] = []
+    codes = await set_codes(db) if fields and fields.set_code else set()
+    rank = {n: i for i, (n, _) in enumerate(keep)}
+    stamp = lambda c: str((c.get("set") or {}).get("release_date") or "")  # noqa: E731
     if keep:
-        rank = {n: i for i, (n, _) in enumerate(keep)}
-        found = [c async for c in db.cards.find({"tcg": "pokemon", "name_norm": {"$in": list(rank)}}, {"raw": 0})]
-        stamp = lambda c: str((c.get("set") or {}).get("release_date") or "")  # noqa: E731
+        found = [c async for c in db.cards.find({"tcg": "pokemon", "name_norm": {"$in": list(rank)}}, {"raw": 0})
+                 .limit(POOL)]
         found.sort(key=stamp, reverse=True)  # newest set first ...
         found.sort(key=lambda c: rank[c["name_norm"]])  # ... best name first (stable)
-        total = len(found)
-        cards = await views(db, found[:MAX_CARDS])
-        cards.sort(key=lambda v: (rank[norm(v["name"])], -v["owned_qty"] if v["owned_qty"] else 0))
+        sigs = {c["_id"]: signals_for(c, fields, True, codes) for c in found}
+    elif fields and fields.number and fields.printed_total:
+        # No readable name: number + printed total alone still narrow the catalog to a handful of prints.
+        found = [c async for c in db.cards.find(
+            {"tcg": "pokemon", "set.printed_total": fields.printed_total, "number": {"$in": _number_forms(fields.number)}},
+            {"raw": 0}).limit(NUMBER_ONLY_MAX)]
+        found.sort(key=stamp, reverse=True)
+        sigs = {c["_id"]: signals_for(c, fields, False, codes) for c in found}
     else:
-        total = 0
-    return {"text": text, "confidence": confidence(matches, lines), "names": [n for n, _ in keep],
-            "total": total, "cards": cards}
+        found, sigs = [], {}
+    # Most agreeing signals first; the stable sort keeps best name, then newest set, inside a tie.
+    found.sort(key=lambda c: -len(sigs[c["_id"]]))
+    total = len(found)
+    top = found[:MAX_CARDS]
+    cards = await views(db, top)
+    for c, v in zip(top, cards):
+        v["signals"] = sigs[c["_id"]]
+        v["match_label"] = label_for(v["signals"])
+    cards.sort(key=lambda v: (-len(v["signals"]), rank.get(norm(v["name"]), 0), -v["owned_qty"]))
+    best = len(cards[0]["signals"]) if cards else 0
+    exact = bool(cards) and best >= 2 and ("number" in cards[0]["signals"] or "set" in cards[0]["signals"]) and (
+        len(cards) == 1 or len(cards[1]["signals"]) < best)
+    names = [n for n, _ in keep]
+    conf = confidence(matches, lines) if keep else ("low" if cards else "none")
+    return {"text": text, "confidence": conf, "names": names, "total": total, "cards": cards,
+            "read": read_view(fields), "exact": exact}
+
+
+def _number_forms(n: str) -> list[str]:
+    """Stored numbers keep their printed form ("4", "004"); try the unpadded and padded spellings."""
+    bare = n.lstrip("0") or "0"
+    return [bare, bare.zfill(2), bare.zfill(3), n]
 
 
 async def search(db, q: str, page: int = 1, page_size: int = 24) -> dict:

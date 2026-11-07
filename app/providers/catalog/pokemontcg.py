@@ -35,7 +35,7 @@ def map_set(s: dict) -> dict:
         "_id": f"pokemon:{s['id']}", "tcg": "pokemon", "external_id": s["id"], "name": s["name"],
         "series": s.get("series"), "release_date": _date(s.get("releaseDate")),
         "printed_total": s.get("printedTotal"), "total": s.get("total"),
-        "logo_url": (s.get("images") or {}).get("logo"),
+        "ptcgo_code": s.get("ptcgoCode"), "logo_url": (s.get("images") or {}).get("logo"),
         "symbol_url": (s.get("images") or {}).get("symbol"),
     }
 
@@ -59,7 +59,8 @@ def map_card(c: dict) -> dict:
         "set": {
             "id": st.get("id"), "name": st.get("name"), "series": st.get("series"),
             "release_date": _date(st.get("releaseDate")), "printed_total": st.get("printedTotal"),
-            "total": st.get("total"), "logo_url": (st.get("images") or {}).get("logo"),
+            "total": st.get("total"), "ptcgo_code": st.get("ptcgoCode"),
+            "logo_url": (st.get("images") or {}).get("logo"),
             "symbol_url": (st.get("images") or {}).get("symbol"),
         },
         "images": c.get("images") or {}, "variants": variants, "language": "en",

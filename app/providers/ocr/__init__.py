@@ -1,5 +1,5 @@
 from app.config import settings
-from app.providers.ocr.base import ImageError, OcrLine, OcrProvider, OcrUnavailable  # noqa: F401
+from app.providers.ocr.base import CardFields, ImageError, OcrLine, OcrProvider, OcrUnavailable  # noqa: F401
 
 
 def get_ocr() -> OcrProvider:
