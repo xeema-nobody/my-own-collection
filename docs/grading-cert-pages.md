@@ -1,0 +1,23 @@
+# Grading companies: cert pages
+
+One row per grader. Used by the slab scan (roadmap 5f, decisions.md "Slab identity from the cert") to turn a cert number into the exact card, and to give every slab a link to its report. Code lives in `providers/grading/`, one small module per grader, selected from a registry; only providers call httpx.
+
+**Status legend:** `verified` = checked with a real request in this repo and a fixture saved under `tests/fixtures/cert/`; `user-seen` = the user showed the page in a browser, not yet fetched by code; `to verify` = from memory, check before coding. Update this table as each grader is verified; do not trust a `to verify` row.
+
+| Grader | Cert page (template) | Cert format | Machine-readable? | Fields seen / expected | Status |
+|---|---|---|---|---|---|
+| ACE | `https://acegrading.com/cert/{cert}` | 6 digits (158689, 158690, 158678 in samples) | **yes**: plain GET returns server-rendered HTML (Livewire), no JS needed, no bot wall, robots.txt `Disallow:` empty. Parse the `<h2>` (name, number, set, year, variant), subgrade tiles, grade + tier, population block. Not-found cert returns 200 with a generic 'Verify Certification Number' page (title has no `Cert #`) | cert, name, number (011/078), set (POKEMON GO), year, language, variant (HOLO), label, grade + tier, 4 subgrades, population (lower / same / higher, total submitted, gem rate) | **verified 2026-11-08**: fixtures `ace_158690.html` (Radiant Charizard 011/078 Pokemon GO 2022 Holo, 10 GEM MINT, 10/10/10/10, pop 785), `ace_158678.html` (Charizard V Star Birth 103/100 Japanese, 10), `ace_notfound.html`. Note 158689 = Blastoise ex 151 184/165 Secret Rare 2023 grade 9 |
+| PSA | `https://www.psacard.com/cert/{cert}` | 8-9 digits (56941091, 146737388 in samples) | official API needs a token; page may sit behind a bot wall | name, set, number, year, variety, grade, population | **blocked 2026-11-08**: page returns 403 Cloudflare 'Just a moment' to plain requests (fixture `psa_blocked_403.html`); official API (`/publicapi`) needs OAuth with a PSA account login, not a free anonymous token. Link-only (do not defeat the wall); API only if the user supplies credentials |
+| Beckett (BGS) | Beckett grading lookup (`beckett.com/grading`, cert form) | 10 digits (0018969667, 0016872326 in samples) | likely form + page | name, set, number, year, grade, 4 subgrades | **blocked 2026-11-08**: lookup URL 302 to beckett.com then 403 Cloudflare challenge. Link-only |
+| CGC | `https://www.cgccards.com/certlookup/{cert}/` | 7-10 digits | likely public page | name, set, number, grade, variant | **blocked 2026-11-08**: certlookup page 403 Cloudflare challenge (home page is 200). Link-only; no CGC slab in samples |
+| SGC | `https://sgccard.com` cert lookup | numeric | **blocked 2026-11-08**: sgccard.com 301 to gosgc.com, 403 Cloudflare challenge. Link-only; exact cert URL template still unconfirmed | name, set, grade | to verify |
+| Other | none | any | no | grader name typed by the user | n/a (existing "Other slab" flow) |
+
+## Rules for every provider
+
+- The URL is built from a fixed template and a **digits-only** cert (validate before building), never from OCR text or user text directly (no SSRF, no redirects to other hosts).
+- A provider returns `CertInfo` (grader, cert, name, number, printed_total, set_name, year, language, variant, grade, tier, subgrades, population optional, url, fetched_at) or `None`; it never raises for "not found" / blocked / timeout. The link is built even when the fetch fails.
+- Cache per (grader, cert) in Mongo (successful and "not found" with a short TTL); polite rate, one request per scan, no crawling.
+- No login, no cookies kept. A site that blocks plain requests: try the host fetcher (as for alt.xyz) or stay link-only; never defeat a bot wall.
+- Fixtures: save the response of one real cert per grader under `tests/fixtures/cert/`; tests never touch the network.
+- Re-check each site's terms / robots before depending on it; note the result in the row above.

@@ -31,7 +31,7 @@ EOT
     [[ -f "$ENV_FILE" ]] || { echo "run: scripts/lan.sh setup <tailnet-host> <tailscale-login>"; exit 1; }
     docker compose up -d app
     docker compose run --rm -e VITE_API_URL= web sh -c "npm install --no-audit --no-fund && npm run build"
-    docker compose --profile lan up -d lan
+    docker compose --profile lan up -d --force-recreate lan   # recreate: Caddyfile is a single-file bind mount, edits are not seen by a running gate
     host="$(val LAN_ORIGIN)"
     echo; echo "Gate running on 127.0.0.1:5443. Now (once) expose it on your tailnet:"
     echo "  tailscale serve --bg --https=443 http://127.0.0.1:5443"
