@@ -125,5 +125,35 @@ def test_flats_adds_fixed_sleeve_crops_at_card_size():
     from PIL import Image
     flat = Image.new("L", (cardgeom.CARD_W, cardgeom.CARD_H), 128)
     crops = cardgeom.sleeve_crops(flat)
-    assert len(crops) == len(cardgeom.SLEEVE_SHIFTS)
+    assert len(crops) == len(cardgeom.SLEEVE_SHIFTS)  # a blank flat has no card edges: only the fixed boxes
+    assert all(c.size == (cardgeom.CARD_W, cardgeom.CARD_H) for c in crops)
+
+
+def sleeved_flat(x0, y0, w):
+    """A flat sleeve (grey, 630x880) with a card of width w at (x0, y0): bright border, dark inner art frame."""
+    from PIL import Image
+    h = int(w * 88 / 63)
+    flat = np.full((cardgeom.CARD_H, cardgeom.CARD_W, 3), 110, np.uint8)
+    cv2.rectangle(flat, (x0, y0), (x0 + w, y0 + h), (235, 200, 60), -1)
+    cv2.rectangle(flat, (x0 + 25, y0 + 25), (x0 + w - 25, y0 + h - 25), (60, 50, 40), -1)
+    return Image.fromarray(flat), (x0, y0, x0 + w, y0 + h)
+
+
+@pytest.mark.parametrize("x0,y0,w", [(60, 140, 500), (100, 120, 490), (50, 90, 510)])
+def test_locate_card_finds_the_card_inside_a_flat_sleeve(x0, y0, w):
+    flat, want = sleeved_flat(x0, y0, w)
+    got = cardgeom.locate_card(flat)
+    assert got is not None
+    assert all(abs(g - e) <= 24 for g, e in zip(got, want))  # the card edge, not the inner art frame (25 px inside)
+
+
+def test_locate_card_gives_none_on_a_blank_flat():
+    from PIL import Image
+    assert cardgeom.locate_card(Image.new("RGB", (cardgeom.CARD_W, cardgeom.CARD_H), 128)) is None
+
+
+def test_sleeve_crops_puts_the_located_card_first():
+    flat, _ = sleeved_flat(60, 140, 500)
+    crops = cardgeom.sleeve_crops(flat)
+    assert len(crops) == len(cardgeom.SLEEVE_SHIFTS) + 1
     assert all(c.size == (cardgeom.CARD_W, cardgeom.CARD_H) for c in crops)

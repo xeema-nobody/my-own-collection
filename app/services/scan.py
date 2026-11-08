@@ -82,16 +82,19 @@ def match_names(names: list[str], cands: list[tuple[str, float]]) -> list[tuple[
 
 
 VARIANT = re.compile(r"^(?:ex|v|vmax|vstar|gx|break|star)$")
+OWNER = re.compile(r"^[a-z .&-]+'s $")  # "ethan's ", "team rocket's ": the owner prefix of a trainer's Pokémon
 
 
 def with_suffix_variants(names: list[str], keep: list[tuple[str, float]]) -> list[tuple[str, float]]:
-    """The printed "ex"/"V" glyph is rarely read, so a matched base name also brings its ex/V/GX forms."""
+    """The printed "ex"/"V" glyph is rarely read, so a matched base name also brings its ex/V/GX forms; the owner
+    prefix ("Ethan's Typhlosion") is a small word beside the name and is often missed the same way."""
     have = {n for n, _ in keep}
     out = []
     for n, sc in keep:
         for other in names:
             base, _, tail = other.rpartition(" ")
-            if base == n and VARIANT.match(tail) and other not in have:
+            owned = other.endswith(" " + n) and OWNER.match(other[: -len(n)]) is not None
+            if ((base == n and VARIANT.match(tail)) or owned) and other not in have:
                 out.append((other, sc))
                 have.add(other)
     return out
@@ -224,7 +227,7 @@ async def read_fields(ocr, image: bytes) -> CardFields | None:
 def read_view(f: CardFields | None) -> dict | None:
     if not f:
         return None
-    return {"number": f.number, "printed_total": f.printed_total, "set_code": f.set_code, "hp": f.hp}
+    return {"number": f.number, "printed_total": f.printed_total, "set_code": f.set_code, "hp": f.hp, "votes": f.votes}
 
 
 async def read_slab(ocr, image: bytes) -> dict | None:
@@ -292,6 +295,8 @@ async def identify_card(db, ocr, image: bytes) -> dict:
     exact = bool(cards) and len(cards[0]["signals"]) >= 2 and (
         "number" in cards[0]["signals"] or "set" in cards[0]["signals"]) and (
         len(cards) == 1 or score(cards[1]["signals"]) < best)
+    if exact and read and read.votes == 1 and not {"set", "hp"} & set(cards[0]["signals"]):
+        exact = False  # one lone read of number + total can be a wrong-but-real pair (4/63): needs a second witness
     names = [n for n, _ in keep]
     conf = confidence(matches, lines) if keep else ("low" if cards else "none")
     return {"text": text, "confidence": conf, "names": names, "total": total, "cards": cards,

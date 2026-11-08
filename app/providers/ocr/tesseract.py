@@ -288,6 +288,7 @@ class TesseractOcr:
                 break
         if votes:
             out.number, out.printed_total = max(votes, key=lambda k: votes[k])
+            out.votes = votes[(out.number, out.printed_total)]
         code = await asyncio.to_thread(crop_rel, flat, full, *SET_REGION)
         out.set_code = parse_set_code(" ".join(ln.text for ln in await _safe_run(code, 7, LETTERS)))
         hp = await asyncio.to_thread(crop_rel, flat, full, *HP_BOX)

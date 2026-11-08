@@ -26,6 +26,7 @@ class CardFields:
     set_code: str | None = None      # "PAR" (upper case, language code removed)
     hp: int | None = None
     flat: bool = False               # True when read from a perspective-corrected card
+    votes: int = 0                   # how many reads of the number region agreed on (number, total)
 
 
 class OcrProvider(Protocol):

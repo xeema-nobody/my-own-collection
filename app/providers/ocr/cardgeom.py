@@ -139,10 +139,60 @@ SLEEVE_BOX = (0.10, 0.155, 0.895, 0.915)
 SLEEVE_SHIFTS = (0.0, -0.075, 0.03)
 
 
+SCAN = 4  # detection runs on the flat shrunk by this factor
+SIZES = np.arange(0.74, 0.87, 0.02)  # card width as a share of the sleeve flat width
+BORDER = 2  # border band thickness in scan pixels
+SIZE_PRIOR = 4.0  # inner art frames sit inside the card and have strong edges: lean toward the larger box
+
+
+def locate_card(flat: Image.Image) -> tuple[int, int, int, int] | None:
+    """Card box (x0, y0, x1, y1 in flat pixels) inside a flat sleeve / toploader: the 63:88 rectangle whose four
+    sides sit on the strongest edges (card edge against the sleeve), searched over size and position with integral
+    images. None when no box clearly beats the average one."""
+    g = np.asarray(flat.convert("L"), dtype=np.float32)
+    g = cv2.GaussianBlur(cv2.resize(g, (g.shape[1] // SCAN, g.shape[0] // SCAN), interpolation=cv2.INTER_AREA), (3, 3), 0)
+    H, W = g.shape
+    gx = np.abs(cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3))  # vertical edges: left and right sides
+    gy = np.abs(cv2.Sobel(g, cv2.CV_32F, 0, 1, ksize=3))  # horizontal edges: top and bottom sides
+    gx, gy = np.minimum(gx, np.percentile(gx, 99)), np.minimum(gy, np.percentile(gy, 99))  # glare streaks do not win
+    ix = np.pad(gx.cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+    iy = np.pad(gy.cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+
+    def box_sum(i: np.ndarray, x0: int, y0: int, x1: int, y1: int) -> float:
+        return float(i[y1, x1] - i[y0, x1] - i[y1, x0] + i[y0, x0])
+
+    best, scores = None, []
+    for fw in SIZES:
+        bw = int(fw * W)
+        bh = int(bw / RATIO)
+        if bh >= H - 2:
+            continue
+        for y0 in range(1, H - bh - 1, 2):
+            for x0 in range(1, W - bw - 1, 2):
+                x1, y1 = x0 + bw, y0 + bh
+                b = BORDER
+                side = (box_sum(ix, x0 - b, y0, x0 + b, y1) + box_sum(ix, x1 - b, y0, x1 + b, y1)
+                        + box_sum(iy, x0, y0 - b, x1, y0 + b) + box_sum(iy, x0, y1 - b, x1, y1 + b))
+                sc = side / (2 * (bw + bh) * 2 * b) * (fw / SIZES[0]) ** SIZE_PRIOR
+                scores.append(sc)
+                if best is None or sc > best[0]:
+                    best = (sc, x0, y0, x1, y1)
+    if best is None or best[0] <= 0 or best[0] < 1.4 * float(np.mean(scores)):
+        return None
+    _, x0, y0, x1, y1 = best
+    return x0 * SCAN, y0 * SCAN, x1 * SCAN, y1 * SCAN
+
+
 def sleeve_crops(flat: Image.Image) -> list[Image.Image]:
     w, h = flat.size
     x0, y0, x1, y1 = SLEEVE_BOX
     out = []
+    try:
+        found = locate_card(flat)
+    except Exception:  # noqa: BLE001 - geometry must never break scanning
+        found = None
+    if found is not None:
+        out.append(flat.crop(found).resize((CARD_W, CARD_H), Image.LANCZOS))
     for dy in SLEEVE_SHIFTS:
         box = (int(x0 * w), int((y0 + dy) * h), int(x1 * w), int((y1 + dy) * h))
         out.append(flat.crop(box).resize((CARD_W, CARD_H), Image.LANCZOS))

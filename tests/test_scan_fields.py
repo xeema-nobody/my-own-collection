@@ -136,3 +136,21 @@ async def test_number_outweighs_total_and_hp(cat):
     await cat.cards.update_one({"_id": "pokemon:xy12-11"}, {"$set": {"hp": "180"}})
     res = await scan.identify(cat, FieldOcr("Charizard", CardFields(number="4", printed_total=108, hp=180)), b"x")
     assert ids(res)[0] in {"base1", "base2"}  # number (4) beats total (108) + HP (180)
+
+
+async def test_a_lone_number_read_is_not_exact_without_a_second_witness(cat):
+    lone = CardFields(number="4", printed_total=102, flat=True, votes=1)
+    res = await scan.identify(cat, FieldOcr("Charizard", lone), b"x")
+    assert ids(res)[0] == "base1" and res["exact"] is False  # ranked first, but the user must pick
+    agreed = CardFields(number="4", printed_total=102, flat=True, votes=2)
+    assert (await scan.identify(cat, FieldOcr("Charizard", agreed), b"x"))["exact"] is True
+    with_hp = CardFields(number="4", printed_total=102, hp=120, flat=True, votes=1)
+    await cat.cards.update_one({"_id": "pokemon:base1-4"}, {"$set": {"hp": "120"}})
+    assert (await scan.identify(cat, FieldOcr("Charizard", with_hp), b"x"))["exact"] is True
+
+
+def test_owner_prefix_is_a_variant_of_the_bare_name():
+    names = ["typhlosion", "ethan's typhlosion", "team rocket's mewtwo", "mewtwo", "dark typhlosion"]
+    got = [n for n, _ in scan.with_suffix_variants(names, [("typhlosion", 1.0)])]
+    assert got == ["ethan's typhlosion"]  # "dark typhlosion" has no owner 's
+    assert [n for n, _ in scan.with_suffix_variants(names, [("mewtwo", 1.0)])] == ["team rocket's mewtwo"]
