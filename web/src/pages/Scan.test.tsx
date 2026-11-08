@@ -109,7 +109,7 @@ describe("Scan page", () => {
   });
 
   it("shows the link banner when the laptop opened a session", async () => {
-    mockApi({ "GET /api/scan/session": { session: { id: "s1", created_at: "" } } });
+    mockApi({ "GET /api/scan/session": { session: { id: "s1", created_at: "", mode: "raw" } } });
     renderPage(<Scan />, "/scan");
     expect(await screen.findByText(/Linked to your computer/)).toBeInTheDocument();
   });
@@ -125,6 +125,42 @@ describe("Scan page", () => {
     await screen.findByText(/Tap the one you hold/);
     expect(String(api.mock.calls.find(([u]) => String(u).includes("/api/scan/identify"))![0])).toContain("slab=1");
   });
+
+  it("a slab session sets Scan slab without saving it, and identify is sent with slab=1", async () => {
+    const api = mockApi({ "GET /api/scan/session": { session: { id: "s1", created_at: "", mode: "slab" } }, "POST /api/scan/identify": IDENT });
+    const user = userEvent.setup();
+    renderPage(<Scan />, "/scan");
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Scan slab" })).toHaveAttribute("aria-checked", "true"));
+    expect(screen.getByText(/Linked to your computer \(slabs\)/)).toBeInTheDocument();
+    expect(localStorage.getItem("scan.mode")).toBeNull(); // the device default is untouched
+    await user.upload(screen.getByLabelText("Take a photo of the card"), new File(["x"], "c.jpg", { type: "image/jpeg" }));
+    await screen.findByText(/Tap the one you hold/);
+    expect(String(api.mock.calls.find(([u]) => String(u).includes("/api/scan/identify"))![0])).toContain("slab=1");
+  });
+
+  it("the phone toggle wins mid-session; only a NEW session id re-applies the laptop's mode", async () => {
+    let sess = { id: "s1", created_at: "", mode: "slab" };
+    mockApi({ "GET /api/scan/session": () => ({ session: sess }) });
+    const user = userEvent.setup();
+    renderPage(<Scan />, "/scan");
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Scan slab" })).toHaveAttribute("aria-checked", "true"));
+    await user.click(screen.getByRole("radio", { name: "Scan raw" }));
+    await new Promise((r) => setTimeout(r, 3000)); // at least one more poll of the same session
+    expect(screen.getByRole("radio", { name: "Scan raw" })).toHaveAttribute("aria-checked", "true");
+    sess = { id: "s2", created_at: "", mode: "slab" };
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Scan slab" })).toHaveAttribute("aria-checked", "true"), { timeout: 5000 });
+    expect(localStorage.getItem("scan.mode")).toBe("raw"); // only the user's own tap was saved
+  }, 15000);
+
+  it("a session that goes away leaves the mode as it is", async () => {
+    let sess: object | null = { id: "s1", created_at: "", mode: "slab" };
+    mockApi({ "GET /api/scan/session": () => ({ session: sess }) });
+    renderPage(<Scan />, "/scan");
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Scan slab" })).toHaveAttribute("aria-checked", "true"));
+    sess = null;
+    await waitFor(() => expect(screen.queryByText(/Linked to your computer/)).toBeNull(), { timeout: 5000 });
+    expect(screen.getByRole("radio", { name: "Scan slab" })).toHaveAttribute("aria-checked", "true");
+  }, 15000);
 
   it("starts in slab mode when that was the remembered choice", () => {
     localStorage.setItem("scan.mode", "slab");

@@ -370,15 +370,16 @@ class ScanError(Exception):
 
 
 def _session_out(s: dict | None) -> dict | None:
-    return None if not s else {"id": str(s["_id"]), "created_at": s["created_at"].isoformat()}
+    return None if not s else {"id": str(s["_id"]), "created_at": s["created_at"].isoformat(),
+                                "mode": s.get("mode", "raw")}  # docs from before the mode existed are raw
 
 
-async def start_session(db) -> dict:
-    """Laptop opens a session; any older open one is closed (one at a time)."""
+async def start_session(db, mode: str = "raw") -> dict:
+    """Laptop opens a session in raw or slab mode (the phone follows); any older open one is closed (one at a time)."""
     now = datetime.now(timezone.utc)
     await db.scan_sessions.update_many({"status": "open"}, {"$set": {"status": "closed", "closed_at": now}})
-    res = await db.scan_sessions.insert_one({"status": "open", "created_at": now, "last_activity": now})
-    return _session_out({"_id": res.inserted_id, "created_at": now})
+    res = await db.scan_sessions.insert_one({"status": "open", "mode": mode, "created_at": now, "last_activity": now})
+    return _session_out({"_id": res.inserted_id, "created_at": now, "mode": mode})
 
 
 async def current_session(db) -> dict | None:

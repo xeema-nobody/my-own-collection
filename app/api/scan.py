@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.api.deps import get_db
 from app.config import settings
-from app.db.models import CollectionIn
+from app.db.models import CollectionIn, ScanSessionIn
 from app.providers.ocr import ImageError, OcrUnavailable, get_ocr
 from app.security import require_laptop
 from app.services import scan as svc
@@ -83,8 +83,8 @@ async def session():
 
 
 @router.post("/sessions", status_code=201, dependencies=[Depends(require_laptop)])
-async def start_session():
-    return await svc.start_session(get_db())
+async def start_session(body: ScanSessionIn | None = None):
+    return await svc.start_session(get_db(), (body or ScanSessionIn()).mode)
 
 
 @router.delete("/sessions/{session_id}", status_code=204, dependencies=[Depends(require_laptop)])

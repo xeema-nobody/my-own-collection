@@ -305,3 +305,41 @@ async def test_lookup_api_phone_allowed(cat, phone):
     async with client() as c:
         r = await c.get("/api/scan/lookup?number=4/102", headers=phone)
         assert r.status_code == 200 and r.json()["cards"][0]["id"] == "pokemon:base1-4"
+
+
+async def test_session_mode_stored_default_raw_and_legacy(cat):
+    assert (await scan.start_session(cat))["mode"] == "raw"
+    slab = await scan.start_session(cat, "slab")
+    assert slab["mode"] == "slab" and (await scan.current_session(cat))["mode"] == "slab"
+    await cat.scan_sessions.update_many({}, {"$unset": {"mode": ""}})  # legacy doc
+    assert (await scan.current_session(cat))["mode"] == "raw"
+
+
+async def test_session_mode_over_http(cat):
+    async with client() as c:
+        r = await c.post("/api/scan/sessions")  # no body: old clients
+        assert r.status_code == 201 and r.json()["mode"] == "raw"
+        r = await c.post("/api/scan/sessions", json={"mode": "slab"})
+        assert r.status_code == 201 and r.json()["mode"] == "slab"
+        assert (await c.get("/api/scan/session")).json()["session"]["mode"] == "slab"
+        assert (await c.post("/api/scan/sessions", json={"mode": "binder"})).status_code == 422
+        assert (await c.get("/api/scan/session")).json()["session"]["mode"] == "slab"  # bad request changed nothing
+
+
+async def test_phone_reads_session_mode_but_cannot_start_one(cat, phone):
+    await scan.start_session(cat, "slab")
+    async with client() as c:
+        assert (await c.get("/api/scan/session", headers=phone)).json()["session"]["mode"] == "slab"
+        assert (await c.post("/api/scan/sessions", json={"mode": "raw"}, headers=phone)).status_code == 403
+
+
+def test_caddy_gate_forwards_exactly_the_app_phone_allowlist():
+    """The Caddyfile path list and app.security.PHONE_ALLOWED must agree, or a phone call is 403'd at the gate."""
+    import re
+    from pathlib import Path
+    from app.security import PHONE_ALLOWED
+    text = (Path(__file__).resolve().parents[1] / "lan" / "Caddyfile").read_text()
+    if "@phone_api" not in text:
+        pytest.skip("lan/Caddyfile not mounted in this container")
+    line = re.search(r"@phone_api \{.*?path ([^\n]+)", text, re.S).group(1).split()
+    assert sorted(line) == sorted(p for _, p in PHONE_ALLOWED if p != "/health")

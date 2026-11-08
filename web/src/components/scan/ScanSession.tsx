@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Smartphone, Undo2 } from "lucide-react";
+import { Check, Gem, Smartphone, Undo2 } from "lucide-react";
 import { api, type ScanEvent, type ScanSession as Session } from "../../lib/api";
 import { Button } from "../ui";
 
@@ -20,7 +20,7 @@ export default function ScanSession() {
   const [events, setEvents] = useState<ScanEvent[]>([]);
   const cursor = useRef<string>(START);
   const start = useMutation({
-    mutationFn: api.scanStartSession,
+    mutationFn: (mode: "raw" | "slab") => api.scanStartSession(mode),
     onSuccess: (s) => { cursor.current = START; setEvents([]); setSession(s); },
   });
   const close = useMutation({
@@ -42,15 +42,18 @@ export default function ScanSession() {
   if (!status.data?.enabled) return null; // phone mode not set up: PhoneLink explains how
   if (!session) return (
     <div className="space-y-2 text-sm">
-      <p>Start a scan here, then hold a card up to your phone. The page on the phone is already linked.</p>
-      <Button onClick={() => start.mutate()} disabled={start.isPending}><Smartphone size={14} />Start a scan</Button>
+      <p>Pick what you are about to scan, then hold it up to your phone. The page on the phone is already linked and follows your choice.</p>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => start.mutate("raw")} disabled={start.isPending}><Smartphone size={14} />Scan raw cards</Button>
+        <Button variant="secondary" onClick={() => start.mutate("slab")} disabled={start.isPending}><Gem size={14} />Scan slabs</Button>
+      </div>
       {start.error && <p role="alert" className="text-danger">{(start.error as Error).message}</p>}
     </div>);
   const adds = events.filter((e) => e.kind !== "undo" && !events.some((u) => u.undoes === e.id));
   return (
     <div className="space-y-3 text-sm" aria-label="Scan session">
       <p role="status" className="flex items-center gap-2 text-accent"><Smartphone size={14} />
-        {adds.length ? `${adds.length} added this session` : "Waiting for the phone… open the scan page on your phone."}</p>
+        {session.mode === "slab" ? "Slab session" : "Raw session"}: {adds.length ? `${adds.length} added this session` : "waiting for the phone… open the scan page on your phone."}</p>
       {events.length > 0 && <ul className="space-y-2">
         {events.map((e) => e.kind === "undo"
           ? <li key={e.id} className="flex items-center gap-2 text-muted"><Undo2 size={14} />Undone: {e.label}</li>

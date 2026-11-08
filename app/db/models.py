@@ -241,3 +241,7 @@ class AlertPatch(BaseModel):
     include_estimated: bool | None = None
     threshold: float | None = Field(default=None, gt=0)
     kind: AlertKind | None = None
+
+
+class ScanSessionIn(BaseModel):
+    mode: Literal["raw", "slab"] = "raw"

@@ -53,7 +53,7 @@ export type ScanSearch = { total: number; page: number; cards: ScanCard[] };
 export type ScanAdded = { label: string; stack: { id: string; quantity: number; type_conflict?: boolean; duplicate?: boolean }; event: ScanEvent };
 export type ScanEvent = { id: string; at: string; kind?: "add" | "undo"; card_id: string; label: string; quantity_added: number; quantity_after: number; type_conflict: boolean;
   condition?: string | null; language?: string | null; grading?: unknown; session_id?: string | null; undoes?: string | null };
-export type ScanSession = { id: string; created_at: string };
+export type ScanSession = { id: string; created_at: string; mode: "raw" | "slab" };
 export type ScanUndone = { label: string; quantity: number; deleted: boolean; event_id: string };
 export type ScanStatus = { enabled: boolean; url: string | null; login: string | null };
 
@@ -192,7 +192,7 @@ export const api = {
   scanLookup: (number: string, set?: string) => req<ScanIdentify>("/api/scan/lookup" + qs({ number, set: set || undefined })),
   scanUndo: (eventId: string) => req<ScanUndone>("/api/scan/undo", post({ event_id: eventId })),
   scanSession: () => req<{ session: ScanSession | null }>("/api/scan/session"),
-  scanStartSession: () => req<ScanSession>("/api/scan/sessions", { method: "POST" }),
+  scanStartSession: (mode: "raw" | "slab" = "raw") => req<ScanSession>("/api/scan/sessions", post({ mode })),
   scanCloseSession: (id: string) => req<void>(`/api/scan/sessions/${id}`, { method: "DELETE" }),
   scanStatus: () => req<ScanStatus>("/api/scan/status"),
   scanEvents: (after?: string | null, sessionId?: string | null) => req<{ events: ScanEvent[]; latest: string | null }>("/api/scan/events" + qs({ after, session_id: sessionId })),

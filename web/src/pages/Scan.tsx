@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, Laptop, ScanLine, Undo2 } from "lucide-react";
 import { api, type ScanCard, type ScanIdentify } from "../lib/api";
@@ -32,6 +32,13 @@ export default function Scan() {
   // The laptop may have opened a session: poll (react-query pauses this while the page is hidden). No session = normal page.
   const sess = useQuery({ queryKey: ["scan", "session"], queryFn: api.scanSession, refetchInterval: 2500, retry: false });
   const sessionId = sess.data?.session?.id ?? null;
+  const sessionMode = sess.data?.session?.mode ?? null;
+  // A NEW session sets the mode the laptop chose, in memory only (the device default stays as saved). After that the
+  // phone toggle wins until the next new session; a session that vanishes leaves the mode alone.
+  const appliedId = useRef<string | null>(null);
+  useEffect(() => {
+    if (sessionId && sessionId !== appliedId.current) { appliedId.current = sessionId; if (sessionMode) setModeState(sessionMode); }
+  }, [sessionId, sessionMode]);
 
   const show = (r: ScanIdentify, q: string | null, page: number) => { setRes(r); setMore(q ? { q, page } : null); setErr(null); setStep("pick"); };
   const identify = useMutation({
@@ -81,7 +88,7 @@ export default function Scan() {
   return (
     <main className="mx-auto max-w-lg space-y-4 px-4 py-4">
       <h1 className="flex items-center gap-2 text-lg font-semibold"><ScanLine size={20} className="text-accent" />Add a card</h1>
-      {sessionId && <p role="status" className="flex items-center gap-2 rounded bg-accent/15 px-3 py-2 text-sm text-accent"><Laptop size={16} />Linked to your computer: the card you pick shows up there.</p>}
+      {sessionId && <p role="status" className="flex items-center gap-2 rounded bg-accent/15 px-3 py-2 text-sm text-accent"><Laptop size={16} />Linked to your computer ({sessionMode === "slab" ? "slabs" : "raw cards"}): the card you pick shows up there.</p>}
       {err && step !== "details" && <p role="alert" className="rounded bg-danger/15 px-3 py-2 text-sm text-danger">{err}</p>}
       {step === "camera" && (identify.isPending
         ? <p className="py-16 text-center text-muted" role="status">Reading the card…</p>
