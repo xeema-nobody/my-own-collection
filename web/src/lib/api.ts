@@ -52,7 +52,7 @@ export type ScanSlab = { grader: string | null; grade: number | null; cert: stri
 export type CertInfo = { grader: string; cert: string; status: string; url: string | null; name?: string | null; number?: string | null;
   printed_total?: number | null; set_name?: string | null; year?: number | null; language?: string | null; variant?: string | null;
   grade?: number | null; tier?: string | null; detail?: string | null };
-export type ScanCert = { cert: CertInfo; cards: ScanCard[]; how_exact: "exact" | "likely" | "possible" | "none"; needs_confirm: boolean; cached: boolean; report_url: string | null };
+export type ScanCert = { cert: CertInfo; cards: ScanCard[]; how_exact: "exact" | "likely" | "possible" | "none"; needs_confirm: boolean; cached: boolean; report_url: string | null; warnings?: { code: string; text: string }[] };
 export type ScanIdentify = { text: string; confidence: "high" | "medium" | "low" | "none"; names: string[]; total: number; cards: ScanCard[]; read?: ScanRead | null; exact?: boolean; slab?: ScanSlab | null; detected?: boolean; cert?: ScanCert | null };
 export type ScanSearch = { total: number; page: number; cards: ScanCard[] };
 export type ScanAdded = { label: string; stack: { id: string; quantity: number; type_conflict?: boolean; duplicate?: boolean }; event: ScanEvent };

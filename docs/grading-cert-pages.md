@@ -15,6 +15,8 @@ One row per grader. Used by the slab scan (roadmap 5f, decisions.md "Slab identi
 
 **Matching signals per grader** (what the page gives the catalog match): ACE = name + number + printed total + set + year + variant (best); PSA = name + number + set/year hint (no total); BGS = name + set name/year only (no number). CGC / SGC unverified; fetcher + same approach if the user confirms their pages are free in a browser.
 
+**Noisy page text (seen 2026-11-09):** BGS puts the rarity in the name ("Gardevoir ex SIR"), PSA's set is a brand + code ("POKEMON MEW EN-151") and its variety carries the rarity ("HYPER RARE"), ACE is clean ("Radiant Charizard", set "POKEMON GO"). The catalog match therefore resolves the set first, matches name words inside it, and uses the rarity as a bonus; see decisions.md "Set-first token matching". A cert read wrong can land on any card (PSA 2023151 = a 1976 baseball card): the response `warnings` flag grade / tier disagreement with the label, a non-Pokemon page and an odd cert length.
+
 ## Fetcher behaviour for cert pages (2026-11-09)
 
 Cloudflare shows 'Just a moment...' first, then clears by itself in a few seconds in real Chrome. Unattended fetches (scans, scheduler) wait the 10 s challenge grace for that, never ask the user and never open a window for a login; a challenge that does not clear = `blocked` = link-only. Sites are data (built-ins `psa`, `beckett` + `~/.moc-fetcher/sites.json`, re-read per request); `GET /health` lists site ids; the app checks it before a lookup and shows 'restart the fetcher: scripts/fetcher.sh restart' when the site is missing (old fetcher) or 'scripts/fetcher.sh start' when it is down. Providers: `app/providers/grading/{base,ace,psa,bgs,linkonly,registry,fetched}.py`.

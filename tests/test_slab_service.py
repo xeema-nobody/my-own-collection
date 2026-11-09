@@ -20,6 +20,7 @@ def ace(name):
 
 @pytest.fixture
 async def cat(db):
+    slab.reset_sets_cache()
     go = lambda num, name="Radiant Charizard": card("pgo", num, name)  # noqa: E731
     await db.cards.insert_many([go("11"), card("base1", "4"), card("sv3pt5", "6", "Charizard ex"),
                                 card("xy1", "142", "Blastoise-EX"), card("other", "11", "Radiant Charizard")])
@@ -32,14 +33,6 @@ async def cat(db):
 def info(grader="ACE", **kw):
     base = dict(grader=grader, cert="1", status=FOUND, url="https://x/1", fetched_at=now())
     return CertInfo(**{**base, **kw})
-
-
-def test_name_forms_cover_printed_spellings():
-    assert "blastoise ex" in slab.name_forms("BLASTOISE-EX")
-    assert slab.name_forms("Charizard Holo")[0] == "charizard"
-    assert "radiant charizard" in slab.name_forms("RADIANT CHARIZARD 1st Edition")
-    assert slab.name_forms("Gardevoir ex SIR")[0] == "gardevoir ex"  # BGS appends the rarity
-    assert slab.name_forms("MEW ex SAR")[0] == "mew ex"
 
 
 async def test_ace_exact_when_name_number_total_agree_on_one_print(cat):
@@ -161,3 +154,168 @@ async def test_cert_api_allowed_through_the_phone_gate(cat, phone, monkeypatch):
         r = await c.get("/api/scan/cert", params={"grader": "ACE", "cert": "158690"}, headers=phone)
         assert r.status_code == 200 and r.json()["cert"]["status"] == "found"
         assert (await c.get("/api/scan/cert", params={"grader": "ACE"}, headers=phone)).status_code == 422
+
+
+# --- set-first token matching (slice 3b): one test per noise class, values from real captures where possible ---
+
+SETS3 = {"sv4pt5": ("Paldean Fates", 2024, 91), "sv1": ("Scarlet & Violet", 2023, 198), "sv3pt5": ("151", 2023, 165),
+         "swsh12pt5": ("Crown Zenith", 2023, 159), "base1": ("Base", 1999, 102), "g1": ("Generations", 2016, 83),
+         "pgo": ("Pokemon GO", 2022, 78)}
+
+
+async def put(db, set_id, num, name, rarity=None):
+    nm, year, total = SETS3[set_id]
+    c = card(set_id, num, name, rarity=rarity)
+    c["set"].update(name=nm, printed_total=total, release_date=now().replace(year=year))
+    await db.cards.insert_one(c)
+
+
+@pytest.fixture
+async def real(db):
+    slab.reset_sets_cache()
+    for sid, num, name, rar in [
+            ("sv4pt5", "29", "Gardevoir ex", "Double Rare"), ("sv4pt5", "217", "Gardevoir ex", "Illustration Rare"),
+            ("sv4pt5", "233", "Gardevoir ex", "Special Illustration Rare"), ("sv4pt5", "86", "Gardevoir", "Rare"),
+            ("sv1", "86", "Gardevoir ex", "Double Rare"), ("sv3pt5", "205", "Mew ex", "Hyper Rare"),
+            ("sv3pt5", "151", "Mew ex", "Double Rare"), ("sv3pt5", "7", "Squirtle", "Common"),
+            ("swsh12pt5", "50", "Mr. Mime", "Common"), ("g1", "61", "Mr. Mime", "Rare"),
+            ("base1", "27", "Farfetch'd", "Common"), ("g1", "27", "Farfetch'd", "Common"),
+            ("swsh12pt5", "9", "Pikachu", "Common"), ("swsh12pt5", "10", "Pikachu V", "Rare Holo V"),
+            ("swsh12pt5", "11", "Pikachu VMAX", "Rare Holo VMAX"), ("base1", "58", "Pikachu", "Common"),
+            ("base1", "4", "Charizard", "Rare Holo"), ("sv3pt5", "6", "Charizard ex", "Double Rare"),
+            ("sv3pt5", "20", "Flabébé", "Common"), ("pgo", "11", "Radiant Charizard", "Radiant Rare")]:
+        await put(db, sid, num, name, rar)
+    return db
+
+
+def ids(cards):
+    return [c["id"] for c in cards]
+
+
+async def test_bgs_gardevoir_ex_sir_real_capture_picks_the_sir_print(real):
+    i = info("BGS", cert="0018969667", name="Gardevoir ex SIR", year=2024,
+             set_name="2024 Pokemon Scarlet and Violet Paldean Fates")
+    assert await slab.resolve_sets(real, i) == ["sv4pt5"]  # not Scarlet & Violet: more words + the year
+    cards = await slab.match_catalog(real, i)
+    assert ids(cards)[0] == "pokemon:sv4pt5-233" and "rarity" in cards[0]["signals"]
+    assert set(ids(cards)) == {"pokemon:sv4pt5-29", "pokemon:sv4pt5-217", "pokemon:sv4pt5-233"}  # longest name only
+    assert slab.how_exact("BGS", cards) == "likely"
+
+
+async def test_bgs_without_rarity_word_stays_possible(real):
+    i = info("BGS", name="Gardevoir ex", year=2024, set_name="2024 Pokemon Scarlet and Violet Paldean Fates")
+    assert slab.how_exact("BGS", await slab.match_catalog(real, i)) == "possible"
+
+
+async def test_psa_mew_ex_205_real_capture(real):
+    i = info("PSA", cert="168766783", name="MEW ex", number="205", year=2023, set_name="POKEMON MEW EN-151",
+             variant="HYPER RARE", grade=9.0, tier="MINT")
+    assert await slab.resolve_sets(real, i) == ["sv3pt5"]
+    cards = await slab.match_catalog(real, i)
+    assert ids(cards)[0] == "pokemon:sv3pt5-205" and {"name", "number", "set", "year", "rarity"} <= set(cards[0]["signals"])
+    assert slab.how_exact("PSA", cards) == "likely"
+
+
+async def test_ace_radiant_charizard_real_capture_set_first(real):
+    i = info("ACE", name="Radiant Charizard", number="011/078", printed_total=78, year=2022, set_name="POKEMON GO",
+             variant="HOLO")
+    cards = await slab.match_catalog(real, i)
+    assert ids(cards) == ["pokemon:pgo-11"] and cards[0]["signals"][:3] == ["name", "number", "total"]
+
+
+@pytest.mark.parametrize("page_name, want", [
+    ("Gardevoir ex SIR", "Gardevoir ex"), ("GARDEVOIR EX HOLO", "Gardevoir ex"), ("1st Edition Charizard", "Charizard"),
+    ("Charizard Holo Shadowless Unlimited", "Charizard"), ("Mr. Mime", "Mr. Mime"), ("MR MIME", "Mr. Mime"),
+    ("Mr Mime Reverse Holo", "Mr. Mime"), ("Farfetch'd", "Farfetch'd"), ("FARFETCHD", "Farfetch'd"),
+    ("Pikachu VMAX", "Pikachu VMAX"), ("PIKACHU-V", "Pikachu V"), ("Pikachu", "Pikachu"), ("Flabebe", "Flabébé"),
+    ("FLABÉBÉ Full Art", "Flabébé"), ("Charizard EX", "Charizard ex")])
+async def test_name_noise_classes_match_the_right_catalog_name(real, page_name, want):
+    cards = await slab.match_catalog(real, info("PSA", name=page_name))
+    assert cards and {c["name"] for c in cards} == {want}, (page_name, [c["name"] for c in cards])
+
+
+async def test_set_narrows_between_prints_of_one_name(real):
+    for sid, set_name, year in [("base1", "POKEMON BASE SET", 1999), ("g1", "POKEMON GENERATIONS", 2016)]:
+        cards = await slab.match_catalog(real, info("PSA", name="FARFETCH'D", set_name=set_name, year=year))
+        assert ids(cards)[0] == f"pokemon:{sid}-27" and "set" in cards[0]["signals"]
+
+
+async def test_word_page_names_leave_no_phantom_name_signal(real):
+    # page says VMAX; only Pikachu V / Pikachu exist in that pool -> never "exact name" for the shorter card
+    await real.cards.delete_one({"_id": "pokemon:swsh12pt5-11"})
+    cards = await slab.match_catalog(real, info("PSA", name="Pikachu VMAX", set_name="Crown Zenith"))
+    assert cards and all("name" not in c["signals"] for c in cards) and slab.how_exact("PSA", cards) == "possible"
+
+
+async def test_unknown_set_falls_back_to_global_name_match(real):
+    cards = await slab.match_catalog(real, info("PSA", name="Squirtle", set_name="Some Brand New Expansion"))
+    assert ids(cards) == ["pokemon:sv3pt5-7"]
+
+
+async def test_japanese_page_does_not_crash_and_uses_number_fallback(real):
+    i = info("ACE", name="リザードン", number="027/083", printed_total=83, set_name="ジェネレーションズ", language="Japanese")
+    assert await slab.resolve_sets(real, i) == []
+    assert ids(await slab.match_catalog(real, i)) == ["pokemon:g1-27"]
+
+
+def test_page_rarity_and_words():
+    assert slab.page_rarity("Gardevoir ex SIR") == frozenset({"special", "illustration", "rare"})
+    assert slab.page_rarity("MEW ex", "HYPER RARE") == frozenset({"hyper", "rare"})
+    assert slab.page_rarity("Secret Rare Pikachu") == frozenset({"secret", "rare"})
+    assert slab.page_rarity("Pikachu", "HOLO") is None
+    assert slab.words("Farfetch'd Flabébé") == ["farfetchd", "flabebe"]
+
+
+async def test_rarity_is_a_bonus_never_a_filter(real):
+    i = info("PSA", name="Gardevoir ex SIR", year=2024, set_name="Paldean Fates")
+    await real.cards.update_many({"set.id": "sv4pt5"}, {"$set": {"rarity": "Something Else"}})
+    cards = await slab.match_catalog(real, i)
+    assert len(cards) == 3 and all("rarity" not in c["signals"] for c in cards)
+
+
+# --- misread warnings (slice 3c) ---
+
+def codes(w):
+    return [x["code"] for x in w]
+
+
+async def test_warnings_grade_and_tier_mismatch(real):
+    i = info("PSA", cert="168766783", name="MEW ex", number="205", set_name="POKEMON MEW EN-151", grade=9.0, tier="MINT")
+    cards = await slab.match_catalog(real, i)
+    assert slab.warnings(i, cards, 9.0, "MINT") == []
+    assert codes(slab.warnings(i, cards, 10.0, "GEM MINT")) == ["grade_mismatch", "tier_mismatch"]
+    assert slab.warnings(info("PSA", cert="12345678", grade=10, tier="GEM MT"), cards, 10.0, "Gem Mint") == []
+
+
+async def test_warnings_non_pokemon_page_hank_aaron(real):
+    i = info("PSA", cert="2023151", name="HANK AARON", set_name="1976 O-PEE-CHEE BASEBALL", year=1976, grade=8.0)
+    w = slab.warnings(i, await slab.match_catalog(real, i))
+    assert codes(w) == ["cert_length", "not_pokemon"] and "HANK AARON" in w[1]["text"]
+
+
+async def test_warnings_not_raised_for_pokemon_without_catalog_hit(real):
+    i = info("ACE", cert="158678", name="Charizard V", set_name="Star Birth", language="Japanese", variant="Special Art")
+    assert "not_pokemon" in codes(slab.warnings(i, []))  # no Pokemon word anywhere: flagged
+    j = info("PSA", cert="12345678", name="Unknown Mon", set_name="POKEMON SOME SET")
+    assert slab.warnings(j, []) == []
+
+
+def test_warnings_cert_length_per_grader():
+    assert codes(slab.warnings(info("ACE", cert="1234567890", status="not_found"), [])) == ["cert_length"]
+    assert slab.warnings(info("BGS", cert="0018969667", status="not_found"), []) == []
+    assert codes(slab.warnings(info("BGS", cert="18969667", status="not_found"), [])) == ["cert_length"]
+
+
+async def test_lookup_returns_warnings_and_api_passes_label(cat):
+    got = await slab.lookup(cat, "ACE", "158690", transport=ace("ace_158690.html"), label_grade=9.0, label_tier="MINT")
+    assert codes(got["warnings"]) == ["grade_mismatch", "tier_mismatch"]
+    assert (await slab.lookup(cat, "ACE", "158690", transport=ace("ace_158690.html"), label_grade=10.0))["warnings"] == []
+
+
+async def test_certs_recent_is_laptop_only_and_explains_the_match(real, phone):
+    await slab.lookup(real, "ACE", "158690", transport=ace("ace_158690.html"))
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://localhost") as c:
+        r = await c.get("/api/scan/certs/recent")
+        assert r.status_code == 200 and r.json()[0]["cert"] == "158690"
+        assert r.json()[0]["match"]["top"][0]["id"] == "pokemon:pgo-11" and r.json()[0]["match"]["sets"] == ["pgo"]
+        assert (await c.get("/api/scan/certs/recent", headers=phone)).status_code in (403, 404)

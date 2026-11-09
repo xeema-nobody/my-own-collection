@@ -48,10 +48,19 @@ async def identify(request: Request, slab: bool = Query(False)):
 
 @router.get("/cert")
 async def cert(grader: str = Query(..., min_length=2, max_length=20), cert: str = Query(..., min_length=1, max_length=20),
-               refresh: bool = Query(False)):
-    """Slab cert lookup (grader's page, cached) + matching catalog cards. Never raises for a missing page."""
+               refresh: bool = Query(False), grade: float | None = Query(None, ge=0, le=10),
+               tier: str | None = Query(None, max_length=30)):
+    """Slab cert lookup (grader's page, cached) + matching catalog cards. Never raises for a missing page. `grade`
+    / `tier` (read off the label) are compared with the page for `warnings`."""
     from app.services import slab as slab_svc
-    return await slab_svc.lookup(get_db(), grader, cert, refresh=refresh)
+    return await slab_svc.lookup(get_db(), grader, cert, refresh=refresh, label_grade=grade, label_tier=tier)
+
+
+@router.get("/certs/recent", dependencies=[Depends(require_laptop)])
+async def certs_recent(limit: int = Query(20, ge=1, le=100)):
+    """Laptop diagnostics: the last cert lookups and how the catalog matched them."""
+    from app.services import slab as slab_svc
+    return await slab_svc.recent(get_db(), limit)
 
 
 @router.get("/search")

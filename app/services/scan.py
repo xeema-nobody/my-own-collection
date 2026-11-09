@@ -182,7 +182,7 @@ def signals_for(c: dict, fields: CardFields | None, name_hit: bool, codes: set[s
     return sig
 
 
-SIGNAL_TEXT = {"name": "name", "number": "number", "total": "printed total", "set": "set code", "hp": "HP", "year": "year"}
+SIGNAL_TEXT = {"name": "name", "number": "number", "total": "printed total", "set": "set code", "hp": "HP", "year": "year", "rarity": "rarity"}
 # How much each agreeing signal counts when ranking prints. The collector number is the strongest read, the printed
 # total and set code say which set, HP only separates prints of one name (and the ex / non-ex forms).
 WEIGHT = {"name": 1.0, "number": 4.0, "total": 3.0, "set": 3.0, "hp": 1.0}
@@ -255,12 +255,15 @@ async def identify(db, ocr, image: bytes, slab: bool = False) -> dict:
         log.info("slab label: %s", label)  # what the reader saw: grader / grade / cert (no photo data)
         if label and label.get("grader") and label.get("cert"):
             try:
-                got = await slab_svc.lookup(db, label["grader"], label["cert"])
+                got = await slab_svc.lookup(db, label["grader"], label["cert"], label_grade=label.get("grade"),
+                                            label_tier=label.get("tier"))
             except Exception:  # a failed lookup must never lose the label read
                 log.warning("cert lookup failed", exc_info=True)
             else:
                 log.info("slab cert %s %s -> %s, %d cards, %s", label["grader"], label["cert"], got["cert"]["status"],
                          len(got["cards"]), got["how_exact"])
+                if got["warnings"]:
+                    log.info("slab warnings: %s", [w["code"] for w in got["warnings"]])
                 res.update(cards=got["cards"], total=len(got["cards"]), cert=got,
                            confidence={"exact": "high", "likely": "medium", "possible": "low"}.get(got["how_exact"], "none"),
                            exact=got["how_exact"] == "exact")
