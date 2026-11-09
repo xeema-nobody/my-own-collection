@@ -4,7 +4,7 @@ Guidance for Claude Code in this repo. Keep current when tooling or layout chang
 
 ## What this is
 
-**my-own-collection** — personal TCG collection manager (Pokémon first, schema generic). FastAPI + Motor (MongoDB 7) backend, Vite React TS SPA. Local only, single user, no auth. Docs: `docs/README.md` (overview/usage), `architecture.md`, `pricing.md`, `decisions.md`, `roadmap.md`, `grading-cert-pages.md` (cert page per grader). Session context: `temp/follow_up.md` (gitignored).
+**my-own-collection** — personal TCG collection manager (Pokémon first, schema generic). FastAPI + Motor (MongoDB 7) backend, Vite React TS SPA. Local only, single user, no auth. Docs: `docs/README.md` (overview/usage), `architecture.md`, `pricing.md`, `decisions.md`, `roadmap.md`, `grading-cert-pages.md` (cert page per grader; PSA/BGS only via the host fetcher). Session context: `temp/follow_up.md` (gitignored).
 
 ## Layout
 
@@ -28,9 +28,9 @@ tests/  docs/
 ```bash
 docker compose up -d --build          # mongo + api :8100 + web :5180 (vite dev)
 docker compose restart app            # backend has no --reload; restart after edits
-docker compose run --rm -v $PWD/tests:/code/tests -v $PWD/pytest.ini:/code/pytest.ini app sh -c "pip install -q pytest pytest-asyncio && python -m pytest"
+docker compose run --rm -v $PWD/tests:/code/tests -v $PWD/lan:/code/lan -v $PWD/pytest.ini:/code/pytest.ini app sh -c "pip install -q pytest pytest-asyncio && python -m pytest"
 docker compose exec web npx tsc --noEmit   # FE typecheck
-docker compose exec web npm test         # FE vitest (jsdom, fetch mocked)
+docker compose exec web npm test         # FE vitest (jsdom, fetch mocked); if 5 s timeouts under load: npx vitest run --testTimeout=30000 --no-file-parallelism
 scripts/lan.sh setup|up|down|status    # phone scanning gate (docs/README.md)
 scripts/backup.sh                     # mongodump -> backups/ (docs/backup.md)
 scripts/restore.sh <file> [--to-scratch]   # restore / verify a dump

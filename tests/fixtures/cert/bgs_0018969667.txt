@@ -1,0 +1,21 @@
+Trimmed from the rendered <main> text of https://beckett.com/grading/card-lookup?item_id=0018969667&item_type=BGS (real Chrome, 2026-11-09). Data is loaded client-side after __NEXT_DATA__ (which only holds the query), so the fetcher must wait for "INDIVIDUAL CARD DETAILS". Replace with raw HTML once the fetcher has captured it.
+Verify Cert
+FINAL GRADE
+9.0
+CERT NUMBER
+# 18969667
+TOTAL GRADED
+CARDS IN POP REPORT
+531
+CARDS GRADED ABOVE THIS CARD
+278
+INDIVIDUAL CARD DETAILS
+Set Name 2024 Pokemon Scarlet and Violet Paldean Fates
+Player Name Gardevoir ex SIR
+Date Graded Friday, November 28, 2025
+Centering Grade 9.0
+Corners Grade 9.0
+Edges Grade 10.0
+Surface Grade 10.0
+Autograph Grade Not Available
+POP REPORT

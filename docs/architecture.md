@@ -63,6 +63,7 @@ Alert notifications: `fetcher/notify.py` (asyncio task started in the fetcher li
 
 Engine: real Google Chrome started by the fetcher with `--remote-debugging-port` and a dedicated profile (`~/.moc-fetcher/profile`, never the user's main profile), driven by Playwright `connect_over_cdp`. Browser starts on first request and closes after an idle timeout or `POST /close`.
 
+- Sites: built-ins in `fetcher/sites.py` (pricecharting, cardmarket, altxyz; planned psa, beckett for slab cert pages) merged with `~/.moc-fetcher/sites.json` re-read per request (`{id, hosts, min_interval_s, cookie_button?}`), so adding a site needs no restart; `GET /health` lists the site ids. Planned in 5f slice 2; see decisions.md "Slab identity from the cert".
 - `POST /fetch/{site}` `{url, wait_selector?, click_text?, click_labels?, pages?, next_label?, wait_ms?, timeout_s?}` -> `{status: ok|login_timeout|blocked|error, final_url, title, html, htmls, detail}` (`pages` > 1 + `next_label`: one load, one snapshot per list page in `htmls`, `html` = first). Sites: `pricecharting`, `cardmarket`, `altxyz`; URL host must belong to the site (no open proxy).
 - `click_text` (optional): clicked after load / `wait_selector` (alt.xyz "Sold listings" toggle), after a short hydrate delay.
 - `click_labels` (optional, max 10): elements clicked in order by exact `aria-label` after `click_text` and `wait_ms`, each followed by `wait_ms` (alt.xyz "Go to next page"). A DOM click event, because Playwright's scroll-into-view hangs on alt.xyz's inner scroller. Missing label = `error`.

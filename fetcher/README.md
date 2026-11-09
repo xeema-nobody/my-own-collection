@@ -1,6 +1,6 @@
 # moc-fetcher
 
-Host-Mac service that fetches pages from PriceCharting, Cardmarket and alt.xyz for the app. It drives real Google Chrome (own profile in `~/.moc-fetcher/profile`) over CDP, because Cloudflare blocks Playwright's Chromium on Cardmarket. Nothing runs until the app asks; Chrome closes after 120 s idle.
+Host-Mac service that fetches pages from PriceCharting, Cardmarket and alt.xyz (and, from roadmap 5f, the PSA and Beckett cert pages) for the app. It drives real Google Chrome (own profile in `~/.moc-fetcher/profile`) over CDP, because Cloudflare blocks Playwright's Chromium on Cardmarket. Nothing runs until the app asks; Chrome closes after 120 s idle.
 
 If a site shows a login or Cloudflare challenge, the Chrome tab is brought to the front and the fetch waits (`GET /status` -> `waiting_login:<site>`). Log in yourself; credentials are never read or stored.
 
