@@ -41,6 +41,12 @@ class FakeCatalog:
 
 
 @pytest.fixture(autouse=True)
+def no_price_on_add(monkeypatch):
+    """Adding to the collection / wishlist would fetch a price in the background: never in tests."""
+    monkeypatch.setattr(settings, "price_on_add", False)
+
+
+@pytest.fixture(autouse=True)
 def no_valuation_cache(monkeypatch):
     """Tests write straight to mongo, so the in-memory valuation cache is off unless a test turns it on."""
     from app.services import valuation_cache

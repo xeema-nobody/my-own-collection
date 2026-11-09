@@ -9,7 +9,7 @@ from app.providers.price import registry_json
 from app.services.catalog_import import import_catalog, incomplete_sets
 from app.services import jobs as jobs_svc
 from app.services.price_fetch import fetch_prices, resolve_bulk, resolve_targets
-from app.services.refresh import refresh_prices
+from app.services.refresh import SCOPES, refresh_prices
 from app.services.snapshots import take_snapshot
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -33,7 +33,9 @@ async def catalog_import_retry_incomplete():
 
 
 @router.post("/prices/refresh", status_code=202)
-async def prices_refresh(scope: str = "collection", sets: list[str] | None = Query(None)):
+async def prices_refresh(scope: str = "tracked", sets: list[str] | None = Query(None)):
+    if scope not in SCOPES:
+        raise HTTPException(422, f"scope must be one of {', '.join(SCOPES)} (prices are stored for tracked cards only)")
     await ensure_idle("price_refresh")
     spawn(refresh_prices(scope, sets or None))
     return {"started": True}

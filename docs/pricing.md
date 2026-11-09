@@ -98,10 +98,16 @@ Rules on one stack, one card (all its stacks) or the collection total: `above|be
 - Failure isolation: an exception in alert evaluation is logged and never fails the snapshot.
 
 ## Scheduled fetches
-With `SCHEDULER_ENABLED`, a daily `price_fetch` covers up to `SCHEDULER_FETCH_CAP` owned + wishlisted cards (stalest first, mixed; `SCHEDULER_FETCH_WISHLIST=false` = owned only), with the usual 24 h cache-skip and unattended fetcher mode (see decisions.md, Phase 6). Sites that need a login yield no new points that day.
+With `SCHEDULER_ENABLED`, a daily catalog `price_refresh` re-fetches every tracked card (collection + wishlist), and a daily `price_fetch` covers up to `SCHEDULER_FETCH_CAP` owned + wishlisted cards (stalest first, mixed; `SCHEDULER_FETCH_WISHLIST=false` = owned only), with the usual 24 h cache-skip and unattended fetcher mode (see decisions.md, Phase 6). Sites that need a login yield no new points that day.
 
 ## Unpriced cards
-Some sets/cards have no price block in the pokemontcg.io payload (e.g. `me55`, `me5`, `me2pt5`, `mcd*`, `tk*`), so they stay unpriced (`price_base = None`, shown as "no price"). That is a source gap, not an import failure; only another source can fill it. Settings shows priced/total per set.
+Some sets/cards have no price block in the pokemontcg.io payload (e.g. `me55`, `me5`, `me2pt5`, `mcd*`, `tk*`), so they stay unpriced (`price_base = None`, shown as "no price"; since 5h also every untracked card never fetched, see "Price scope"). That is a source gap, not an import failure; only another source can fill it. Settings shows priced/total per set.
 
-## Price scope (planned, 5h, user decision 2026-11-09)
-Today the catalog import and `refresh_prices(scope=all|sets)` store prices for every card they touch, so nearly the whole catalog is priced. Intended rule: prices are stored and refreshed only for **tracked** cards = collection + wishlist (collection on the user's fetch, wishlist automatic about daily). Untracked cards show "no price (not tracked)" (never 0) and may fetch one card on demand when opened. Not built yet: see roadmap 5h and `temp/plan_catalog_and_price_scope.md`.
+## Price scope (built 2026-11-09, roadmap 5h)
+Prices are stored and refreshed only for **tracked** cards = collection + wishlist (`pricing.tracked_card_ids`, the one rule).
+- The catalog import writes cards and sets only, never prices (a re-import does not touch prices already stored).
+- `refresh_prices(scope)`: `tracked` (default, collection + wishlist), `collection`, `wishlist`; `sets` narrows to the tracked cards of those sets; any other scope is rejected (`all` / `sets` scopes are gone). The daily scheduled refresh (`PRICE_REFRESH_CRON`) runs `tracked`, so wishlist prices refresh daily too. Scraped-fetch targets given as `sets` also expand to tracked cards only (explicit `cards` ids stay: a user action).
+- Snapshots, movers and alerts value collection items / wishlist entries, so they are tracked-only by construction.
+- A card that joins the collection or wishlist and has no price gets one catalog fetch in the background, best effort (`PRICE_ON_ADD`, default true).
+- Untracked, never-fetched card: `price_base` is absent / `None` (never 0); search and the scan picker say "no price (not tracked)"; the card page has "Fetch price" (`POST /api/cards/{id}/refresh-price`, one catalog request, a user action). A card fetched this way keeps its price rows but is not refreshed later unless it becomes tracked.
+- Existing price rows of untracked cards (written before this rule) are **kept** (user decision 2026-11-09: history is cheap, no purge). They are simply no longer refreshed, so they go stale; the `Priced` column in Settings counts them.

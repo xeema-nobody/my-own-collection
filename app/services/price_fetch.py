@@ -12,7 +12,7 @@ from app.providers.fetcher import FetcherClient, FetcherUnavailable
 from app.providers.price import SCRAPED, get_provider
 from app.services import alerts, jobs, matching
 from app.services.collection import needs_price_card_ids, oid, valuate, valuate_wishlist
-from app.services.pricing import store_scraped_points
+from app.services.pricing import store_scraped_points, tracked_card_ids
 from app.services.sales import store_chart_seed, store_sales
 from app.services.snapshots import take_snapshot
 
@@ -35,8 +35,9 @@ async def resolve_targets(db, cards: list[str] | None = None, sets: list[str] | 
     if cards:
         ids += [c["_id"] async for c in db.cards.find({"_id": {"$in": cards}}, {"_id": 1})]
         ids.sort(key=cards.index)
-    if sets:
-        ids += [c["_id"] async for c in db.cards.find({"set.id": {"$in": sets}}, {"_id": 1}).sort("_id", 1)]
+    if sets:  # price scope: only tracked cards of those sets (explicit `cards` ids are a user action, kept)
+        tracked = await tracked_card_ids(db)
+        ids += [c["_id"] async for c in db.cards.find({"set.id": {"$in": sets}, "_id": {"$in": sorted(tracked)}}, {"_id": 1}).sort("_id", 1)]
     if owned:
         ids += sorted(await db.collection_items.distinct("card_id"))
     if missing:

@@ -11,6 +11,7 @@ from app.providers.fetcher import FetcherClient, FetcherUnavailable
 from app.services import matching
 from app.services.collection import _out, compare_card
 from app.services.price_fetch import fetch_prices, fetch_status
+from app.services.refresh import refresh_card_price
 from app.services.fx import convert, rates_to_base
 from app.services.price_matrix import build_matrix, value_of
 from app.services.search import build_query, find_page
@@ -107,6 +108,18 @@ async def add_sale(card_id: str, s: SaleIn):
 async def _require_card(card_id: str) -> None:
     if not await get_db().cards.find_one({"_id": card_id}, {"_id": 1}):
         raise HTTPException(404, "card not found")
+
+
+@router.post("/cards/{card_id}/refresh-price")
+async def refresh_one_card_price(card_id: str):
+    """"Fetch price" for one card (tracked or not): a single catalog-API fetch, a user action.
+    Prices of untracked cards are otherwise never stored (price scope)."""
+    try:
+        return await refresh_card_price(get_db(), card_id)
+    except LookupError:
+        raise HTTPException(404, "card not found") from None
+    except Exception as e:  # noqa: BLE001 - upstream catalog API down
+        raise HTTPException(502, f"catalog price fetch failed: {e}") from None
 
 
 @router.post("/cards/{card_id}/fetch-prices", status_code=202)

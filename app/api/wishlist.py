@@ -1,9 +1,10 @@
 from fastapi import APIRouter
 
-from app.api.deps import get_db
+from app.api.deps import get_db, spawn
 from app.db.models import BulkIdsIn, WishIn, WishPatch
 from app.services import wishlist as svc
 from app.services.price_fetch import wishlist_freshness
+from app.services.refresh import price_new_tracked
 
 router = APIRouter(prefix="/api/wishlist", tags=["wishlist"])
 
@@ -21,7 +22,9 @@ async def wishlist_prices():
 
 @router.post("", status_code=201)
 async def add_wish(body: WishIn):
-    return await svc.add(get_db(), body)
+    out = await svc.add(get_db(), body)
+    spawn(price_new_tracked(body.card_id))
+    return out
 
 
 @router.post("/bulk-remove")

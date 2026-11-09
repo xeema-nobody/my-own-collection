@@ -50,7 +50,7 @@ export default function Dashboard() {
   const top = useQuery({ queryKey: ["collection", "top"], queryFn: () => api.collection({ sort: "value", order: "desc", page_size: 8 }) });
   const jobs = useQuery({ queryKey: ["jobs"], queryFn: api.jobs, refetchInterval: 5000 });
   const { running } = usePriceFetchJob(() => qc.invalidateQueries());
-  const refresh = useMutation({ mutationFn: () => api.refreshPrices("collection"), onSuccess: () => qc.invalidateQueries() });
+  const refresh = useMutation({ mutationFn: () => api.refreshPrices("tracked"), onSuccess: () => qc.invalidateQueries() });
   const snap = useMutation({ mutationFn: api.snapshot, onSuccess: () => qc.invalidateQueries({ queryKey: ["history"] }) });
   const fetchMissing = useMutation({ mutationFn: () => api.fetchPrices({ missing: true }), onSettled: () => qc.invalidateQueries({ queryKey: ["jobs"] }) });
 

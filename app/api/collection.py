@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from app.services import valuation_cache
-from app.api.deps import get_db
+from app.api.deps import get_db, spawn
 from app.config import settings
 from app.db.models import BulkAcquiredIn, BulkRemoveIn, CollectionIn, CollectionPatch, PresetIn, RemoveIn
 from app.services import acquisition
@@ -13,13 +13,16 @@ from app.services import presets
 from app.services import collection as svc
 from app.services import portability
 from app.services.price_fetch import price_freshness
+from app.services.refresh import price_new_tracked
 
 router = APIRouter(prefix="/api/collection", tags=["collection"])
 
 
 @router.post("", status_code=201)
 async def add_item(body: CollectionIn):
-    return await svc.add(get_db(), body)
+    out = await svc.add(get_db(), body)
+    spawn(price_new_tracked(body.card_id))
+    return out
 
 
 MAX_UPLOAD = 5_000_000

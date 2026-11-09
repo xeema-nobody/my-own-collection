@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     alert_prune_cron: str = "30 6 * * *"
     # max cards per scheduled scraped fetch; stalest first, the rest resumes next run
     scheduler_fetch_cap: int = 300
+    # fetch one catalog price in the background when a card without prices joins the collection / wishlist
+    price_on_add: bool = True
     # include wishlisted cards in the scheduled scraped fetch (false = collection only)
     scheduler_fetch_wishlist: bool = True
     # read alert events older than this many days are deleted by the scheduler; 0 keeps them all

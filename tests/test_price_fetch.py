@@ -57,8 +57,9 @@ async def test_resolve_targets_dedupes_in_order(db):
     ids = await seed(db, "1", "2", "3")
     await db.cards.insert_one(make_card("other", "9"))
     await db.collection_items.insert_one({"stack_key": "k", "card_id": ids[2]})
+    await db.wishlist.insert_one({"card_id": ids[0]})
     out = await pf.resolve_targets(db, [ids[2], "pokemon:nope-1"], ["sv3pt5"], True)
-    assert out == [ids[2], ids[0], ids[1]]
+    assert out == [ids[2], ids[0]]   # `sets` expands to tracked cards only (price scope)
 
 
 async def test_stores_points_and_logs(db):

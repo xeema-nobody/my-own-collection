@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import PriceChart from "../components/PriceChart";
 import PriceMatrix from "../components/PriceMatrix";
 import CardFetch from "../components/CardFetch";
+import CatalogPrice from "../components/CatalogPrice";
 import SourceStatus from "../components/SourceStatus";
 import SalesList from "../components/SalesList";
 import { CompareCopies } from "../components/SourceCompare";
@@ -35,6 +36,7 @@ export default function CardDetail() {
           {c.flavor_text && <p className="mt-1 text-sm italic">{c.flavor_text}</p>}</div>
 
         <Section title="Prices" collapsible id="card-prices">
+          <CatalogPrice card={c} />
           <CardFetch cardId={id} />
           <h3 className="mb-1 text-sm font-semibold">Compare sources</h3>
           <div className="mb-3">

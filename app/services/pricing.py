@@ -146,5 +146,13 @@ def price_for(card: dict, source: str, variant: str | None, rates: dict, grade_k
     return convert(v.get("market"), v["currency"], rates), est
 
 
+async def tracked_card_ids(db) -> set[str]:
+    """THE price-scope rule: cards we store and fetch prices for = collection + wishlist.
+
+    Used by refresh, fetch-job target resolution and the purge script. Catalog import stores no prices;
+    snapshots, movers and alerts value collection items / wishlist entries, so they are tracked-only by construction."""
+    return set(await db.collection_items.distinct("card_id")) | set(await db.wishlist.distinct("card_id"))
+
+
 async def get_rates(db) -> dict:
     return await rates_to_base(db, {"USD", "EUR"})

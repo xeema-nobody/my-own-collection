@@ -25,7 +25,7 @@ function Version({ c, first, onPick }: { c: ScanCard; first: boolean; onPick: (c
         {c.variants.length > 0 && <div className="flex flex-wrap gap-1">{c.variants.map((v) => <Badge key={v} tone="neutral">{VARIANT_LABEL[v] ?? v}</Badge>)}</div>}
         {c.edition_note && <div className="flex items-start gap-1 rounded bg-warn/15 px-1.5 py-1 text-xs text-warn"><TriangleAlert size={12} className="mt-0.5 shrink-0" />
           <span>Also exists as {c.edition_note}. The catalog can't tell them apart: check the stamp.</span></div>}
-        <div className="num mt-auto text-sm font-semibold">{c.price != null ? money(c.price) : <span className="font-normal text-muted">no price</span>}</div>
+        <div className="num mt-auto text-sm font-semibold">{c.price != null ? money(c.price) : <span className="font-normal text-muted">no price (not tracked)</span>}</div>
       </button>
     </li>);
 }

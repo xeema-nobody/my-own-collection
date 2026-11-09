@@ -1,12 +1,13 @@
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from app.api.deps import get_db
+from app.api.deps import get_db, spawn
 from app.config import settings
 from app.db.models import CollectionIn, ScanSessionIn
 from app.providers.ocr import ImageError, OcrUnavailable, get_ocr
 from app.security import require_laptop
 from app.services import scan as svc
+from app.services.refresh import price_new_tracked
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
 
@@ -76,7 +77,9 @@ async def lookup(number: str = Query(..., min_length=1, max_length=20), set: str
 @router.post("/add", status_code=201)
 async def add(body: CollectionIn, session_id: str | None = Query(None, max_length=40)):
     try:
-        return await svc.add_scanned(get_db(), body, session_id)
+        out = await svc.add_scanned(get_db(), body, session_id)
+        spawn(price_new_tracked(body.card_id))
+        return out
     except svc.ScanError as e:
         raise HTTPException(e.status, str(e))
 

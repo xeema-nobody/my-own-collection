@@ -131,11 +131,15 @@ async def test_import_with_tcgdex_keeps_cards_and_tcgplayer_price(db):
     from app.services.catalog_import import import_catalog
     from conftest import FakeCatalog, make_card
 
+    from app.services.pricing import get_rates, store_card_prices
     await import_catalog(None, FakeCatalog({"sv3pt5": [make_card("sv3pt5", "205")]}))
+    await store_card_prices(db, make_card("sv3pt5", "205"), await get_rates(db))   # import stores no prices now
     before = await db.cards.find_one({"_id": "pokemon:sv3pt5-205"})
     assert "tcgplayer" in before["latest_price"]
     p, _ = provider(index(COMPLETE))
-    await import_catalog(["sv3pt5"], p)
+    await db.collection_items.insert_one({"card_id": "pokemon:sv3pt5-205", "stack_key": "k", "quantity": 1})
+    from app.services.refresh import refresh_prices
+    await refresh_prices("tracked", provider=p)   # prices come from the tracked refresh, import is cards only
     after = await db.cards.find_one({"_id": "pokemon:sv3pt5-205"})
     assert after["name"] == before["name"] and after["rarity"] == before["rarity"]  # card doc untouched
     assert after["latest_price"]["tcgplayer"] == before["latest_price"]["tcgplayer"]

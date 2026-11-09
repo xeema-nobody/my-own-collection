@@ -26,7 +26,7 @@ export default function CatalogTab({ sets, jobs, picked, setPicked }: {
   const [filter, setFilter] = useState("");
   const [flags, setFlags] = useState<Filter[]>([]);
   const [open, setOpen] = useState<Set<string>>(new Set());
-  const [confirm, setConfirm] = useState<null | "import_all" | "refresh_all">(null);
+  const [confirm, setConfirm] = useState<null | "import_all">(null);
   const done = () => { qc.invalidateQueries({ queryKey: ["jobs"] }); qc.invalidateQueries({ queryKey: ["sets"] }); };
   const imp = useMutation({ mutationFn: (ids?: string[]) => api.importCatalog(ids), onSettled: done });
   const retry = useMutation({ mutationFn: api.retryIncompleteImports, onSettled: done });
@@ -64,7 +64,7 @@ export default function CatalogTab({ sets, jobs, picked, setPicked }: {
             <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Selected sets ({ids.length})</h3>
             <div className="flex flex-wrap gap-2">
               <Button disabled={importing || !ids.length} onClick={() => imp.mutate(ids)}>Import selected</Button>
-              <Button variant="secondary" disabled={refreshing || !ids.length} onClick={() => ref.mutate({ scope: "sets", sets: ids })}>Refresh prices</Button>
+              <Button variant="secondary" disabled={refreshing || !ids.length} onClick={() => ref.mutate({ scope: "tracked", sets: ids })}>Refresh tracked prices</Button>
             </div>
           </div>
           <div>
@@ -72,14 +72,13 @@ export default function CatalogTab({ sets, jobs, picked, setPicked }: {
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" disabled={importing || !incomplete.length} onClick={() => retry.mutate()}>Retry incomplete ({incomplete.length})</Button>
               <Button variant="secondary" disabled={importing} onClick={() => setConfirm("import_all")}>Import all</Button>
-              <Button variant="secondary" disabled={refreshing} onClick={() => ref.mutate({ scope: "collection" })}>Refresh collection prices</Button>
-              <Button variant="secondary" disabled={refreshing} onClick={() => setConfirm("refresh_all")}>Refresh all prices</Button>
+              <Button variant="secondary" disabled={refreshing} onClick={() => ref.mutate({ scope: "tracked" })}>Refresh tracked prices</Button>
             </div>
           </div>
         </div>
         {err && <p className="mt-3 text-sm text-danger">{errorText(err)}</p>}
         {(importing || refreshing) && <p className="mt-3 text-sm text-warn">Running: {[running("catalog_import"), running("price_refresh")].filter(Boolean).map(run).join(" · ")}</p>}
-        <p className="mt-3 text-xs text-muted">Jobs run in the background, one per type at a time. Progress on the Jobs tab.</p>
+        <p className="mt-3 text-xs text-muted">Prices are stored only for tracked cards (collection + wishlist); the catalog import stores cards, not prices. Jobs run in the background, one per type at a time. Progress on the Jobs tab.</p>
       </Section>
 
       <Section title={`Sets (${shown.length}${shown.length !== all.length ? ` of ${all.length}` : ""})`} id="settings-sets">
@@ -126,12 +125,10 @@ export default function CatalogTab({ sets, jobs, picked, setPicked }: {
           </Table>)}
       </Section>
 
-      <Drawer open={confirm !== null} onClose={() => setConfirm(null)} title={confirm === "import_all" ? "Import all sets?" : "Refresh all prices?"}>
-        <p className="text-sm text-muted">{confirm === "import_all"
-          ? "Imports every set from the catalog source. This can take 30 minutes or more and runs in the background."
-          : "Refreshes prices of every card in the catalog. This can take 30 minutes or more and runs in the background."}</p>
+      <Drawer open={confirm !== null} onClose={() => setConfirm(null)} title="Import all sets?">
+        <p className="text-sm text-muted">Imports every set from the catalog source (cards only, no prices). This can take 30 minutes or more and runs in the background.</p>
         <div className="mt-4 flex gap-2">
-          <Button onClick={() => { confirm === "import_all" ? imp.mutate(undefined) : ref.mutate({ scope: "all" }); setConfirm(null); }}>Start</Button>
+          <Button onClick={() => { imp.mutate(undefined); setConfirm(null); }}>Start</Button>
           <Button variant="ghost" onClick={() => setConfirm(null)}>Cancel</Button>
         </div>
       </Drawer>

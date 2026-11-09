@@ -7,14 +7,13 @@ from app.db.mongo import get_db
 from app.services.catalog_provider import get_catalog
 from app.services import jobs
 from app.services.sets import sets_with_stats
-from app.services.pricing import get_rates, store_card_prices
 
 log = logging.getLogger(__name__)
 
 
 async def import_catalog(set_ids: list[str] | None = None, provider=None, retry: bool = False,
                          trigger: str = "manual") -> dict:
-    """Idempotent: upserts sets/cards by _id and records prices embedded in the payload.
+    """Idempotent: upserts sets/cards by _id. Stores NO prices (price scope: only tracked cards, see services/pricing).
 
     `set_ids=None` imports the full catalog. `stats.origin` (full | selected | retry) lets
     `last_failed_sets` find the run whose failures still need retrying.
@@ -22,7 +21,7 @@ async def import_catalog(set_ids: list[str] | None = None, provider=None, retry:
     db = get_db()
     provider = provider or await get_catalog()
     job = await jobs.start(db, "catalog_import", trigger)
-    stats = {"sets": 0, "cards": 0, "prices": 0, "set": set_ids[0] if set_ids and len(set_ids) == 1 else None,
+    stats = {"sets": 0, "cards": 0, "set": set_ids[0] if set_ids and len(set_ids) == 1 else None,
              "set_ids": set_ids, "origin": "retry" if retry else "selected" if set_ids else "full"}
     try:
         sets = await provider.list_sets()
@@ -31,7 +30,6 @@ async def import_catalog(set_ids: list[str] | None = None, provider=None, retry:
         if ops:
             await db.sets.bulk_write(ops, ordered=False)
         stats["sets"] = len(ops)
-        rates = await get_rates(db)
         # Per-set batches: deep pagination on the upstream API is flaky, and one bad set
         # must not abort the rest.
         targets = set_ids or [s["external_id"] for s in sets]
@@ -39,10 +37,10 @@ async def import_catalog(set_ids: list[str] | None = None, provider=None, retry:
         for sid in targets:
             try:
                 async for card in provider.iter_cards(sid):
-                    if not card.get("_prices_only"):  # providers with other ids/vocabulary only refresh prices of known cards
-                        await db.cards.update_one({"_id": card["_id"]}, {"$set": _without_raw(card)}, upsert=True)
-                        valuation_cache.bump()
-                    stats["prices"] += await store_card_prices(db, card, rates)
+                    if card.get("_prices_only"):  # price-only stubs (TCGdex, known cards): nothing to store here
+                        continue
+                    await db.cards.update_one({"_id": card["_id"]}, {"$set": _without_raw(card)}, upsert=True)
+                    valuation_cache.bump()
                     stats["cards"] += 1
             except Exception as e:  # noqa: BLE001
                 log.warning("set %s failed: %s", sid, e)

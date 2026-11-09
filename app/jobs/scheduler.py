@@ -22,7 +22,7 @@ DAY, WEEK = timedelta(hours=24), timedelta(days=7)
 
 
 async def _refresh(trigger: str):
-    await refresh_prices("collection", trigger=trigger)
+    await refresh_prices("tracked", trigger=trigger)   # collection + wishlist, daily
 
 
 async def _fetch(trigger: str):

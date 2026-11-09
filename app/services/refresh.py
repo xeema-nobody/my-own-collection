@@ -1,42 +1,42 @@
 import logging
 
+from app.config import settings
 from app.db.mongo import get_db
 from app.services.catalog_provider import get_catalog
 from app.services import jobs
-from app.services.pricing import get_rates, store_card_prices
+from app.services.pricing import get_rates, store_card_prices, tracked_card_ids
 from app.services.snapshots import take_snapshot
 
 log = logging.getLogger(__name__)
+SCOPES = ("tracked", "collection", "wishlist")   # all of them write only tracked cards
 
 
-async def refresh_prices(scope: str = "collection", sets: list[str] | None = None, provider=None, trigger: str = "manual") -> dict:
-    """Re-fetch cards from the catalog API (prices ride along). Per-set batches.
+async def refresh_prices(scope: str = "tracked", sets: list[str] | None = None, provider=None, trigger: str = "manual") -> dict:
+    """Re-fetch TRACKED cards (collection + wishlist) from the catalog API (prices ride along). Per-set batches.
 
-    `sets` given: refresh every card of those sets (scope becomes `sets`).
-    """
+    scope: tracked (both), collection, wishlist. `sets` narrows the run to the tracked cards of those sets.
+    Untracked cards are never written (price scope, docs/pricing.md)."""
+    if scope not in SCOPES:
+        raise ValueError(f"scope must be one of {SCOPES}")
     db = get_db()
     provider = provider or await get_catalog()
-    scope = "sets" if sets else scope
     job = await jobs.start(db, "price_refresh", trigger)
     stats = {"scope": scope, "sets": sets, "cards": 0, "prices": 0, "errors": 0}
     try:
         rates = await get_rates(db)
-        owned = await db.collection_items.distinct("card_id")
-        owned_sets = set()
-        for cid in owned:
-            c = await db.cards.find_one({"_id": cid}, {"set.id": 1})
-            if c:
-                owned_sets.add(c["set"]["id"])
-        if scope == "all":
-            target_sets = {s["external_id"] async for s in db.sets.find({"tcg": "pokemon"})}
-        elif scope == "sets":
-            target_sets = set(sets)
-        else:
-            target_sets = owned_sets
-        for sid in sorted(target_sets):
+        want: set[str] = set()
+        if scope in ("tracked", "collection"):
+            want |= set(await db.collection_items.distinct("card_id"))
+        if scope in ("tracked", "wishlist"):
+            want |= set(await db.wishlist.distinct("card_id"))
+        by_set: dict[str, set[str]] = {}
+        async for c in db.cards.find({"_id": {"$in": sorted(want)}}, {"set.id": 1}):
+            by_set.setdefault(c["set"]["id"], set()).add(c["_id"])
+        for sid in sorted(set(sets) & by_set.keys() if sets else by_set):
+            ids = by_set[sid]
             try:
-                async for card in provider.iter_cards(sid, only=owned if scope == "collection" else None):
-                    if scope == "collection" and card["_id"] not in owned:
+                async for card in provider.iter_cards(sid, only=ids):
+                    if card["_id"] not in ids:
                         continue
                     stats["prices"] += await store_card_prices(db, card, rates)
                     stats["cards"] += 1
@@ -49,3 +49,35 @@ async def refresh_prices(scope: str = "collection", sets: list[str] | None = Non
         await jobs.finish(db, job, "error", stats, str(e))
         raise
     return stats
+
+
+async def price_new_tracked(card_id: str) -> None:
+    """Background, best effort: a card that just became tracked and has no catalog price yet gets one fetch.
+
+    Never raises (adding to the collection must not depend on the price API)."""
+    if not settings.price_on_add:
+        return
+    try:
+        db = get_db()
+        card = await db.cards.find_one({"_id": card_id}, {"latest_price": 1})
+        if card and not card.get("latest_price"):
+            await refresh_card_price(db, card_id)
+    except Exception as e:  # noqa: BLE001
+        log.warning("price on add failed for %s: %s", card_id, e)
+
+
+async def refresh_card_price(db, card_id: str, provider=None) -> dict:
+    """One-card catalog price fetch (a user action: card opened / just added). Stores that card's prices only.
+
+    Not a job (small, synchronous). Returns {"found", "prices", "tracked"}; raises LookupError for an unknown card."""
+    card = await db.cards.find_one({"_id": card_id}, {"set.id": 1})
+    if not card:
+        raise LookupError(card_id)
+    provider = provider or await get_catalog()
+    rates = await get_rates(db)
+    out = {"found": False, "prices": 0, "tracked": card_id in await tracked_card_ids(db)}
+    async for c in provider.iter_cards(card["set"]["id"], only={card_id}):
+        if c["_id"] == card_id:
+            out["found"], out["prices"] = True, await store_card_prices(db, c, rates)
+            break
+    return out
