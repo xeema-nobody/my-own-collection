@@ -57,3 +57,13 @@ class FetcherClient:
             return r.json()
         except httpx.HTTPError as e:
             raise FetcherUnavailable(f"fetcher unreachable at {self.base_url}: {e}") from e
+
+    async def sites(self) -> list[str]:
+        """Site ids the running fetcher knows (GET /health). Old fetchers omit them: empty list."""
+        try:
+            async with self._client(3) as c:
+                r = await c.get("/health")
+            r.raise_for_status()
+            return list(r.json().get("sites") or [])
+        except (httpx.HTTPError, ValueError) as e:
+            raise FetcherUnavailable(f"fetcher unreachable at {self.base_url}: {e}") from e

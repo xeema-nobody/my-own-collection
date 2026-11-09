@@ -137,6 +137,14 @@ async def test_unattended_challenge_is_blocked(tmp_path):
     assert r.status == "blocked" and not p.fronted
 
 
+async def test_unattended_challenge_that_self_resolves_within_grace_succeeds(tmp_path):
+    u = "https://www.psacard.com/cert/1/psa"
+    p = FakePage([("Just a moment...", u)] * 3 + [("Cert Verification 1", u)])
+    s, _, c = svc(tmp_path, p)
+    r = await s.fetch("psa", u, unattended=True)
+    assert r.status == "ok" and not p.fronted and c.t < 10
+
+
 async def test_click_labels_in_order_after_click_text(tmp_path):
     u = "https://alt.xyz/browse?query=a"
     p = FakePage([("Browse", u)])

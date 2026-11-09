@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     app_url: str = "http://127.0.0.1:8100"
     notify_poll_s: float = 60
     notify_state: Path = HOME / "notified.json"
+    sites_file: Path = HOME / "sites.json"    # extra sites, re-read on every request
 
 
 settings = Settings()

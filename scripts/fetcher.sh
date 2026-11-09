@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start/stop the host price fetcher (real Chrome over CDP) on 127.0.0.1:8110.
-# Usage: scripts/fetcher.sh [start|stop|status|logs]
+# Usage: scripts/fetcher.sh [start|stop|restart|status|logs]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 STATE="$HOME/.moc-fetcher"
@@ -24,10 +24,15 @@ case "${1:-start}" in
     for _ in $(seq 1 20); do healthy && { echo "fetcher up at $URL (log: $LOG)"; exit 0; }; sleep 0.5; done
     echo "fetcher did not become healthy; see $LOG" >&2; exit 1 ;;
   stop)
-    if [ -f "$PIDFILE" ] && kill "$(cat "$PIDFILE")" 2>/dev/null; then echo stopped; else echo "not running (no pidfile)"; fi
+    PID=""
+    [ -f "$PIDFILE" ] && PID="$(cat "$PIDFILE")"
+    # pidfile lost (old start, reboot): fall back to whatever listens on the fetcher port
+    { [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; } || PID="$(lsof -nP -iTCP:"${FETCHER_PORT:-8110}" -sTCP:LISTEN -t 2>/dev/null | head -1 || true)"
+    if [ -n "$PID" ] && kill "$PID" 2>/dev/null; then echo stopped; else echo "not running"; fi
     rm -f "$PIDFILE" ;;
+  restart) "$0" stop; for _ in $(seq 1 40); do healthy || break; sleep 0.25; done; exec "$0" start ;;
   status)
     if healthy; then echo "up: $(curl -fsS -m 2 "$URL/status")"; else echo "down"; exit 1; fi ;;
   logs) tail -n 50 "$LOG" ;;
-  *) echo "usage: $0 [start|stop|status|logs]" >&2; exit 2 ;;
+  *) echo "usage: $0 [start|stop|restart|status|logs]" >&2; exit 2 ;;
 esac

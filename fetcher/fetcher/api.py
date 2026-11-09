@@ -23,7 +23,7 @@ def build_app(service: FetchService, lifespan=None) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"ok": True}
+        return {"ok": True, "sites": sorted(service.sites())}
 
     @app.get("/status")
     async def status():
@@ -41,6 +41,6 @@ def build_app(service: FetchService, lifespan=None) -> FastAPI:
     @app.post("/close")
     async def close():
         await service.close()
-        return {"ok": True}
+        return {"ok": True, "sites": sorted(service.sites())}
 
     return app

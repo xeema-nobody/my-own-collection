@@ -36,3 +36,30 @@ def test_fixtures_not_flagged_as_challenge():
         html = (FX / rel).read_text()
         title = re.search(r"<title>(.*?)</title>", html, re.S).group(1)
         assert not is_challenge(st(title)), rel
+
+
+def test_builtin_slab_sites():
+    assert SITES["psa"].allows("https://www.psacard.com/cert/168766783/psa")
+    assert SITES["beckett"].allows("https://beckett.com/grading/card-lookup?item_id=1&item_type=BGS")
+    assert not SITES["psa"].allows("https://psacard.com.evil.com/")
+
+
+def test_site_file_merge_and_bad_entries(tmp_path):
+    import json
+    from fetcher.sites import all_sites
+    f = tmp_path / "sites.json"
+    assert set(all_sites(tmp_path / "none.json")) == set(SITES)       # missing file = built-ins
+    f.write_text("not json")
+    assert set(all_sites(f)) == set(SITES)
+    f.write_text(json.dumps([
+        {"id": "cgc", "hosts": ["cgccards.com"], "min_interval_s": 4},
+        {"id": "Bad Id", "hosts": ["x.com"]},
+        {"id": "nohosts", "hosts": []},
+        {"id": "evil", "hosts": ["http://x.com/"]},
+        {"id": "psa", "hosts": ["psacard.com"], "min_interval_s": 0.01},   # file wins, gap floored
+        "junk",
+    ]))
+    s = all_sites(f)
+    assert s["cgc"].allows("https://www.cgccards.com/certlookup/123/") and s["cgc"].min_interval_s == 4
+    assert "Bad Id" not in s and "nohosts" not in s and "evil" not in s
+    assert s["psa"].min_interval_s == 1.0

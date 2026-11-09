@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from fetcher.browser import BrowserError, Driver, Page
 from fetcher.config import Settings
 from fetcher.ratelimit import SiteLimiter
-from fetcher.sites import SITES, PageState, SiteConfig, is_challenge, needs_login
+from fetcher.sites import PageState, SiteConfig, all_sites, is_challenge, needs_login
 
 
 class FetchRejected(ValueError):
@@ -32,13 +32,24 @@ class FetchService:
                  sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
                  jitter_s: float = 1.0):
         self.cfg, self.driver, self._clock, self._sleep = cfg, driver, clock, sleep
-        self._limiters = {s.id: SiteLimiter(s.min_interval_s, jitter_s, clock, sleep)
-                          for s in SITES.values()}
-        self.site_state: dict[str, str] = {s: "idle" for s in SITES}
+        self._jitter_s = jitter_s
+        self._limiters: dict[str, tuple[float, SiteLimiter]] = {}
+        self.site_state: dict[str, str] = {s: "idle" for s in self.sites()}
         self._waited: set[str] = set()
         self.last_error: str | None = None
         self._active = 0
         self._last_used = clock()
+
+    def sites(self) -> dict[str, SiteConfig]:
+        """Built-ins + ~/.moc-fetcher/sites.json, re-read each call: new sites need no restart."""
+        return all_sites(self.cfg.sites_file)
+
+    def _limiter(self, site: SiteConfig) -> SiteLimiter:
+        cur = self._limiters.get(site.id)
+        if cur is None or cur[0] != site.min_interval_s:
+            self._limiters[site.id] = cur = (site.min_interval_s, SiteLimiter(
+                site.min_interval_s, self._jitter_s, self._clock, self._sleep))
+        return cur[1]
 
     def status(self) -> dict:
         return {"browser": "up" if self.driver.is_up else "down",
@@ -49,14 +60,14 @@ class FetchService:
                     click_text: str | None = None, unattended: bool = False,
                     click_labels: list[str] | None = None, pages: int = 1,
                     next_label: str | None = None) -> FetchResult:
-        site = SITES.get(site_id)
+        site = self.sites().get(site_id)
         if site is None:
             raise FetchRejected(f"unknown site {site_id!r}")
         if not site.allows(url):
             raise FetchRejected(f"url not on {site_id} hosts")
         self._active += 1
         try:
-            async with self._limiters[site_id]:
+            async with self._limiter(site):
                 return await self._run(site, url, wait_selector, wait_ms,
                                        timeout_s or self.cfg.nav_timeout_s, click_text, unattended,
                                        click_labels or [], pages, next_label, wait_selector)
@@ -149,9 +160,13 @@ class FetchService:
             if not (challenge or login):
                 return None
             elapsed = self._clock() - start
-            if unattended:
+            if unattended and (login or elapsed >= cfg.challenge_grace_s):
+                # a challenge gets the self-resolve grace; a login or a stuck challenge fails, never asks
                 return FetchResult(status="login_timeout" if login else "blocked", final_url=state.url,
                                    title=state.title, detail=f"unattended: {'login' if login else 'challenge'} required")
+            if unattended:
+                await self._sleep(cfg.poll_interval_s)
+                continue
             if not waiting and (login or elapsed >= cfg.challenge_grace_s):
                 # self-resolving challenges get a grace period; logins ask the user at once
                 waiting = True
