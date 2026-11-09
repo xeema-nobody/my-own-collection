@@ -46,6 +46,14 @@ async def identify(request: Request, slab: bool = Query(False)):
         raise HTTPException(503, str(e))
 
 
+@router.get("/cert")
+async def cert(grader: str = Query(..., min_length=2, max_length=20), cert: str = Query(..., min_length=1, max_length=20),
+               refresh: bool = Query(False)):
+    """Slab cert lookup (grader's page, cached) + matching catalog cards. Never raises for a missing page."""
+    from app.services import slab as slab_svc
+    return await slab_svc.lookup(get_db(), grader, cert, refresh=refresh)
+
+
 @router.get("/search")
 async def search(q: str = Query(..., min_length=2, max_length=60), page: int = Query(1, ge=1, le=20)):
     return await svc.search(get_db(), q, page)

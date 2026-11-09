@@ -6,8 +6,8 @@ import { Badge, Button, Field, Input, Select, Stepper } from "../ui";
 
 /** Details for the picked version: condition, language, quantity, optional cost. Remembers the last choice. */
 export type SlabGrading = { company: string; grade: number; cert_number: string | null; grader_name?: string };
-export default function AddSheet({ card, initial, busy, error, slab, onBack, onAdd }: {
-  card: ScanCard; initial: Choice; busy?: boolean; error?: string | null; slab?: ScanSlab | null; onBack: () => void;
+export default function AddSheet({ card, initial, busy, error, slab, reportUrl, onBack, onAdd }: {
+  card: ScanCard; initial: Choice; busy?: boolean; error?: string | null; slab?: ScanSlab | null; reportUrl?: string | null; onBack: () => void;
   onAdd: (body: { card_id: string; variant: string | null; language: string; condition?: string; grading?: SlabGrading; quantity: number; acquired?: Acquired }, choice: Choice) => void;
 }) {
   // A slab (graded card): `slab` is what the label read (may be empty when the user said "slab" themselves).
@@ -63,6 +63,7 @@ export default function AddSheet({ card, initial, busy, error, slab, onBack, onA
           <Field label="Grade"><Input aria-label="Grade" inputMode="decimal" placeholder="9.5" value={grade} onChange={(e) => setGrade(e.target.value)} /></Field>
           <Field label="Cert number"><Input aria-label="Cert number" inputMode="numeric" placeholder="optional" maxLength={20} value={cert} onChange={(e) => setCert(e.target.value)} /></Field>
         </div>
+        {reportUrl && <a className="block text-sm text-accent underline" href={reportUrl} target="_blank" rel="noreferrer">Open {grader || "grader"} report</a>}
         {grade.trim() !== "" && slabGrade === null && <p className="text-xs text-danger">Grade is 1 to 10, in half steps.</p>}
         <p className="text-xs text-muted">A slab is valued at its graded price only. Without one it stays "needs price", never the raw price.</p>
       </div>}

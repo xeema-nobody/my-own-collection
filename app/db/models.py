@@ -15,6 +15,8 @@ class Grading(BaseModel):
     grade: float = Field(ge=1, le=10)
     cert_number: str | None = Field(default=None, max_length=20)
     grader_name: str | None = Field(default=None, max_length=40, description="the grader's name when company is OTHER")
+    report_url: str | None = Field(default=None, max_length=200, description="set by the server from the cert template")
+    cert_info: dict | None = Field(default=None, description="grader's cert page snapshot, set by the server")
 
     @model_validator(mode="after")
     def _clean(self):

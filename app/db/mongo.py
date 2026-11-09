@@ -82,3 +82,4 @@ async def init_indexes() -> None:
     await db.scan_events.create_index([("at", DESCENDING)])
     await db.scan_events.create_index([("at", ASCENDING)], expireAfterSeconds=settings.scan_event_keep_days * 86400,
                                       name="scan_events_ttl")
+    await db.cert_cache.create_index([("expires_at", ASCENDING)], expireAfterSeconds=0, name="cert_cache_ttl")

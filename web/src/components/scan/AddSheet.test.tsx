@@ -27,6 +27,12 @@ describe("AddSheet slab form", () => {
     expect(body.quantity).toBe(1);
   });
 
+  it("shows an Open <grader> report link when the cert page is known", () => {
+    renderPage(<AddSheet card={card} initial={initial} onBack={() => {}} onAdd={vi.fn()} reportUrl="https://acegrading.com/cert/158690"
+      slab={{ grader: "ACE", grade: 10, cert: "158690" }} />);
+    expect(screen.getByRole("link", { name: "Open ACE report" })).toHaveAttribute("href", "https://acegrading.com/cert/158690");
+  });
+
   it("Other slab: the grader name is required and sent", async () => {
     const onAdd = vi.fn();
     renderPage(<AddSheet card={card} initial={initial} onBack={() => {}} onAdd={onAdd} slab={{ grader: null, grade: null, cert: null }} />);

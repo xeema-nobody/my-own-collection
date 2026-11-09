@@ -13,7 +13,8 @@ GATE_HEADER = "x-moc-gate"
 # (method, path) the phone may call. Everything else is 403 in phone mode.
 PHONE_ALLOWED = {("GET", "/api/scan/me"), ("POST", "/api/scan/identify"),
                  ("GET", "/api/scan/search"), ("POST", "/api/scan/add"), ("GET", "/health"),
-                 ("GET", "/api/scan/session"), ("POST", "/api/scan/undo"), ("GET", "/api/scan/lookup")}
+                 ("GET", "/api/scan/session"), ("POST", "/api/scan/undo"), ("GET", "/api/scan/lookup"),
+                 ("GET", "/api/scan/cert")}
 
 
 def gate_state(request: Request) -> str:

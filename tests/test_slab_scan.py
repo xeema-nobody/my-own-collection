@@ -3,6 +3,7 @@ import httpx
 import pytest
 
 from app.main import app
+from app.providers.grading.base import CertInfo
 from app.providers.ocr import OcrLine
 from app.providers.ocr.slab import SlabRead
 from app.providers.ocr.slabfields import SlabLabel
@@ -25,6 +26,14 @@ class SlabOcr:
         return SlabRead(self.label) if self.label else None
 
 
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """No live cert lookup in tests: PSA 56941091 'is' a Charizard #4 of Base."""
+    async def fake(grader, cert, client=None, transport=None):
+        return CertInfo(grader, cert, "found", f"https://x/{cert}", name="Charizard", number="4", grade=9.0)
+    monkeypatch.setattr("app.providers.grading.registry.lookup", fake)
+
+
 @pytest.fixture
 async def cat(db):
     scan.reset_names_cache()
@@ -38,10 +47,26 @@ async def client(db):
         yield c
 
 
-async def test_slab_label_is_returned_with_the_card_candidates(cat):
+async def test_slab_label_is_returned_with_the_cert_page_card(cat):
     res = await scan.identify(cat, SlabOcr(), b"x", slab=True)
     assert res["slab"] == {"grader": "PSA", "grade": 9.0, "cert": "56941091", "tier": "MINT", "grader_seen": False}
     assert [c["name"] for c in res["cards"]] == ["Charizard"]
+    assert res["cert"]["cert"]["status"] == "found" and res["cert"]["needs_confirm"] is True  # PSA: user confirms
+    assert res["exact"] is False
+
+
+async def test_slab_mode_never_runs_the_raw_card_read(cat):
+    class Boom(SlabOcr):
+        async def read_lines(self, image):
+            raise AssertionError("identify_card must not run in slab mode")
+        async def read_fields(self, image):
+            raise AssertionError("identify_card must not run in slab mode")
+    assert (await scan.identify(cat, Boom(), b"x", slab=True))["slab"]["cert"] == "56941091"
+
+
+async def test_slab_mode_without_a_readable_cert_returns_label_only(cat):
+    res = await scan.identify(cat, SlabOcr(SlabLabel("PSA", 9.0, None, "MINT", False, True)), b"x", slab=True)
+    assert res["cards"] == [] and res["cert"] is None and res["slab"]["grade"] == 9.0
 
 
 async def test_label_only_read_when_card_is_not_an_exact_hit(cat):
@@ -73,7 +98,7 @@ async def test_reader_without_slab_support_still_identifies(cat):
         async def read_lines(self, image):
             return [OcrLine("Charizard", 90.0, 0.05)]
     res = await scan.identify(cat, Plain(), b"x", slab=True)
-    assert res["slab"] is None and res["cards"]
+    assert res["slab"] is None and res["cards"] == []
 
 
 def body(**g):

@@ -16,6 +16,7 @@ from app.db.models import CollectionIn
 from app.providers.catalog.common import norm
 from app.providers.ocr import CardFields, ImageError, OcrLine, OcrUnavailable
 from app.services import collection as collection_svc
+from app.services import slab as slab_svc
 from app.services import valuation_cache
 from app.services.search import build_query, find_page
 
@@ -181,7 +182,7 @@ def signals_for(c: dict, fields: CardFields | None, name_hit: bool, codes: set[s
     return sig
 
 
-SIGNAL_TEXT = {"name": "name", "number": "number", "total": "printed total", "set": "set code", "hp": "HP"}
+SIGNAL_TEXT = {"name": "name", "number": "number", "total": "printed total", "set": "set code", "hp": "HP", "year": "year"}
 # How much each agreeing signal counts when ranking prints. The collector number is the strongest read, the printed
 # total and set code say which set, HP only separates prints of one name (and the ex / non-ex forms).
 WEIGHT = {"name": 1.0, "number": 4.0, "total": 3.0, "set": 3.0, "hp": 1.0}
@@ -243,11 +244,23 @@ async def read_slab(ocr, image: bytes) -> dict | None:
 
 
 async def identify(db, ocr, image: bytes, slab: bool = False) -> dict:
-    """Card candidates from the photo; `slab` (slab mode) always reads the label, in parallel. In raw mode the label is
-    only read when the card itself was not an exact hit, so a bare raw card stays fast; a label found there sets
-    `detected` so the UI can offer to switch to slab mode (never switches silently)."""
+    """Card candidates from the photo. Slab mode never runs the raw card read: the label gives grader + cert, the
+    grader's page gives the card (`services/slab.py`), and the answer carries `cert` (page + how exact) next to
+    the usual `cards`. In raw mode the label is only read when the card itself was not an exact hit, so a bare raw
+    card stays fast; a label found there sets `detected` so the UI can offer slab mode (never switches silently)."""
     if slab:
-        res, label = await asyncio.gather(identify_card(db, ocr, image), read_slab(ocr, image))
+        label = await read_slab(ocr, image)
+        res = {"text": "", "confidence": "none", "names": [], "total": 0, "cards": [], "read": None, "exact": False,
+               "cert": None}
+        if label and label.get("grader") and label.get("cert"):
+            try:
+                got = await slab_svc.lookup(db, label["grader"], label["cert"])
+            except Exception:  # a failed lookup must never lose the label read
+                log.warning("cert lookup failed", exc_info=True)
+            else:
+                res.update(cards=got["cards"], total=len(got["cards"]), cert=got,
+                           confidence={"exact": "high", "likely": "medium", "possible": "low"}.get(got["how_exact"], "none"),
+                           exact=got["how_exact"] == "exact")
     else:
         res = await identify_card(db, ocr, image)
         label = None if res["exact"] else await read_slab(ocr, image)

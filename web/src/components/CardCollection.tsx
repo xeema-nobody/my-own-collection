@@ -52,7 +52,7 @@ export default function CardCollection({ card }: { card: any }) {
           return (
             <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
               <Badge tone={s.grading ? "accent" : "neutral"}>{stackLabel(s)}</Badge>
-              <span className="min-w-0 flex-1 truncate text-muted">{s.variant ? `${s.variant} · ` : ""}{s.language.toUpperCase()}{s.grading?.cert_number ? ` · cert ${s.grading.cert_number}` : ""}</span>
+              <span className="min-w-0 flex-1 truncate text-muted">{s.variant ? `${s.variant} · ` : ""}{s.language.toUpperCase()}{s.grading?.cert_number ? ` · cert ${s.grading.cert_number}` : ""}{s.grading?.report_url && <> · <a className="text-accent underline" href={s.grading.report_url} target="_blank" rel="noreferrer">Open {s.grading.company} report</a></>}</span>
               <span className="num w-24 text-right" title={v?.needs_price ? "No graded price yet, not counted" : v?.estimated ? "Estimated value of the stack" : "Value of the stack"}>
                 {v == null ? "" : v.value == null ? <span className="text-muted">needs price</span> : <>{v.estimated && "≈ "}{money(v.value)}</>}
               </span>

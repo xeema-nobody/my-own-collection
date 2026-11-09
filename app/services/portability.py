@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from app.services import valuation_cache
 from app.db.models import CollectionIn
 from app.services import acquisition
+from app.services import slab
 from app.services.collection import stack_key
 
 FORMAT, VERSION = "moc-collection", 1
@@ -126,6 +127,8 @@ async def import_items(db, rows: list[dict], mode: str = "set") -> dict:
             continue
         key = stack_key(item)
         doc = item.model_dump(mode="json", exclude={"quantity"})
+        if doc.get("grading"):
+            doc["grading"] = await slab.enrich_grading(db, doc["grading"])
         existing = await db.collection_items.find_one({"stack_key": key}, {"acquired": 1})
         if mode == "set" and existing is not None and doc.get("acquired") is not None \
                 and "type" not in (r.get("acquired") or {}):

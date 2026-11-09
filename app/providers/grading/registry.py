@@ -2,6 +2,7 @@
 (docs/grading-cert-pages.md; ask the user to show the page in a browser first)."""
 from app.providers.fetcher import FetcherClient
 from app.providers.grading.ace import AceProvider
+from app.providers.grading.ace import cert_url as ace_cert_url
 from app.providers.grading.base import INVALID, CertInfo, CertProvider, clean_cert, now
 from app.providers.grading.bgs import BgsProvider
 from app.providers.grading.linkonly import LinkOnlyProvider
@@ -46,3 +47,18 @@ async def lookup(grader: str, cert: str, client: FetcherClient | None = None, tr
         why = "unknown grader" if lo_hi is None else "cert must be digits only"
         return CertInfo(g, (cert or "").strip(), INVALID, None, detail=why, fetched_at=now())
     return await build(g, client, transport).lookup(c)
+
+
+def report_url(grader: str, cert: str | None) -> str | None:
+    """The grader's report page for a cert, from the fixed template only (no network). None when unknown."""
+    g, c = canon_grader(grader), clean_cert(cert)
+    if not c:
+        return None
+    if g == "ACE":
+        return ace_cert_url(c)
+    p = build(g)
+    if p is None:
+        return None
+    if hasattr(p, "cert_url"):
+        return p.cert_url(c)
+    return getattr(p, "template", None) and p.template.format(cert=c)

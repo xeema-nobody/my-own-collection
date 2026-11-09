@@ -48,7 +48,12 @@ export type ScanCard = {
 export type ScanRead = { number: string | null; printed_total: number | null; set_code: string | null; hp: number | null };
 /** What the slab label read as. `grader_seen` false = the grader was guessed from the label layout (confirm it). */
 export type ScanSlab = { grader: string | null; grade: number | null; cert: string | null; tier?: string | null; grader_seen?: boolean };
-export type ScanIdentify = { text: string; confidence: "high" | "medium" | "low" | "none"; names: string[]; total: number; cards: ScanCard[]; read?: ScanRead | null; exact?: boolean; slab?: ScanSlab | null; detected?: boolean };
+/** A grader's cert page as read by the server (`status` found | not_found | blocked | unavailable | link_only | invalid). */
+export type CertInfo = { grader: string; cert: string; status: string; url: string | null; name?: string | null; number?: string | null;
+  printed_total?: number | null; set_name?: string | null; year?: number | null; language?: string | null; variant?: string | null;
+  grade?: number | null; tier?: string | null; detail?: string | null };
+export type ScanCert = { cert: CertInfo; cards: ScanCard[]; how_exact: "exact" | "likely" | "possible" | "none"; needs_confirm: boolean; cached: boolean; report_url: string | null };
+export type ScanIdentify = { text: string; confidence: "high" | "medium" | "low" | "none"; names: string[]; total: number; cards: ScanCard[]; read?: ScanRead | null; exact?: boolean; slab?: ScanSlab | null; detected?: boolean; cert?: ScanCert | null };
 export type ScanSearch = { total: number; page: number; cards: ScanCard[] };
 export type ScanAdded = { label: string; stack: { id: string; quantity: number; type_conflict?: boolean; duplicate?: boolean }; event: ScanEvent };
 export type ScanEvent = { id: string; at: string; kind?: "add" | "undo"; card_id: string; label: string; quantity_added: number; quantity_after: number; type_conflict: boolean;
@@ -76,7 +81,7 @@ export type AlertIn = {
 };
 
 export type WishEntry = {
-  id: string; card_id: string; variant: string | null; grading: { company: string; grade: number } | null;
+  id: string; card_id: string; variant: string | null; grading: { company: string; grade: number; cert_number?: string | null; report_url?: string | null } | null;
   target_price: number | null; note: string | null; alert: boolean; created_at: string;
   card: { _id: string; name: string; number: string; rarity?: string; set?: { name: string }; images?: { small?: string } } | null;
   value: number | null; estimated: boolean; price_kind: string | null; source: string | null; thin: boolean; stale: boolean;
@@ -187,6 +192,7 @@ export const api = {
   scanMe: () => req<{ ok: boolean }>("/api/scan/me"),
   scanIdentify: (photo: Blob, slab = false) =>
     req<ScanIdentify>("/api/scan/identify" + qs({ slab: slab ? 1 : undefined }), { method: "POST", body: photo, headers: { "content-type": photo.type || "image/jpeg" } }),
+  scanCert: (grader: string, cert: string, refresh = false) => req<ScanCert>("/api/scan/cert" + qs({ grader, cert, refresh: refresh ? 1 : undefined })),
   scanSearch: (q: string, page = 1) => req<ScanSearch>("/api/scan/search" + qs({ q, page })),
   scanAdd: (b: unknown, sessionId?: string | null) => req<ScanAdded>("/api/scan/add" + qs({ session_id: sessionId }), post(b)),
   scanLookup: (number: string, set?: string) => req<ScanIdentify>("/api/scan/lookup" + qs({ number, set: set || undefined })),

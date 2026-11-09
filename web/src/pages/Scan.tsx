@@ -135,7 +135,7 @@ export default function Scan() {
         canMore={!!more && res.cards.length < res.total}
         onPick={(c) => { setCard(c); setErr(null); setStep("details"); }}
         onSearch={(q) => search.mutate({ q, page: 1 })} onMore={() => more && search.mutate({ q: more.q, page: more.page + 1 })} onRetake={again} />}
-      {step === "details" && card && <AddSheet card={card} initial={choice.current} busy={add.isPending} error={err} slab={res.slab ?? (slabMode ? { grader: null, grade: null, cert: null } : null)}
+      {step === "details" && card && <AddSheet card={card} initial={choice.current} reportUrl={res.cert?.report_url} busy={add.isPending} error={err} slab={res.slab ?? (slabMode ? { grader: null, grade: null, cert: null } : null)}
         onBack={() => { setErr(null); setStep("pick"); }} onAdd={(body, c) => add.mutate({ body, c })} />}
       {step === "done" && <div className="space-y-4 py-8 text-center">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-ok/15 text-ok"><Check size={28} /></div>

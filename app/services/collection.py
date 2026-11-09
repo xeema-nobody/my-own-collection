@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from app.db.models import CollectionIn
 from app.services import acquisition
+from app.services import slab
 from app.config import settings
 from app.providers.price import registry
 from app.services import valuation_cache
@@ -61,6 +62,8 @@ async def _add(db, i: CollectionIn) -> dict:
         # one physical slab: scanning it again changes nothing (idempotent), the caller is told
         return _out(existing) | {"type_conflict": False, "duplicate": True}
     doc = i.model_dump(mode="json", exclude={"quantity"})
+    if doc.get("grading"):
+        doc["grading"] = await slab.enrich_grading(db, doc["grading"])
     if existing is None:
         await db.collection_items.update_one(
             {"stack_key": key},
