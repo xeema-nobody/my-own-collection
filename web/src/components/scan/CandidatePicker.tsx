@@ -35,11 +35,13 @@ const leads = (cards: ScanCard[]) => cards.length < 2 || (cards[0].signals?.leng
 const readText = (r?: ScanRead | null) => r ? [r.number ? `#${r.number}${r.printed_total ? `/${r.printed_total}` : ""}` : null, r.set_code].filter(Boolean).join(" · ") : "";
 
 /** Every plausible version side by side. Nothing is added from here: tapping a card only opens the details step. */
-export default function CandidatePicker({ cards, total, confidence, text, read, searching, canMore, onPick, onSearch, onMore, onRetake }: {
+export default function CandidatePicker({ cards, total, confidence, text, read, searching, canMore, quiet, initialQuery, onPick, onSearch, onMore, onRetake }: {
   cards: ScanCard[]; total: number; confidence: ScanIdentify["confidence"]; text: string; read?: ScanRead | null; searching?: boolean; canMore?: boolean;
+  /** Slab result: the grader's page, not the photo, named the card; hide the name-read wording. `initialQuery` prefills the typed search. */
+  quiet?: boolean; initialQuery?: string;
   onPick: (c: ScanCard) => void; onSearch: (q: string) => void; onMore: () => void; onRetake: () => void;
 }) {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initialQuery ?? "");
   const conf = CONF[confidence];
   return (
     <div className="space-y-3">
@@ -49,12 +51,13 @@ export default function CandidatePicker({ cards, total, confidence, text, read, 
       </form>
       {cards.length === 0
         ? <div className="space-y-2 rounded-lg border border-line bg-surface p-4 text-sm">
-            <p className="font-medium">Couldn't read a card name.</p>
-            <p className="text-muted">Move closer, reduce glare, keep the name at the top, or type it above.{text ? ` (Read: "${text}")` : ""}</p>
+            <p className="font-medium">{quiet ? "No card from the catalog yet." : "Couldn't read a card name."}</p>
+            {quiet ? <p className="text-muted">Type the card name above and search; nothing is added until you tap Add.</p>
+              : <p className="text-muted">Move closer, reduce glare, keep the name at the top, or type it above.{text ? ` (Read: "${text}")` : ""}</p>}
           </div>
         : <>
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              {conf.text && <Badge tone={conf.tone}>{conf.text}</Badge>}
+              {!quiet && conf.text && <Badge tone={conf.tone}>{conf.text}</Badge>}
               {readText(read) && <Badge tone="neutral">Read {readText(read)}</Badge>}
               <span className="text-muted">{total > cards.length ? `Showing ${cards.length} of ${total} versions` : `${cards.length} version${cards.length === 1 ? "" : "s"}`}. Tap the one you hold.</span>
             </div>

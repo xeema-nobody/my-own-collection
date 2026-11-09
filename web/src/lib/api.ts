@@ -192,7 +192,8 @@ export const api = {
   scanMe: () => req<{ ok: boolean }>("/api/scan/me"),
   scanIdentify: (photo: Blob, slab = false) =>
     req<ScanIdentify>("/api/scan/identify" + qs({ slab: slab ? 1 : undefined }), { method: "POST", body: photo, headers: { "content-type": photo.type || "image/jpeg" } }),
-  scanCert: (grader: string, cert: string, refresh = false) => req<ScanCert>("/api/scan/cert" + qs({ grader, cert, refresh: refresh ? 1 : undefined })),
+  scanCert: (grader: string, cert: string, opts: { refresh?: boolean; grade?: number | null; tier?: string | null } = {}) =>
+    req<ScanCert>("/api/scan/cert" + qs({ grader, cert, refresh: opts.refresh ? 1 : undefined, grade: opts.grade ?? undefined, tier: opts.tier ?? undefined })),
   scanSearch: (q: string, page = 1) => req<ScanSearch>("/api/scan/search" + qs({ q, page })),
   scanAdd: (b: unknown, sessionId?: string | null) => req<ScanAdded>("/api/scan/add" + qs({ session_id: sessionId }), post(b)),
   scanLookup: (number: string, set?: string) => req<ScanIdentify>("/api/scan/lookup" + qs({ number, set: set || undefined })),

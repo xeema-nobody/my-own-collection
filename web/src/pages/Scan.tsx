@@ -6,6 +6,7 @@ import { friendlyScanError, loadChoice, loadMode, saveChoice, saveMode, type Sca
 import CameraCapture from "../components/scan/CameraCapture";
 import CandidatePicker from "../components/scan/CandidatePicker";
 import AddSheet from "../components/scan/AddSheet";
+import SlabResult from "../components/scan/SlabResult";
 import { Button, Input } from "../components/ui";
 
 type Step = "camera" | "pick" | "details" | "done" | "review";
@@ -83,13 +84,25 @@ export default function Scan() {
     onSuccess: (r) => show(r, null, 0),
     onError: (e) => setErr(friendlyScanError(e)),
   });
+  // Slab result card: fix the grader / cert and look again; the answer replaces the cards and the label read.
+  const relookup = useMutation({
+    mutationFn: ({ grader, cert }: { grader: string; cert: string }) => api.scanCert(grader, cert, { grade: res.slab?.grade, tier: res.slab?.tier }),
+    onSuccess: (got, v) => {
+      setRes((o) => ({ ...o, cert: got, cards: got.cards, total: got.cards.length, names: got.cert.name ? [got.cert.name] : [], text: "",
+        slab: { ...(o.slab ?? { grade: null }), grader: v.grader, cert: v.cert, grader_seen: true } }));
+      setMore(null); setErr(null);
+    },
+    onError: (e) => setErr(friendlyScanError(e)),
+  });
   const lastRow = rows[rows.length - 1] ?? null;
+  const slabForSheet = res.slab ? { ...res.slab, grade: res.slab.grade ?? res.cert?.cert.grade ?? null } : slabMode ? { grader: null, grade: null, cert: null } : null;
+  const showSlab = slabMode && !!(res.slab || res.cert || res.cards.length === 0);
   const again = () => { setStep("camera"); setErr(null); setCard(null); setRes(EMPTY); };
   return (
     <main className="mx-auto max-w-lg space-y-4 px-4 py-4">
       <h1 className="flex items-center gap-2 text-lg font-semibold"><ScanLine size={20} className="text-accent" />Add a card</h1>
       {sessionId && <p role="status" className="flex items-center gap-2 rounded bg-accent/15 px-3 py-2 text-sm text-accent"><Laptop size={16} />Linked to your computer ({sessionMode === "slab" ? "slabs" : "raw cards"}): the card you pick shows up there.</p>}
-      {err && step !== "details" && <p role="alert" className="rounded bg-danger/15 px-3 py-2 text-sm text-danger">{err}</p>}
+      {err && step !== "details" && !(step === "pick" && showSlab) && <p role="alert" className="rounded bg-danger/15 px-3 py-2 text-sm text-danger">{err}</p>}
       {step === "camera" && (identify.isPending
         ? <p className="py-16 text-center text-muted" role="status">Reading the card…</p>
         : <div className="space-y-3">
@@ -131,11 +144,14 @@ export default function Scan() {
           <span className="flex-1">Looks like a slab (graded card in a case).</span>
           <Button size="sm" onClick={() => { setMode("slab"); again(); }}>Switch to slab and retake</Button>
         </div>)}
-      {step === "pick" && <CandidatePicker cards={res.cards} total={res.total} confidence={res.confidence} text={res.text} read={res.read} searching={search.isPending}
+      {step === "pick" && showSlab &&
+        <SlabResult key={`${res.slab?.grader}:${res.slab?.cert}:${res.cert?.cert.status}`} slab={res.slab} result={res.cert} busy={relookup.isPending} error={err}
+          onLookup={(grader, cert) => relookup.mutate({ grader, cert })} />}
+      {step === "pick" && <CandidatePicker quiet={slabMode && !!(res.slab || res.cert)} initialQuery={res.cert?.cert.name ?? undefined} cards={res.cards} total={res.total} confidence={res.confidence} text={res.text} read={res.read} searching={search.isPending}
         canMore={!!more && res.cards.length < res.total}
         onPick={(c) => { setCard(c); setErr(null); setStep("details"); }}
         onSearch={(q) => search.mutate({ q, page: 1 })} onMore={() => more && search.mutate({ q: more.q, page: more.page + 1 })} onRetake={again} />}
-      {step === "details" && card && <AddSheet card={card} initial={choice.current} reportUrl={res.cert?.report_url} busy={add.isPending} error={err} slab={res.slab ?? (slabMode ? { grader: null, grade: null, cert: null } : null)}
+      {step === "details" && card && <AddSheet card={card} initial={choice.current} reportUrl={res.cert?.report_url} busy={add.isPending} error={err} slab={slabForSheet}
         onBack={() => { setErr(null); setStep("pick"); }} onAdd={(body, c) => add.mutate({ body, c })} />}
       {step === "done" && <div className="space-y-4 py-8 text-center">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-ok/15 text-ok"><Check size={28} /></div>
