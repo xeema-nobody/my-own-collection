@@ -211,7 +211,9 @@ def label_for(sig: list[str]) -> str | None:
 
 
 async def set_codes(db) -> set[str]:
-    return {c.lower() for c in await db.cards.distinct("set.ptcgo_code", {"tcg": "pokemon"}) if c}
+    flt = {"tcg": "pokemon"}
+    codes = await db.sets.distinct("ptcgo_code", flt) + await db.cards.distinct("set.ptcgo_code", flt)
+    return {c.lower() for c in codes if c}
 
 
 async def read_fields(ocr, image: bytes) -> CardFields | None:
@@ -347,8 +349,11 @@ async def lookup(db, number: str, set_q: str | None = None) -> dict:
     q = (set_q or "").strip()
     if q:
         rx = {"$regex": re.escape(q), "$options": "i"}
+        # The printed code is read from the sets collection: the card's embedded set may predate the code.
+        coded = [s["external_id"] async for s in db.sets.find(
+            {"tcg": "pokemon", "ptcgo_code": {"$regex": f"^{re.escape(q)}$", "$options": "i"}}, {"external_id": 1})]
         flt["$or"] = [{"set.ptcgo_code": {"$regex": f"^{re.escape(q)}$", "$options": "i"}},
-                      {"set.id": q.lower()}, {"set.name": rx}]
+                      {"set.id": {"$in": coded + [q.lower()]}}, {"set.name": rx}]
     found = [c async for c in db.cards.find(flt, {"raw": 0}).limit(POOL)]
     found.sort(key=lambda c: str((c.get("set") or {}).get("release_date") or ""), reverse=True)
     sigs = {}

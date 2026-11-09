@@ -74,3 +74,14 @@ async def test_first_page_failure_raises_plain_error():
     handler, _ = upstream(lambda o, s: o == 0)
     with pytest.raises(httpx.HTTPStatusError):
         await collect(provider(handler))
+
+
+async def test_card_order_has_a_unique_tiebreaker():
+    """orderBy=number alone is not unique upstream: pages overlap and cards go missing. `id` breaks the ties."""
+    seen = []
+
+    def handler(req):
+        seen.append(req.url.params["orderBy"])
+        return httpx.Response(200, json={"data": [], "totalCount": 0})
+    await collect(provider(handler))
+    assert seen and all(o == "number,id" for o in seen)

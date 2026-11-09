@@ -161,6 +161,7 @@ export const api = {
   jobs: () => req<any[]>("/api/admin/jobs"),
   status: () => req<any>("/api/admin/status"),
   importCatalog: (sets?: string[]) => req<any>("/api/admin/catalog/import" + qs({ sets }), { method: "POST" }),
+  catalogAudit: () => req<any>("/api/admin/catalog/audit"),
   retryIncompleteImports: () => req<{ started: boolean; sets: string[] }>("/api/admin/catalog/import/retry-incomplete", { method: "POST" }),
   refreshCardPrice: (id: string) => req<{ found: boolean; prices: number; tracked: boolean }>(`/api/cards/${encodeURIComponent(id)}/refresh-price`, { method: "POST" }),
   refreshPrices: (scope = "tracked", sets?: string[]) =>

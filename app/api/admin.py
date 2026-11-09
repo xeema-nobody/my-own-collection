@@ -7,12 +7,21 @@ from app.db.models import FetchControlIn, FetchIn
 from app.providers.fetcher import FetcherClient, FetcherUnavailable
 from app.providers.price import registry_json
 from app.services.catalog_import import import_catalog, incomplete_sets
-from app.services import jobs as jobs_svc
+from app.services import catalog_audit, jobs as jobs_svc
 from app.services.price_fetch import fetch_prices, resolve_bulk, resolve_targets
 from app.services.refresh import SCOPES, refresh_prices
 from app.services.snapshots import take_snapshot
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+@router.get("/catalog/audit")
+async def catalog_audit_route():
+    """Provider's live set list vs the database (one upstream call, no card download)."""
+    try:
+        return await catalog_audit.audit(get_db())
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"catalog provider unavailable: {e}") from None
 
 
 @router.post("/catalog/import", status_code=202)

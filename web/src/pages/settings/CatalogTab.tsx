@@ -32,6 +32,9 @@ export default function CatalogTab({ sets, jobs, picked, setPicked }: {
   const retry = useMutation({ mutationFn: api.retryIncompleteImports, onSettled: done });
   const ref = useMutation({ mutationFn: (a: { scope: string; sets?: string[] }) => api.refreshPrices(a.scope, a.sets), onSettled: done });
 
+  const audit = useMutation({ mutationFn: api.catalogAudit });
+  const a = audit.data;
+
   const running = (type: string) => jobs.data?.find((j: any) => j.type === type && j.status === "running");
   const importing = !!running("catalog_import"), refreshing = !!running("price_refresh");
   const lastFull = jobs.data?.find((j: any) => j.type === "catalog_import" && j.status !== "running" &&
@@ -79,6 +82,26 @@ export default function CatalogTab({ sets, jobs, picked, setPicked }: {
         {err && <p className="mt-3 text-sm text-danger">{errorText(err)}</p>}
         {(importing || refreshing) && <p className="mt-3 text-sm text-warn">Running: {[running("catalog_import"), running("price_refresh")].filter(Boolean).map(run).join(" · ")}</p>}
         <p className="mt-3 text-xs text-muted">Prices are stored only for tracked cards (collection + wishlist); the catalog import stores cards, not prices. Jobs run in the background, one per type at a time. Progress on the Jobs tab.</p>
+      </Section>
+
+      <Section title="Coverage audit" id="settings-audit">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" disabled={audit.isPending} onClick={() => audit.mutate()}>{audit.isPending ? "Checking…" : "Check coverage"}</Button>
+          {a && <Button size="sm" variant="ghost" disabled={!a.to_import.length} onClick={() => setPicked(new Set(a.to_import))}>Select gaps ({a.to_import.length})</Button>}
+          <span className="text-xs text-muted">Compares the source's live set list with what is stored. One request, no card download.</span>
+        </div>
+        {audit.error && <p className="mt-3 text-sm text-danger">{errorText(audit.error)}</p>}
+        {a && (<>
+          <p className="mt-3 text-sm text-muted">{a.sets} sets, {a.cards} cards · {a.promo_sets} promo / other sets · {a.secret_over_printed} sets hold secret rares above the printed total (normal) · {a.provider_only.length} new at the source · {a.code_missing.length} without printed code</p>
+          {a.rows.length === 0 ? <p className="mt-2 text-sm text-ok">No gaps.</p> : (
+            <Table className="mt-3 max-h-80 overflow-y-auto">
+              <THead><Th>Set</Th><Th num>Stored</Th><Th num>Source total</Th><Th>Issue</Th></THead>
+              <tbody>{a.rows.map((r: any) => (
+                <Tr key={r.id}><Td>{r.name} <span className="text-xs text-muted">{r.id}{r.promo ? " · promo" : ""}</span></Td>
+                  <Td num>{r.imported}</Td><Td num>{r.provider_total ?? "—"}</Td>
+                  <Td>{r.issues.filter((i: string) => i !== "over_total").map((i: string) => <Badge key={i} tone={i === "short" || i === "new_at_provider" || i === "empty" ? "warn" : undefined}>{i.replace(/_/g, " ")}</Badge>)}</Td></Tr>))}</tbody>
+            </Table>)}
+        </>)}
       </Section>
 
       <Section title={`Sets (${shown.length}${shown.length !== all.length ? ` of ${all.length}` : ""})`} id="settings-sets">

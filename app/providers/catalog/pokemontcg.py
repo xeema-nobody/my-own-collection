@@ -115,7 +115,7 @@ class PokemonTcgCatalog:
 
     async def iter_cards(self, set_id: str | None = None, only: set[str] | None = None) -> AsyncIterator[dict]:
         """Yield every card; raises IncompletePage after the last page if some windows stayed unavailable."""
-        base: dict = {"orderBy": "number"}  # stable order = stable offsets across page sizes
+        base: dict = {"orderBy": "number,id"}  # stable order = stable offsets; `number` alone ties, so pages repeat and drop cards
         if set_id:
             base["q"] = f"set.id:{set_id}"
         missing: list[tuple[int, int]] = []

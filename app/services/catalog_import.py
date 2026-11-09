@@ -30,6 +30,7 @@ async def import_catalog(set_ids: list[str] | None = None, provider=None, retry:
         if ops:
             await db.sets.bulk_write(ops, ordered=False)
         stats["sets"] = len(ops)
+        await sync_set_fields(db, sets, set_ids)
         # Per-set batches: deep pagination on the upstream API is flaky, and one bad set
         # must not abort the rest.
         targets = set_ids or [s["external_id"] for s in sets]
@@ -58,6 +59,19 @@ async def import_catalog(set_ids: list[str] | None = None, provider=None, retry:
         await jobs.finish(db, job, "error", stats, str(e))
         raise
     return stats
+
+
+async def sync_set_fields(db, sets: list[dict], only: list[str] | None = None) -> int:
+    """Copy set-level fields onto the cards' embedded `set`, so typed number + set-code lookups work for cards
+    imported before the provider sent the printed code. Every set gets its code; the other fields (name, totals)
+    only for the sets being imported (`only`; all when None). Idempotent; returns cards touched."""
+    n = 0
+    for s in sets:
+        keys = ("ptcgo_code", "name", "printed_total", "total") if not only or s["external_id"] in only else ("ptcgo_code",)
+        fields = {f"set.{k}": s.get(k) for k in keys if s.get(k) is not None}
+        if fields:
+            n += (await db.cards.update_many({"tcg": "pokemon", "set.id": s["external_id"]}, {"$set": fields})).modified_count
+    return n
 
 
 async def last_failed_sets(db) -> list[str]:
