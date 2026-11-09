@@ -51,6 +51,8 @@ export default function SlabResult({ slab, result, busy, error, onLookup }: {
     <section aria-label="Slab result" className="space-y-2 rounded-lg border border-line bg-surface p-3 text-sm">
       {summary ? <p className="font-semibold">{summary}</p> : <p className="font-medium">The label could not be read. Pick the grader and type the cert number.</p>}
       {slab?.grader && slab.grader_seen === false && <p className="text-xs text-muted">The grader is a guess from the label layout: check it.</p>}
+      {!result && slab?.cert && slab.cert_sure === false && <p role="alert" className="flex items-start gap-1.5 rounded bg-warn/15 px-2 py-1.5 text-warn">
+        <TriangleAlert size={14} className="mt-0.5 shrink-0" /><span>The cert read ({slab.cert}) has {slab.cert.length} digits{slab.grader ? `, not what ${slab.grader} prints` : ""}, so it was not looked up. Check the digits, then look it up.</span></p>}
       {info?.status === "found" && result && HOW[result.how_exact].text && result.cards.length > 0 && <Badge tone={HOW[result.how_exact].tone}>{HOW[result.how_exact].text}</Badge>}
       {warn.map((w) => <p key={w.code} role="alert" className="flex items-start gap-1.5 rounded bg-warn/15 px-2 py-1.5 text-warn">
         <TriangleAlert size={14} className="mt-0.5 shrink-0" /><span>{w.text}: check the cert digits.</span></p>)}

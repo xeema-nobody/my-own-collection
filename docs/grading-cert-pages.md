@@ -13,6 +13,8 @@ One row per grader. Used by the slab scan (roadmap 5f, decisions.md "Slab identi
 | SGC | `https://sgccard.com` cert lookup | numeric | **blocked 2026-11-08**: sgccard.com 301 to gosgc.com, 403 Cloudflare challenge. Link-only; exact cert URL template still unconfirmed | name, set, grade | to verify |
 | Other | none | any | no | grader name typed by the user | n/a (existing "Other slab" flow) |
 
+**Cert lengths the label reader trusts (`slabfields.CERT_SURE`, 2026-11-09):** ACE 6 digits (samples 158678 / 158689 / 158690), PSA 8-9, Beckett 10 starting `00`, CGC 10 (no sample). A read with another length is never looked up on its own (`cert_sure` false): the phone card asks for the digits. The grader is also inferred from the length when the logo is unreadable (6-7 ACE, 8-9 PSA, 10 with `00` or subgrade rows BGS, other 10 CGC).
+
 **Matching signals per grader** (what the page gives the catalog match): ACE = name + number + printed total + set + year + variant (best); PSA = name + number + set/year hint (no total); BGS = name + set name/year only (no number). CGC / SGC unverified; fetcher + same approach if the user confirms their pages are free in a browser.
 
 **Noisy page text (seen 2026-11-09):** BGS puts the rarity in the name ("Gardevoir ex SIR"), PSA's set is a brand + code ("POKEMON MEW EN-151") and its variety carries the rarity ("HYPER RARE"), ACE is clean ("Radiant Charizard", set "POKEMON GO"). The catalog match therefore resolves the set first, matches name words inside it, and uses the rarity as a bonus; see decisions.md "Set-first token matching". A cert read wrong can land on any card (PSA 2023151 = a 1976 baseball card): the response `warnings` flag grade / tier disagreement with the label, a non-Pokemon page and an odd cert length.

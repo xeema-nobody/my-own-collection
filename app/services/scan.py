@@ -15,6 +15,7 @@ from app.api.deps import clean
 from app.db.models import CollectionIn
 from app.providers.catalog.common import norm
 from app.providers.ocr import CardFields, ImageError, OcrLine, OcrUnavailable
+from app.providers.ocr.slabfields import cert_sure
 from app.services import collection as collection_svc
 from app.services import slab as slab_svc
 from app.services import valuation_cache
@@ -245,6 +246,16 @@ async def read_slab(ocr, image: bytes) -> dict | None:
     return got.as_dict() if got else None
 
 
+def slab_certs(label: dict | None, limit: int = 2) -> list[str]:
+    """The cert reads worth a lookup, best first: only reads with a length the grader prints (`cert_sure`). A read
+    that is not sure is never looked up silently (a dropped digit can land on a stranger's card); the phone card
+    shows it and the user corrects it. At most `limit` lookups (each one is a request to the grader)."""
+    if not label or not label.get("grader") or not label.get("cert"):
+        return []
+    reads = [label["cert"], *label.get("cert_alt", [])]
+    return [c for c in dict.fromkeys(reads) if cert_sure(label["grader"], c)][:limit]
+
+
 async def identify(db, ocr, image: bytes, slab: bool = False) -> dict:
     """Card candidates from the photo. Slab mode never runs the raw card read: the label gives grader + cert, the
     grader's page gives the card (`services/slab.py`), and the answer carries `cert` (page + how exact) next to
@@ -255,20 +266,23 @@ async def identify(db, ocr, image: bytes, slab: bool = False) -> dict:
         res = {"text": "", "confidence": "none", "names": [], "total": 0, "cards": [], "read": None, "exact": False,
                "cert": None}
         log.info("slab label: %s", label)  # what the reader saw: grader / grade / cert (no photo data)
-        if label and label.get("grader") and label.get("cert"):
+        for cert in slab_certs(label):
             try:
-                got = await slab_svc.lookup(db, label["grader"], label["cert"], label_grade=label.get("grade"),
+                got = await slab_svc.lookup(db, label["grader"], cert, label_grade=label.get("grade"),
                                             label_tier=label.get("tier"))
             except Exception:  # a failed lookup must never lose the label read
                 log.warning("cert lookup failed", exc_info=True)
-            else:
-                log.info("slab cert %s %s -> %s, %d cards, %s", label["grader"], label["cert"], got["cert"]["status"],
-                         len(got["cards"]), got["how_exact"])
-                if got["warnings"]:
-                    log.info("slab warnings: %s", [w["code"] for w in got["warnings"]])
-                res.update(cards=got["cards"], total=len(got["cards"]), cert=got,
-                           confidence={"exact": "high", "likely": "medium", "possible": "low"}.get(got["how_exact"], "none"),
-                           exact=got["how_exact"] == "exact")
+                break
+            log.info("slab cert %s %s -> %s, %d cards, %s", label["grader"], cert, got["cert"]["status"],
+                     len(got["cards"]), got["how_exact"])
+            if got["warnings"]:
+                log.info("slab warnings: %s", [w["code"] for w in got["warnings"]])
+            label["cert"] = cert  # the read that was looked up (the second best when the first was not found)
+            res.update(cards=got["cards"], total=len(got["cards"]), cert=got,
+                       confidence={"exact": "high", "likely": "medium", "possible": "low"}.get(got["how_exact"], "none"),
+                       exact=got["how_exact"] == "exact")
+            if got["cert"]["status"] != "not_found":
+                break  # found, blocked or unavailable: another read of the same label would not change that
     else:
         res = await identify_card(db, ocr, image)
         label = None if res["exact"] else await read_slab(ocr, image)

@@ -61,3 +61,50 @@ def test_pick_grade_largest_glyph_then_most_reads():
     assert pick_grade([(9.0, 40), (1.0, 12), (9.0, 38)]) == 9.0
     assert pick_grade([(4.0, 50)], tier="GEM MINT") is None
     assert pick_grade([]) is None
+
+
+# --- slices 5 + 6: per-grader cert rules, targeted cert reads, grader from the cert length ---
+from app.providers.ocr.slabfields import cert_candidates, cert_sure, grader_for_cert  # noqa: E402
+
+
+def test_cert_sure_follows_each_graders_length_rules():
+    assert cert_sure("ACE", "158689") and not cert_sure("ACE", "1586784") and not cert_sure("ACE", "15868")
+    assert cert_sure("PSA", "56941091") and cert_sure("PSA", "146737388") and not cert_sure("PSA", "569410917 "[:10])
+    assert cert_sure("BGS", "0018969667") and not cert_sure("BGS", "9018969667") and not cert_sure("BGS", "001896966")
+    assert cert_sure("CGC", "1234567890") and cert_sure(None, "158689") and not cert_sure(None, "1234567")
+
+
+def test_targeted_cert_read_outvotes_year_and_number_runs_in_the_label_text():
+    lines = ["2023 151 BLASTOISE EX", "FULL ART #184", "9 MINT"]  # "2023 151" joins into a 7 digit run
+    assert cert_candidates(lines, None)[0][0] == "2023151"
+    got = cert_candidates(lines, "ACE", ["158689", "158689"])
+    assert got[0] == ("158689", True)
+
+
+def test_a_grader_word_that_contradicts_the_cert_length_loses_to_the_length():
+    # a logo read as "PSA" on an ACE label: no cert has a PSA length, the 6 digit read is an ACE cert
+    lab = parse_label(["PSA", "2023 POKEMON GO", "GEM MINT", "10"], ["158690", "158690"])
+    assert (lab.grader, lab.cert, lab.grader_seen, lab.cert_sure) == ("ACE", "158690", False, True)
+
+
+def test_grader_word_with_a_matching_cert_stays_seen():
+    lab = parse_label(["PSA", "MINT 9", "56941091"])
+    assert (lab.grader, lab.grader_seen, lab.cert_sure) == ("PSA", True, True)
+
+
+def test_beckett_cert_with_a_misread_leading_zero_is_repaired_and_the_wrong_read_kept_as_alternative():
+    lab = parse_label(["BECKETT", "CENTERING 9 CORNERS 9", "MINT", "9018969667"])
+    assert lab.cert == "0018969667" and lab.cert_sure and lab.cert_alt == ("9018969667",)
+
+
+def test_a_cert_with_no_sure_read_is_flagged_not_guessed():
+    lab = parse_label(["PSA", "MINT 9", "5694109"], ["5694109"])
+    assert lab.cert == "5694109" and lab.cert_sure is False
+    assert lab.as_dict()["cert_sure"] is False
+    assert "cert_sure" not in parse_label(["PSA", "MINT 9", "56941091"]).as_dict()
+
+
+def test_grader_for_cert_by_length_and_prefix():
+    assert grader_for_cert([], "158690") == "ACE" and grader_for_cert([], "56941091") == "PSA"
+    assert grader_for_cert([], "0016872326") == "BGS" and grader_for_cert([], "4301234567") == "CGC"
+    assert grader_for_cert(["CENTERING 9"], "4301234567") == "BGS" and grader_for_cert([], "12345") is None

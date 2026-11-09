@@ -9,6 +9,11 @@ photos: the quad came out loose or missing). The label is found by its text inst
   4. `slabfields.parse_label` votes grader / cert / tier over all the lines (pure, unit-tested).
 A photo with no tier word and no cert is not a slab and costs only step 1.
 
+Locate, then read (slices 5 + 6): the slab box is found first, then the label as the first dense text band below the
+top of the slab (`locate_label`). Only that crop is read: ~8 tesseract calls instead of ~29 (psm 11 + 6 over the
+crop, a digits-only read of the cert corner below the tier word, tight grade-glyph crops beside it). The tile
+reader below stays as the fallback when no label band is found or the crop is not a label.
+
 Position first: the slab is the one big non-background blob (`find_slab`), and the label always sits in the top third
 of it, with the grade glyph beside the tier word. So the photo is cropped to the slab, the label zone is blown up to a fixed
 width (text size no longer depends on how far away the phone was) and the grade is read from tight crops next to the tier word. If no slab blob is found the old whole-photo tile search runs unchanged."""
@@ -30,6 +35,7 @@ TIER_WORD = re.compile(r"^(MINT|PRISTINE|NM-?MT)\W*$", re.I)
 ZONE_H = 0.34  # label zone: top share of the slab's height
 ZONE_W = 2000  # zone is scaled to this width before reading
 ZONE_TILES = ((0.0, 0.0), (0.3, 0.0), (0.5, 0.0), (0.0, 0.4), (0.3, 0.4), (0.5, 0.4))  # (x, y) shares, tile 0.5 x 0.6
+GLYPH_PSMS = (8, 7)
 GRADE_BOX = (5.0, 6.0, 3.0)  # crop around the tier word: widths left+right, heights above, heights below
 
 
@@ -62,6 +68,109 @@ def find_slab(img: Image.Image) -> tuple[int, int, int, int] | None:
     if bh < bw:  # a slab stands upright in the photo
         return None
     return tuple(int(v / k) for v in (x, y, x + bw, y + bh))  # type: ignore[return-value]
+
+
+LABEL_W = 1800  # label crop is scaled to this width before reading
+LABEL_MAX_TOP = 0.22  # the label starts within this share of the slab's height
+# cert corner reads (x share, y share of the label crop, width after scaling, psm): digits only, bottom right of the label
+CERT_CORNERS = ((0.55, 0.40, 1000, 11), (0.45, 0.35, 1100, 6))
+RIGHT_HALF = (0.45, 1.4)  # x share where the right half starts, scale: tesseract reads a tile better than a whole label
+
+
+def locate_label(img: Image.Image, box: tuple[int, int, int, int]) -> tuple[int, int, int, int] | None:
+    """Box of the label inside the slab box: the first band of dense vertical strokes (text) in the top part of the
+    slab, rows measured on the central columns. The label is a text-rich strip, the plastic above it is quiet and
+    the card art under it starts a few percent lower. None when no band starts in the top share of the slab."""
+    x0, y0, x1, y1 = box
+    sw, sh = x1 - x0, y1 - y0
+    if sw < 100 or sh < 150:
+        return None
+    c = img.crop((x0 + int(sw * 0.12), y0, x1 - int(sw * 0.12), y0 + int(sh * 0.42))).convert("L")
+    k = 500 / c.width
+    g = cv2.GaussianBlur(np.asarray(c.resize((500, max(1, round(c.height * k))))), (3, 3), 0)
+    edges = (np.abs(cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3)) > 80).astype(np.float32)
+    prof = cv2.blur(edges.sum(1).reshape(-1, 1), (1, 5)).ravel()
+    on = prof > max(6.0, 0.25 * float(np.percentile(prof, 90)))
+    min_h, max_gap, n, i = 0.07 * sh * k, 0.02 * sh * k, len(on), 0
+    while i < n:
+        if not on[i]:
+            i += 1
+            continue
+        j, gap = i, 0
+        while j < n and (on[j] or gap < max_gap):  # a short quiet gap (between label lines) does not end the band
+            gap = 0 if on[j] else gap + 1
+            j += 1
+        j -= gap
+        if j - i >= min_h:
+            top, bottom = y0 + int(i / k), y0 + int(j / k)
+            if top - y0 > LABEL_MAX_TOP * sh:
+                return None
+            pad = int(0.01 * sh)
+            return (x0 + int(sw * 0.04), max(y0, top - pad), x1 - int(sw * 0.04), bottom + pad)
+        i = j
+    return None
+
+
+def _label_crop(img: Image.Image, lb: tuple[int, int, int, int]) -> Image.Image:
+    pad = round((lb[3] - lb[1]) * 0.15)
+    c = img.crop((lb[0], max(0, lb[1] - pad), lb[2], min(img.height, lb[3] + pad)))
+    return ImageOps.autocontrast(c.resize((LABEL_W, max(1, round(c.height * LABEL_W / c.width))), Image.LANCZOS), cutoff=1)
+
+
+async def _cert_lines(label: Image.Image) -> list[str]:
+    """Digit-only reads of the corner where every grader prints the cert (right, lower half of the label)."""
+    async def one(x0: float, y0: float, w: int, psm: int) -> list[str]:
+        c = label.crop((int(label.width * x0), int(label.height * y0), label.width, label.height))
+        c = ImageOps.expand(c.resize((w, max(1, round(c.height * w / c.width))), Image.LANCZOS), 20, fill=255)
+        return _group([x for x in await T._run_words(c, psm, "0123456789") if x[1] >= 20])
+    return [ln for got in await asyncio.gather(*[one(*v) for v in CERT_CORNERS]) for ln in got]
+
+
+GRADE_COLUMN = (0.70, 700)  # x share where the grade column starts (every grader prints the grade right), width after scaling
+
+
+async def _grade_column(label: Image.Image) -> list[tuple[float, int]]:
+    """Grade tokens (value, glyph height) from the label's right column, digits only. The grade is the biggest
+    number there (ACE, Beckett: above the tier word; PSA: below it); the cert is too long to look like a grade."""
+    x0, w = GRADE_COLUMN
+    c = label.crop((int(label.width * x0), 0, label.width, label.height)).convert("L")
+    k = w / c.width
+    c = ImageOps.expand(c.resize((w, max(1, round(c.height * k))), Image.LANCZOS), 20, fill=255)
+    found = []
+    for words in await asyncio.gather(*[T._run_words(c, psm, "0123456789.") for psm in (11, 6)]):
+        for text, conf, _, _, _, h in words:
+            m = GRADE_RE.fullmatch(text)
+            if m and conf >= 40:
+                found.append((float(m.group(1)), round(h / k)))
+    return found
+
+
+async def _read_label_crop(img: Image.Image, lb: tuple[int, int, int, int]) -> SlabRead | None:
+    label = await asyncio.to_thread(_label_crop, img, lb)
+    x0, sc = RIGHT_HALF
+    right = label.crop((int(label.width * x0), 0, label.width, label.height))
+    right = right.resize((round(right.width * sc), round(right.height * sc)), Image.LANCZOS)
+    reads, cert_lines = await asyncio.gather(
+        asyncio.gather(T._run_words(label, 11), T._run_words(label, 6), T._run_words(right, 6)), _cert_lines(label))
+    lines, anchors = [], []
+    for k, words in enumerate(reads):
+        words = [w for w in words if w[1] >= 30]
+        lines += _group(words)
+        if k < 2:  # anchors in label coordinates (the right-half read is scaled and shifted)
+            anchors += [(w[1], w[2], w[3], w[4], w[5]) for w in words if TIER_WORD.match(w[0])]
+    parsed = parse_label(lines, cert_lines)
+    if not parsed.is_slab:
+        return None
+    grade = pick_grade(await _grade_column(label), parsed.tier)
+    best = sorted(anchors, key=lambda a: -a[0])[:1]
+    if grade is not None:
+        parsed.grade = grade
+    elif best:
+        found = [g for gs in await asyncio.gather(*[_grade_glyph(label, a, GLYPH_PSMS) for a in best]) for g in gs]
+        grade = pick_grade(found, parsed.tier)
+        if grade is not None:
+            parsed.grade = grade
+    return SlabRead(parsed, lines + cert_lines)
 
 
 def _zone(img: Image.Image) -> Image.Image | None:
@@ -141,7 +250,7 @@ def pick_grade(found: list[tuple[float, int]], tier: str | None = None) -> float
     return max(set(near), key=lambda v: (v == 10 or v != int(v), near.count(v)))  # 9.5 / 10 beat a lone 5 / 1 cut from them
 
 
-async def _grade_glyph(zone: Image.Image, anchor) -> list[tuple[float, int]]:
+async def _grade_glyph(zone: Image.Image, anchor, psms=(8, 10, 7)) -> list[tuple[float, int]]:
     """Grade tokens (value, glyph height) from tight crops next to one tier word: above it (ACE, BGS: the big glyph) and
     just below it (PSA: the small grade under MINT). Tight single-glyph crops read where a whole label does not."""
     _, ax, ay, aw, ah = anchor
@@ -157,7 +266,7 @@ async def _grade_glyph(zone: Image.Image, anchor) -> list[tuple[float, int]]:
         k = max(1.0, 200 / c.height)
         c = ImageOps.autocontrast(c.resize((round(c.width * k), round(c.height * k)), Image.LANCZOS).convert("L"), cutoff=1)
         c = ImageOps.expand(c, 30, fill=255)
-        for psm in (8, 10, 7):
+        for psm in psms:
             for text, conf, _, _, _, h in await T._run_words(c, psm, "0123456789."):
                 m = GRADE_RE.fullmatch(text)
                 if m and conf >= 30:
@@ -167,6 +276,34 @@ async def _grade_glyph(zone: Image.Image, anchor) -> list[tuple[float, int]]:
 
 async def read_slab(img: Image.Image) -> SlabRead | None:
     """None when the photo shows no graded-card label."""
+    box = await asyncio.to_thread(find_slab, img)
+    lb = await asyncio.to_thread(locate_label, img, box) if box else None
+    got = await _read_label_crop(img, lb) if lb else None
+    if got and got.label.cert and got.label.cert_sure:  # a missing grade is no reason to look again: the cert page has it
+        return got
+    # no label band, nothing label-like in it, or a cert / grade the cheap read could not settle: the tile readers
+    # (slower, ~6 s) look again; their sure cert / grade fills what the cheap read lacked
+    slow = await _read_tiles_path(img)
+    return _merge(got, slow)
+
+
+def _merge(fast: SlabRead | None, slow: SlabRead | None) -> SlabRead | None:
+    if not fast or not slow:
+        return fast or slow
+    f, s = fast.label, slow.label
+    if (not f.cert or not f.cert_sure) and s.cert and (s.cert_sure or not f.cert):
+        f.cert, f.cert_sure = s.cert, s.cert_sure
+        f.cert_alt = tuple(dict.fromkeys(c for c in (*f.cert_alt, *s.cert_alt) if c != f.cert))[:2]
+        if f.grader is None or not f.grader_seen:
+            f.grader, f.grader_seen = s.grader or f.grader, s.grader_seen or f.grader_seen
+    if f.grade is None:
+        f.grade = s.grade
+    if f.tier is None:
+        f.tier = s.tier
+    return SlabRead(f, fast.lines + slow.lines)
+
+
+async def _read_tiles_path(img: Image.Image) -> SlabRead | None:
     zone = await asyncio.to_thread(_zone, img)
     if zone is not None:
         lines, anchors = await _read_tiles(zone, ZONE_TILES, 0.5, 0.6, 1.0)

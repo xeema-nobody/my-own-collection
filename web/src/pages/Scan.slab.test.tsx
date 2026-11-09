@@ -29,6 +29,14 @@ async function scanSlab() {
 describe("Scan page, slab result card", () => {
   beforeEach(() => localStorage.clear());
 
+  it("unsure cert: not looked up, says so and keeps the digits to correct", async () => {
+    const api = mockApi({ "POST /api/scan/identify": ident(null, { grader: "PSA", grade: 9, cert: "5694109", tier: "MINT", grader_seen: true, cert_sure: false }) });
+    await scanSlab();
+    expect(await screen.findByText(/The cert read \(5694109\) has 7 digits, not what PSA prints, so it was not looked up/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Cert number")).toHaveValue("5694109");
+    expect(api.mock.calls.some(([u]) => String(u).includes("/api/scan/cert"))).toBe(false);
+  });
+
   it("found: shows the page summary, the exact card, and prefills the slab form; adds only on the last tap", async () => {
     const api = mockApi({ "POST /api/scan/identify": ident(cert()), ...ADD });
     const user = await scanSlab();

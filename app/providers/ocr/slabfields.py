@@ -17,7 +17,8 @@ TIER_RE = re.compile(r"\b(GEM\s*MINT|MINT|PRISTINE|NM[- ]?MT|NEAR MINT|EX[- ]?MT
 GRADE_RE = re.compile(r"(?<![\d.])(10|[1-9](?:\.5)?)(?![\d.])")
 SUBGRADE_RE = re.compile(r"CENTER|CORNER|EDGES|SURFACE")
 CERT_RE = re.compile(r"(?<!\d)\d(?:[\d ]{4,12}\d)(?!\d)")
-CERT_LEN = {"PSA": (7, 9), "BGS": (10, 10), "CGC": (7, 10), "ACE": (6, 6), "SGC": (7, 8)}
+CERT_LEN = {"PSA": (7, 9), "BGS": (10, 10), "CGC": (7, 10), "ACE": (6, 7), "SGC": (7, 8)}  # digit runs worth voting on
+CERT_SURE = {"PSA": (8, 9), "BGS": (10, 10), "CGC": (10, 10), "ACE": (6, 6), "SGC": (7, 8)}  # lengths a real cert has (every ACE sample is 6 digits)
 ANY_CERT_LEN = (6, 10)
 
 
@@ -29,10 +30,17 @@ class SlabLabel:
     tier: str | None        # "GEM MINT", "MINT" ...
     grader_seen: bool       # the grader name itself was read (False = layout guess, the user confirms)
     is_slab: bool           # tier word + (grade or cert), or a grader word + cert
+    cert_sure: bool = True  # the cert has a length the grader prints (False = a digit was probably dropped or added)
+    cert_alt: tuple = ()    # other cert reads, best first: tried when the first one is not found
 
     def as_dict(self) -> dict:
-        return {"grader": self.grader, "grade": self.grade, "cert": self.cert, "tier": self.tier,
-                "grader_seen": self.grader_seen}
+        d = {"grader": self.grader, "grade": self.grade, "cert": self.cert, "tier": self.tier,
+             "grader_seen": self.grader_seen}
+        if self.cert and not self.cert_sure:
+            d["cert_sure"] = False
+        if self.cert_alt:
+            d["cert_alt"] = list(self.cert_alt)
+        return d
 
 
 def _clean(lines: list[str]) -> list[str]:
@@ -87,53 +95,89 @@ def find_grade(lines: list[str], tier: str | None = None) -> float | None:
     return votes.most_common(1)[0][0] if votes else None
 
 
-def find_cert(lines: list[str], grader: str | None = None) -> str | None:
+def cert_sure(grader: str | None, cert: str) -> bool:
+    """The cert has a length (and prefix) this grader prints. With no grader: any grader's."""
+    def ok(g: str) -> bool:
+        lo, hi = CERT_SURE[g]
+        return lo <= len(cert) <= hi and (g != "BGS" or cert.startswith("00"))
+    return ok(grader) if grader in CERT_SURE else any(ok(g) for g in CERT_SURE if g != "SGC")
+
+
+def cert_candidates(lines: list[str], grader: str | None = None, targeted: list[str] | None = None) -> list[tuple[str, bool]]:
+    """Digit runs read as a cert, best first, as (cert, sure). `targeted` = lines from the cert region alone (digits
+    only): their votes count triple, the label lines also carry year / card number runs ("2023 151") that pass for a
+    cert. Order: sure length first, then votes, then the longer read (it lost fewer digits)."""
     lo, hi = CERT_LEN.get(grader or "", ANY_CERT_LEN)
-    # the lone number beside a subgrade row ("EDGES 10 SURFACE 10 0018969667") is still read as one digit run
-    votes = Counter()
-    for ln in lines:
-        for m in CERT_RE.finditer(ln):
-            groups = m.group().split()
-            # "#011 158690" or "001 8969667": the digits may be one number split by a misread gap, or two numbers
-            # side by side. Count the joined run and each trailing run; the cert is the one read most often.
-            for k in range(len(groups)):
-                digits = "".join(groups[k:])
-                if lo <= len(digits) <= hi:
-                    votes[digits] += 1
-    if not votes:
-        return None
-    best = max(votes.values())
-    top = [c for c, v in votes.items() if v == best]
-    return max(top, key=len)  # equal votes: the longer read lost fewer digits
+    votes: Counter = Counter()
+    for weight, group in ((1, lines), (3, targeted or [])):
+        for ln in group:
+            for m in CERT_RE.finditer(ln):
+                # "#011 158690" or "001 8969667": one number split by a misread gap, or two numbers side by side:
+                # count the joined run and each trailing run
+                groups = m.group().split()
+                for k in range(len(groups)):
+                    digits = "".join(groups[k:])
+                    if lo <= len(digits) <= hi:
+                        votes[digits] += weight
+    for c, v in list(votes.items()):  # Beckett prints 00 first and the first 0 is the one tesseract turns into a 9 / 8 / 6
+        if len(c) == 10 and c[1] == "0" and c[0] != "0" and grader in (None, "BGS"):
+            votes["0" + c[1:]] += v
+    ranked = sorted(votes, key=lambda c: (cert_sure(grader, c), votes[c], len(c)), reverse=True)
+    return [(c, cert_sure(grader, c)) for c in ranked]
 
 
-def infer_grader(lines: list[str], tier: str | None, cert: str | None) -> str | None:
-    """Labels mostly print a logo, not the company name, so the name is rarely readable. The layout still tells:
-    Beckett prints four subgrades and a 10-digit cert, PSA an 8-9 digit cert, ACE a 6-digit cert, CGC a 10-digit
-    cert without subgrades. A guess only: `grader_seen` stays False and the user confirms the grader chip."""
-    if not cert or not tier:
+def find_cert(lines: list[str], grader: str | None = None) -> str | None:
+    got = cert_candidates(lines, grader)
+    return got[0][0] if got else None
+
+
+def grader_for_cert(lines: list[str], cert: str | None) -> str | None:
+    """Labels mostly print a logo, not the company name, so the name is rarely readable. The cert length still tells:
+    ACE 5-7 digits, PSA 8-9, Beckett 10 starting 00 (and four subgrades), CGC 10 without subgrades. SGC is never
+    inferred (its range overlaps). A guess only: `grader_seen` stays False and the user confirms the grader chip."""
+    if not cert:
         return None
     sub = any(SUBGRADE_RE.search(ln) for ln in lines)
     n = len(cert)
-    if n == 6:
+    if n in (6, 7):
         return "ACE"
-    if sub and n == 10:
+    if n == 10 and (sub or cert.startswith("00")):
         return "BGS"
-    if n in (7, 8, 9) and not sub:
+    if n in (8, 9) and not sub:
         return "PSA"
     if n == 10:
         return "CGC"
     return None
 
 
-def parse_label(raw_lines: list[str]) -> SlabLabel:
+def infer_grader(lines: list[str], tier: str | None, cert: str | None) -> str | None:
+    return grader_for_cert(lines, cert) if cert and tier else None
+
+
+def parse_label(raw_lines: list[str], cert_lines: list[str] | None = None) -> SlabLabel:
     lines = _clean(raw_lines)
+    targeted = _clean(cert_lines or [])
     grader = find_grader(lines)
     tier = find_tier(lines)
-    cert = find_cert(lines, grader)
+    cands = cert_candidates(lines, grader, targeted)
+    if grader and not any(sure for _, sure in cands):
+        # the grader word disagrees with every cert read (a logo read as "PSA" on an ACE label): the cert length wins
+        wide = cert_candidates(lines, None, targeted)
+        other = grader_for_cert(lines, wide[0][0]) if wide else None
+        if other and other != grader and wide[0][1]:
+            grader, cands = other, cert_candidates(lines, other, targeted)
+            seen = False
+        else:
+            seen = True
+    else:
+        seen = grader is not None
+    cert = cands[0][0] if cands else None
     grade = find_grade(lines, tier)
-    seen = grader is not None
     if grader is None:
         grader = infer_grader(lines, tier, cert)
+        if grader:
+            cands = cert_candidates(lines, grader, targeted)
+            cert = cands[0][0] if cands else None
     is_slab = bool((tier and (grade is not None or cert)) or (seen and cert))
-    return SlabLabel(grader, grade, cert, tier, seen, is_slab)
+    alt = tuple(c for c, _ in cands[1:3])
+    return SlabLabel(grader, grade, cert, tier, seen, is_slab, bool(cert) and cands[0][1], alt)

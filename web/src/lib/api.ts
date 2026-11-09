@@ -46,8 +46,8 @@ export type ScanCard = {
   owned: { condition: string | null; language: string; variant: string | null; grading: unknown; quantity: number }[];
 };
 export type ScanRead = { number: string | null; printed_total: number | null; set_code: string | null; hp: number | null };
-/** What the slab label read as. `grader_seen` false = the grader was guessed from the label layout (confirm it). */
-export type ScanSlab = { grader: string | null; grade: number | null; cert: string | null; tier?: string | null; grader_seen?: boolean };
+/** What the slab label read as. `grader_seen` false = the grader was guessed from the label layout (confirm it). `cert_sure` false = the cert has a length the grader does not print, so it was not looked up. */
+export type ScanSlab = { grader: string | null; grade: number | null; cert: string | null; tier?: string | null; grader_seen?: boolean; cert_sure?: boolean; cert_alt?: string[] };
 /** A grader's cert page as read by the server (`status` found | not_found | blocked | unavailable | link_only | invalid). */
 export type CertInfo = { grader: string; cert: string; status: string; url: string | null; name?: string | null; number?: string | null;
   printed_total?: number | null; set_name?: string | null; year?: number | null; language?: string | null; variant?: string | null;

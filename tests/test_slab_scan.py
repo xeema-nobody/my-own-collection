@@ -135,3 +135,36 @@ async def test_scanned_slab_without_graded_price_is_not_valued_at_raw(cat, clien
     r = (await client.get("/api/collection")).json()
     item = r["items"][0]
     assert item["value"] is None and item["needs_price"] is True
+
+
+
+async def test_unsure_cert_is_never_looked_up_silently(cat):
+    """A PSA cert of 7 digits lost one: the label is returned, no request goes to the grader."""
+    calls = []
+
+    async def counting(grader, cert, client=None, transport=None):
+        calls.append(cert)
+        return CertInfo(grader, cert, "not_found", f"https://x/{cert}")
+    import app.providers.grading.registry as reg
+    orig, reg.lookup = reg.lookup, counting
+    try:
+        res = await scan.identify(cat, SlabOcr(SlabLabel("PSA", 9.0, "5694109", "MINT", True, True, False, ())), b"x", slab=True)
+    finally:
+        reg.lookup = orig
+    assert calls == [] and res["cert"] is None and res["cards"] == []
+    assert res["slab"]["cert"] == "5694109" and res["slab"]["cert_sure"] is False
+
+
+async def test_second_best_sure_cert_is_tried_when_the_first_is_not_found(cat, monkeypatch):
+    seen = []
+
+    async def fake(grader, cert, client=None, transport=None):
+        seen.append(cert)
+        if cert == "56941099":
+            return CertInfo(grader, cert, "not_found", f"https://x/{cert}")
+        return CertInfo(grader, cert, "found", f"https://x/{cert}", name="Charizard", number="4", grade=9.0)
+    monkeypatch.setattr("app.providers.grading.registry.lookup", fake)
+    lab = SlabLabel("PSA", 9.0, "56941099", "MINT", True, True, True, ("56941091", "5694109"))
+    res = await scan.identify(cat, SlabOcr(lab), b"x", slab=True)
+    assert seen == ["56941099", "56941091"]  # the 7 digit alternative is not sure: never asked
+    assert res["slab"]["cert"] == "56941091" and res["cert"]["cert"]["status"] == "found"
