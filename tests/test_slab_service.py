@@ -38,6 +38,8 @@ def test_name_forms_cover_printed_spellings():
     assert "blastoise ex" in slab.name_forms("BLASTOISE-EX")
     assert slab.name_forms("Charizard Holo")[0] == "charizard"
     assert "radiant charizard" in slab.name_forms("RADIANT CHARIZARD 1st Edition")
+    assert slab.name_forms("Gardevoir ex SIR")[0] == "gardevoir ex"  # BGS appends the rarity
+    assert slab.name_forms("MEW ex SAR")[0] == "mew ex"
 
 
 async def test_ace_exact_when_name_number_total_agree_on_one_print(cat):

@@ -19,7 +19,8 @@ MAX_CARDS = 12
 WEIGHT = {"name": 1.0, "number": 4.0, "total": 3.0, "set": 2.0, "year": 1.0}
 CONFIRM_ALWAYS = {"PSA", "BGS"}  # the page lacks the printed total (PSA) or the number (BGS): never "exact"
 # words a grader prints after the name that are not part of it
-TRAIL = re.compile(r"\b(?:reverse holo|holo(?:foil)?|1st edition|first edition|shadowless|unlimited)\b")
+TRAIL = re.compile(r"\b(?:reverse holo|holo(?:foil)?|1st edition|first edition|shadowless|unlimited"
+                   r"|sir|sar|ar|ur|hr|sr|rr|full art|alt(?:ernate)? art|special illustration rare|secret rare)\b")
 
 
 def _key(grader: str, cert: str) -> str:

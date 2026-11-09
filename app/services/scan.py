@@ -252,12 +252,15 @@ async def identify(db, ocr, image: bytes, slab: bool = False) -> dict:
         label = await read_slab(ocr, image)
         res = {"text": "", "confidence": "none", "names": [], "total": 0, "cards": [], "read": None, "exact": False,
                "cert": None}
+        log.info("slab label: %s", label)  # what the reader saw: grader / grade / cert (no photo data)
         if label and label.get("grader") and label.get("cert"):
             try:
                 got = await slab_svc.lookup(db, label["grader"], label["cert"])
             except Exception:  # a failed lookup must never lose the label read
                 log.warning("cert lookup failed", exc_info=True)
             else:
+                log.info("slab cert %s %s -> %s, %d cards, %s", label["grader"], label["cert"], got["cert"]["status"],
+                         len(got["cards"]), got["how_exact"])
                 res.update(cards=got["cards"], total=len(got["cards"]), cert=got,
                            confidence={"exact": "high", "likely": "medium", "possible": "low"}.get(got["how_exact"], "none"),
                            exact=got["how_exact"] == "exact")
