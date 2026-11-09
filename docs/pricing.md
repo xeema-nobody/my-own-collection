@@ -102,3 +102,6 @@ With `SCHEDULER_ENABLED`, a daily `price_fetch` covers up to `SCHEDULER_FETCH_CA
 
 ## Unpriced cards
 Some sets/cards have no price block in the pokemontcg.io payload (e.g. `me55`, `me5`, `me2pt5`, `mcd*`, `tk*`), so they stay unpriced (`price_base = None`, shown as "no price"). That is a source gap, not an import failure; only another source can fill it. Settings shows priced/total per set.
+
+## Price scope (planned, 5h, user decision 2026-11-09)
+Today the catalog import and `refresh_prices(scope=all|sets)` store prices for every card they touch, so nearly the whole catalog is priced. Intended rule: prices are stored and refreshed only for **tracked** cards = collection + wishlist (collection on the user's fetch, wishlist automatic about daily). Untracked cards show "no price (not tracked)" (never 0) and may fetch one card on demand when opened. Not built yet: see roadmap 5h and `temp/plan_catalog_and_price_scope.md`.

@@ -29,3 +29,4 @@ Cloudflare shows 'Just a moment...' first, then clears by itself in a few second
 - No login, no cookies kept. A site that blocks plain requests (PSA, BGS, probably CGC / SGC): read it only through the host fetcher (real Chrome, own profile, rate-limited, as for alt.xyz); fetcher down = link-only. Never defeat a bot wall or challenge page.
 - Fixtures: save the response of one real cert per grader under `tests/fixtures/cert/`; tests never touch the network.
 - Re-check each site's terms / robots before depending on it; note the result in the row above.
+- Phone result card (slice 4): the user sees the page's own words (`name number/total - set year - variety - cert`) next to the label read; a grade / tier disagreement or a non-Pokemon page is shown as "check the cert digits", and the cert can be corrected and looked up again (a new cert = one more request to the grader, only on that tap).
