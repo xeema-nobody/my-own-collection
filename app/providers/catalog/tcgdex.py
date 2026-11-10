@@ -196,6 +196,20 @@ class TcgdexCatalog:
                 out.append(map_set(detail))
         return out
 
+    async def set_images(self, set_id: str) -> dict[str, dict]:
+        """{card number: {small, large}} for one of our sets, from the brief set listing (one request, no per-card
+        calls). Empty when the set has no TCGdex counterpart; cards without artwork upstream are left out."""
+        sets, mapping = await self._tcgdex_sets()
+        tid = mapping.get(set_id)
+        if tid is None:
+            return {}
+        out = {}
+        for stub in (await self._get(f"/sets/{tid}")).get("cards", []):
+            if stub.get("image"):
+                out[card_number(stub["localId"])] = {"small": _asset(stub["image"], "low.webp"),
+                                                     "large": _asset(stub["image"], "high.webp")}
+        return out
+
     async def _one(self, stub: dict, set_id: str, set_doc: dict | None) -> dict:
         c = await self._get(f"/cards/{stub['id']}")
         return map_card(c, set_id, set_doc) if set_doc else prices_only(c, set_id)

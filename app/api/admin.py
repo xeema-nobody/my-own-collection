@@ -7,7 +7,7 @@ from app.db.models import FetchControlIn, FetchIn
 from app.providers.fetcher import FetcherClient, FetcherUnavailable
 from app.providers.price import registry_json
 from app.services.catalog_import import import_catalog, incomplete_sets
-from app.services import catalog_audit, catalog_ja, jobs as jobs_svc
+from app.services import catalog_audit, catalog_images, catalog_ja, jobs as jobs_svc
 from app.services.price_fetch import fetch_prices, resolve_bulk, resolve_targets
 from app.services.refresh import SCOPES, refresh_prices
 from app.services.snapshots import take_snapshot
@@ -45,6 +45,25 @@ async def catalog_ja_import(sets: list[str] = Query(...)):
     await ensure_idle("catalog_import")
     spawn(catalog_ja.import_ja_sets(sets))
     return {"started": True, "sets": sets}
+
+
+@router.get("/catalog/images/status")
+async def catalog_images_status():
+    return await catalog_images.status()
+
+
+@router.post("/catalog/images/repoint", status_code=202)
+async def catalog_images_repoint():
+    """Move stored card images from images.pokemontcg.io to TCGdex assets (reversible, idempotent)."""
+    await ensure_idle("catalog_images")
+    spawn(catalog_images.repoint_images())
+    return {"started": True}
+
+
+@router.post("/catalog/images/restore")
+async def catalog_images_restore():
+    await ensure_idle("catalog_images")
+    return {"restored": await catalog_images.restore_images()}
 
 
 @router.post("/catalog/import/retry-incomplete", status_code=202)

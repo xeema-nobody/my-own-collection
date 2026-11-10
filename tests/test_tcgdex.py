@@ -221,3 +221,16 @@ async def test_list_sets_skips_pocket_and_declined_sets():
     p, _ = provider(index())
     ids = {s["external_id"] for s in await p.list_sets()}
     assert "A1" not in ids and "wp" not in ids and {"sv3pt5", "swsh9"} <= ids
+
+
+async def test_set_images_from_brief_listing_one_request():
+    p, calls = provider(index())
+    imgs = await p.set_images("sv3pt5")
+    assert imgs["205"] == {"small": "https://assets.tcgdex.net/en/sv/sv03.5/205/low.webp",
+                           "large": "https://assets.tcgdex.net/en/sv/sv03.5/205/high.webp"}
+    assert not [c for c in calls if c.startswith("/cards/")]            # no per-card requests
+
+
+async def test_set_images_unknown_set_is_empty():
+    p, _ = provider(index())
+    assert await p.set_images("nope") == {}

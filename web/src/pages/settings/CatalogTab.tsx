@@ -3,6 +3,7 @@ import { useMutation, useQueryClient, type UseQueryResult } from "@tanstack/reac
 import { ChevronRight } from "lucide-react";
 import { api } from "../../lib/api";
 import JaSets from "./JaSets";
+import CardImages from "./CardImages";
 import { errorText } from "../../components/QueryState";
 import { Badge, Button, Checkbox, Chip, Drawer, EmptyState, Input, Section, Table, THead, Td, Th, Tr } from "../../components/ui";
 
@@ -150,6 +151,7 @@ export default function CatalogTab({ sets, jobs, picked, setPicked }: {
       </Section>
 
       <JaSets jobs={jobs} />
+      <CardImages jobs={jobs} />
 
       <Drawer open={confirm !== null} onClose={() => setConfirm(null)} title="Import all sets?">
         <p className="text-sm text-muted">Imports every set from the catalog source (cards only, no prices). This can take 30 minutes or more and runs in the background.</p>
