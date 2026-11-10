@@ -7,8 +7,8 @@
 
 | Source id | How | Kind | Notes |
 |---|---|---|---|
-| `tcgplayer` | embedded in pokemontcg.io payload | market, USD, per variant | low / mid / high / market |
-| `cardmarket` | embedded in pokemontcg.io payload | market, EUR, `variant=None` | trend as `market`; `as_of` can be stale |
+| `tcgplayer` | embedded in pokemontcg.io payload only (TCGdex has none: stops updating after the 2026-11 flip, stored values age out after `MARKET_MAX_AGE_DAYS`) | market, USD, per variant | low / mid / high / market |
+| `cardmarket` | embedded in the catalog payload (TCGdex since 2026-11; pokemontcg.io before) | market, EUR, `variant=None` | trend as `market`; `as_of` can be stale |
 | `pricecharting` | browser fetcher | market (raw + grades) + sold (graded, per company from listing titles), USD | grade keys: `raw`, `G2`..`G9`, `G9.5` (company-agnostic buckets), `PSA10`/`CGC10`/`BGS10Black`... (10s per company) |
 | `cardmarket_web` | browser fetcher (real Chrome) | market (trend, 30d avg) + ask (From), EUR | raw only. Separate id so it never overwrites the `cardmarket` aggregate |
 | `altxyz` | browser fetcher | sold, USD, per company grade (`PSA9`, `CGC10`...) | median/low/high of last 10 sales within 90 d, `sample_size` |

@@ -56,3 +56,16 @@ async def test_audit_reports_gaps(db):
     assert out["provider_only"] == ["new"] and out["short"] == ["b"] and out["promo_sets"] == 1
     assert sorted(out["to_import"]) == ["b", "new"]
     assert {r["id"] for r in out["rows"]} == {"b", "new"}
+
+
+async def test_audit_bare_provider_docs_do_not_flag_total_changed(db):
+    """TCGdex lists known sets as bare docs: no total / code upstream must not read as 'changed'."""
+    await db.sets.insert_one({"_id": "pokemon:a", "tcg": "pokemon", "external_id": "a", "name": "A", "total": 3,
+                              "ptcgo_code": "AAA"})
+    await db.cards.insert_many([make_card("a", str(i)) for i in range(1, 4)])
+
+    class Bare:
+        async def list_sets(self):
+            return [{"_id": "pokemon:a", "tcg": "pokemon", "external_id": "a"}]
+    r = await audit(db, Bare())
+    assert r["total_changed"] == [] and r["code_missing"] == [] and r["to_import"] == [] and r["rows"] == []

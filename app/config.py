@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     # Host headers the API answers to (DNS-rebinding guard); the FE and healthcheck use localhost
     allowed_hosts: str = "localhost,127.0.0.1"
     base_currency: str = "EUR"
-    # catalog + aggregate price source: pokemontcg | tcgdex (pokemontcg.io keys expire 2027-03-01)
-    catalog_provider: str = "pokemontcg"
+    # catalog + aggregate price source: tcgdex (default since 2026-11) | pokemontcg (rollback; its keys expire 2027-03-01)
+    catalog_provider: str = "tcgdex"
     tcgdex_base_url: str = "https://api.tcgdex.net/v2/en"
     pokemontcg_api_key: str = ""
     pokemontcg_base_url: str = "https://api.pokemontcg.io/v2"

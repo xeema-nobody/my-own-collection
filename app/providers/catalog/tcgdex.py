@@ -24,7 +24,11 @@ log = logging.getLogger(__name__)
 CONCURRENCY = 8
 BATCH = 40
 SOURCES = ("cardmarket",)
-SUPERTYPES = {"Pokemon": "Pokémon", "Trainer": "Trainer", "Energy": "Energy"}
+# Unknown upstream sets that must never be listed (so never imported or flagged): digital Pocket sets, and the sets
+# the user declined 2026-11-10 (docs/decisions.md 'TCGdex extras import').
+IGNORED_SERIES = {"tcgp"}
+IGNORED_SETS = {"miscp", "wp", "sp", "ex5.5", "exu", "xya"}
+SUPERTYPES ={"Pokemon": "Pokémon", "Trainer": "Trainer", "Energy": "Energy"}
 
 
 @dataclass
@@ -185,8 +189,11 @@ class TcgdexCatalog:
             if s["id"] in by_tid:
                 sid = by_tid[s["id"]]
                 out.append({"_id": f"pokemon:{sid}", "tcg": "pokemon", "external_id": sid})
-            else:
-                out.append(map_set(await self._get(f"/sets/{s['id']}")))
+            elif s["id"] not in IGNORED_SETS:
+                detail = await self._get(f"/sets/{s['id']}")
+                if (detail.get("serie") or {}).get("id") in IGNORED_SERIES:
+                    continue
+                out.append(map_set(detail))
         return out
 
     async def _one(self, stub: dict, set_id: str, set_doc: dict | None) -> dict:
@@ -216,7 +223,8 @@ class TcgdexCatalog:
             if only is not None and f"pokemon:{set_id}-{number}" not in only:
                 continue
             if number in known:
-                jobs.append((stub, None))
+                if only is not None:   # price refresh; an import (only=None) stores nothing for known cards
+                    jobs.append((stub, None))
             elif room:
                 jobs.append((stub, set_doc))
         missing: list[tuple[int, int]] = []

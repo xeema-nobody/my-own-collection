@@ -1,6 +1,6 @@
 # Architecture
 
-Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network only, auth on). External: pokemontcg.io (catalog + prices), frankfurter.dev (FX). Scraped price sites are reached only through the host-Mac **fetcher** (below).
+Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network only, auth on). External: TCGdex (catalog + Cardmarket prices; pokemontcg.io selectable until its keys end 2027-03-01), frankfurter.dev (FX). Scraped price sites are reached only through the host-Mac **fetcher** (below).
 
 ## Backend layering
 
@@ -9,10 +9,10 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 | Module | Role |
 |---|---|
 | `providers/catalog/common.py` | `norm`, price units, `extract_prices` shared by every catalog provider |
-| `providers/catalog/tcgdex.py` | TCGdex adapter (`CATALOG_PROVIDER=tcgdex`): matches its sets to ours by id then name, cards by number; one request per wanted card (8 in parallel); known cards only refresh Cardmarket prices (`_prices_only`), cards of sets we never imported are created in full; no TCGplayer prices (`_sources`) |
-| `services/catalog_extras.py` | One-off import of TCGdex-only sets/cards while `CATALOG_PROVIDER=pokemontcg`: wraps `TcgdexCatalog`, stores only the wanted new sets, fetches only numbers we lack (catalog only, no collection) |
+| `providers/catalog/tcgdex.py` | TCGdex adapter (`CATALOG_PROVIDER=tcgdex`, default since 2026-11-10): matches its sets to ours by id then name, cards by number; one request per wanted card (8 in parallel); known cards only refresh Cardmarket prices (`_prices_only`; an import without `only` skips them, no request); unknown sets are created in full except Pocket sets and the user-declined ones (`IGNORED_SERIES` / `IGNORED_SETS`); no TCGplayer prices (`_sources`) |
+| `services/catalog_extras.py` | One-off import of TCGdex-only sets/cards (works under either provider): wraps `TcgdexCatalog`, stores only the wanted new sets, fetches only numbers we lack (catalog only, no collection) |
 | `services/catalog_ja.py` | Japanese Pokémon (D4): `list_ja_sets()` (live TCGdex `/ja` list + stored counts) and `import_ja_sets(ids)` (job, catalog only). Wraps `TcgdexJaCatalog` (`providers/catalog/tcgdex.py`): ids `pokemon-ja:{set}-{num}`, `language:'ja'`, `name_en` from the dexId (English card list), full import of chosen sets, known numbers skipped, price stubs for refresh. English flows (`build_index`, audit, set stats, completeness, scan name pool, slab set resolver) exclude `language:'ja'` |
-| `services/catalog_provider.py` | `get_catalog()`: picks the provider from `CATALOG_PROVIDER` (`pokemontcg` default, `tcgdex`), builds the id index TCGdex needs from the database |
+| `services/catalog_provider.py` | `get_catalog()`: picks the provider from `CATALOG_PROVIDER` (`tcgdex` default, `pokemontcg` rollback), builds the id index TCGdex needs from the database |
 | `providers/catalog/pokemontcg.py` | httpx + tenacity retry on 429/5xx; a card page that still fails is re-fetched as smaller aligned pages (50/25/5, `orderBy=number`), windows dead at every size raise `IncompletePage` after the rest is yielded; maps payload to card/set docs, extracts price points |
 | `services/catalog_import.py` | per-set import (all / chosen sets / retry incomplete), upsert by `_id`, job logging, failed-set isolation; after each set stores `sets.imported_count` + `complete` (imported vs upstream `total`), a short set counts as failed (job `partial`), `incomplete_sets()` feeds the retry |
 | `scripts/backup.sh`, `scripts/restore.sh`, `scripts/backup_schedule.sh` (launchd daily job) | host-side `mongodump`/`mongorestore` through `docker compose exec` (creds from container env); see `backup.md` |
@@ -107,7 +107,7 @@ Health: `/health`, `/health/ready` (pings Mongo).
 
 ## Config (`.env`, see `.env.example`)
 
-`MONGO_ROOT_USER/PASSWORD`, `BASE_CURRENCY`, `CATALOG_PROVIDER` (`pokemontcg`|`tcgdex`), `TCGDEX_BASE_URL`, `POKEMONTCG_API_KEY` (optional), `SCHEDULER_ENABLED`, `PRICE_REFRESH_CRON` (`0 4 * * *`), `PRICE_FETCH_CRON` (`30 4 * * *`), `SNAPSHOT_CRON` (`0 6 * * *`), `CATALOG_IMPORT_CRON` (`0 3 * * 0`), `SCHEDULER_FETCH_CAP` (300), `SCHEDULER_FETCH_WISHLIST` (true; wishlisted cards in the scheduled fetch), `PRICE_ON_ADD` (true; one background catalog price fetch when a card without prices joins the collection / wishlist), `FETCHER_URL`, valuation rules `SOLD_MIN_SALES` (3), `SOLD_WINDOW_DAYS` (90), `SOLD_SAMPLE` (10), `PREFERRED_SOURCES` (comma list), `MARKET_MAX_AGE_DAYS` (180). `PRICECHARTING_TOKEN` is unused (no paid API).
+`MONGO_ROOT_USER/PASSWORD`, `BASE_CURRENCY`, `CATALOG_PROVIDER` (`tcgdex` default|`pokemontcg`), `TCGDEX_BASE_URL`, `POKEMONTCG_API_KEY` (optional), `SCHEDULER_ENABLED`, `PRICE_REFRESH_CRON` (`0 4 * * *`), `PRICE_FETCH_CRON` (`30 4 * * *`), `SNAPSHOT_CRON` (`0 6 * * *`), `CATALOG_IMPORT_CRON` (`0 3 * * 0`), `SCHEDULER_FETCH_CAP` (300), `SCHEDULER_FETCH_WISHLIST` (true; wishlisted cards in the scheduled fetch), `PRICE_ON_ADD` (true; one background catalog price fetch when a card without prices joins the collection / wishlist), `FETCHER_URL`, valuation rules `SOLD_MIN_SALES` (3), `SOLD_WINDOW_DAYS` (90), `SOLD_SAMPLE` (10), `PREFERRED_SOURCES` (comma list), `MARKET_MAX_AGE_DAYS` (180). `PRICECHARTING_TOKEN` is unused (no paid API).
 
 ## Frontend
 

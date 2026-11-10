@@ -44,6 +44,8 @@ async def audit(db=None, provider=None) -> dict:
     rows = []
     for sid in sorted(set(theirs) | set(ours)):
         p, o = theirs.get(sid), ours.get(sid)
+        if p and o and "name" not in p:   # bare doc (TCGdex, known set): upstream sent no fields, compare what we hold
+            p = {**o, **p}
         n = have.get(sid, 0)
         tags = classify(p, o, n)
         base = p or o

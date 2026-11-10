@@ -5,6 +5,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from app.config import Settings
 from app.providers.catalog import tcgdex
 from app.providers.catalog.common import extract_prices
 from app.providers.catalog.pokemontcg import IncompletePage
@@ -15,7 +16,9 @@ SET = json.loads((FIX / "set_sv03.5.json").read_text())
 MEW = json.loads((FIX / "card_sv03.5-205.json").read_text())
 SETS = [{"id": "sv03.5", "name": "151", "cardCount": {"total": 207}},
         {"id": "swsh9", "name": "Brilliant Stars", "cardCount": {"total": 186}},
-        {"id": "sv10.5b", "name": "Black Bolt", "cardCount": {"total": 172}}]
+        {"id": "sv10.5b", "name": "Black Bolt", "cardCount": {"total": 172}},
+        {"id": "A1", "name": "Genetic Apex", "cardCount": {"total": 286}, "serie": {"id": "tcgp"}},   # digital Pocket set
+        {"id": "wp", "name": "W Promotional", "cardCount": {"total": 5}}]                            # declined by the user
 
 
 def stub_card(local_id: str, **kw) -> dict:
@@ -80,7 +83,7 @@ async def test_list_sets_known_are_bare_new_are_full():
 
 async def test_known_cards_refresh_prices_only_under_our_ids():
     p, calls = provider(index(COMPLETE))
-    cards = [c async for c in p.iter_cards("sv3pt5")]
+    cards = [c async for c in p.iter_cards("sv3pt5", only={f"pokemon:sv3pt5-{n}" for n in COMPLETE})]
     assert [c["_id"] for c in cards] == ["pokemon:sv3pt5-1", "pokemon:sv3pt5-2", "pokemon:sv3pt5-205"]
     cards = cards[1:]  # 002 is known too, so also prices only
     cards = [cards[1]]
@@ -112,7 +115,7 @@ async def test_failed_card_is_reported_after_the_rest():
     p, _ = provider(index(COMPLETE), fail={"sv03.5-001"})
     got = []
     with pytest.raises(IncompletePage) as e:
-        async for c in p.iter_cards("sv3pt5"):
+        async for c in p.iter_cards("sv3pt5", only={f"pokemon:sv3pt5-{n}" for n in COMPLETE}):
             got.append(c["_id"])
     assert got == ["pokemon:sv3pt5-2", "pokemon:sv3pt5-205"] and e.value.missing == [(0, 1)]
 
@@ -152,7 +155,10 @@ async def test_get_catalog_picks_provider(monkeypatch, db):
     from app.providers.catalog.pokemontcg import PokemonTcgCatalog
     from app.services.catalog_provider import get_catalog
 
-    assert isinstance(await get_catalog(), PokemonTcgCatalog)
+    monkeypatch.delenv("CATALOG_PROVIDER", raising=False)   # a local .env may pin it
+    assert Settings(_env_file=None).catalog_provider == "tcgdex"   # default after the 2026-11 flip
+    monkeypatch.setattr(settings, "catalog_provider", "pokemontcg")
+    assert isinstance(await get_catalog(), PokemonTcgCatalog)       # rollback path
     monkeypatch.setattr(settings, "catalog_provider", "tcgdex")
     assert isinstance(await get_catalog(), TcgdexCatalog)
     monkeypatch.setattr(settings, "catalog_provider", "nope")
@@ -199,3 +205,19 @@ async def test_extras_import_only_wanted_sets_and_missing_numbers(db):
         assert not any(p.startswith("/cards/sv03.5") for p in calls)   # sv3pt5 complete: nothing fetched
     finally:
         del SETS[-2:]
+
+
+async def test_import_mode_makes_no_request_for_known_cards():
+    """An import (no `only`) stores nothing for known cards, so it must not fetch them (weekly cron: ~20k requests)."""
+    p, calls = provider(index(COMPLETE))
+    assert [c async for c in p.iter_cards("sv3pt5")] == []
+    assert not [c for c in calls if c.startswith("/cards/")]
+    room, calls = provider(index(FULL))   # number 2 missing: only that card is fetched
+    assert [c["_id"] async for c in room.iter_cards("sv3pt5")] == ["pokemon:sv3pt5-2"]
+    assert [c for c in calls if c.startswith("/cards/")] == ["/cards/sv03.5-002"]
+
+
+async def test_list_sets_skips_pocket_and_declined_sets():
+    p, _ = provider(index())
+    ids = {s["external_id"] for s in await p.list_sets()}
+    assert "A1" not in ids and "wp" not in ids and {"sv3pt5", "swsh9"} <= ids
