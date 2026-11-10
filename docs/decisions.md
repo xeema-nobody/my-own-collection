@@ -293,3 +293,10 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 
 ## Price scope: only tracked cards (decided and built 2026-11-09)
 User: store and fetch prices only for cards the user selects into the collection (and fetches), and for wishlists (may be automatic, once a day), not for the whole catalog. Why: the catalog import writes prices for every card; it is noise, storage, and hides which prices the user actually cares about. How to apply: one `tracked_card_ids` rule (collection + wishlist); the import stores cards and sets only; refresh and snapshot touch tracked cards; answers (2026-11-09): (a) an untracked card shows "no price (not tracked)" with a one-card "Fetch price" action; (b) existing price rows of untracked cards are KEPT, no purge (so no purge script was built; rows go stale, nothing is lost). Adding to the collection or wishlist fetches that card's price once in the background. See roadmap 5h, pricing.md "Price scope".
+
+## Roadmap decisions D2, D3, D4, D8 (2026-11-10)
+- **D2** first marketplaces for listing export: Vinted and Cardmarket.
+- **D3** price sync for listed items: daily sync, Reprice table with % and amount change, suggested price = market + 10 % (configurable), user edits and confirms. Confirm updates the listing in the app only; no automatic push to platforms (no Vinted seller API, restricted Cardmarket API, seller-account risk). Per-platform push is researched later.
+- **D4** after English Pokémon: Japanese Pokémon first (TCGdex data), other TCGs later.
+- **D8** pulled cards have no cost and are excluded from P/L; P/L covers bought cards only. All cards, pulled and bought, count in collection value.
+- Work order agreed: TCGdex extras import (all) -> slab leftovers -> image-match fallback -> Japanese.

@@ -100,7 +100,7 @@ Row checkboxes and "Select all on this page" already exist, but the only bulk ac
 
 ## Step 5 — Scan cards with the phone camera `[~]`
 
-> **Next up (re-prioritised 2026-11-09 after the slice 4 phone check): 5h price scope and 5g coverage audit are done (the TCGdex-only extras import is parked, undecided), then slab slices 5 + 6 (done, see changelog), then the raw accuracy misses (item 4, pass 3 done 2026-11-10; the rest are OCR limits, see item 4).** 5f slices 1-4 are done (the phone result card works; slices 5-6 are polish). Backup schedule done 2026-11-10 (launchd, daily 05:30). 
+> **Decided 2026-11-10 order: (1) import the TCGdex-only extras (all, catalog only, backup first), (2) slab leftovers (label grade, tiny-text fallback), (3) image-match fallback for unread number lines, (4) Japanese Pokémon (D4) after that.** Earlier note: **Next up (re-prioritised 2026-11-09 after the slice 4 phone check): 5h price scope and 5g coverage audit are done (the TCGdex-only extras import is parked, undecided), then slab slices 5 + 6 (done, see changelog), then the raw accuracy misses (item 4, pass 3 done 2026-11-10; the rest are OCR limits, see item 4).** 5f slices 1-4 are done (the phone result card works; slices 5-6 are polish). Backup schedule done 2026-11-10 (launchd, daily 05:30). 
 
 **Goal:** add a card to the collection in a few seconds by pointing the phone at it. "Super easy" is the acceptance bar.
 
@@ -220,9 +220,8 @@ The catalog import writes price rows for every card of every imported set (the p
 
 ### 6d. Price sync with platforms `[ ]` _(stretch — high value, uncertain feasibility)_
 
-- Goal: keep asking prices of listed items aligned with market. Minimum useful version, no integration needed: a **"Reprice suggestions"** view — listed items whose market price moved > X% since listing, with "suggested new price" and a one-tap "I've updated it" confirmation.
-- Full integration only where a platform genuinely allows it. **Must be researched before committing** (Decisions D3): Vinted has no public seller API; Cardmarket's API access is restricted and needs approval; eBay has an official API. Do not build anything that violates a platform's terms or risks the founder's seller account.
-- Alert: "listed price is X% below/above market".
+- **Decided 2026-11-10 (D3):** a **daily price sync for listed items** (reuse the scheduled refresh) feeds a **Reprice table**: card, platform, current asking price, new market price, change in % and amount, **suggested price = market + markup (default 10 %, configurable)**. The user edits the price if wanted and confirms; confirm saves the new asking price on the listing in the app and flags "update on platform". It does **not** push to the marketplace (Vinted has no seller API, Cardmarket access is restricted; nothing that risks the seller account). Per-platform push is researched later (eBay API possible).
+- Alert/inbox item when a sync finds listings whose market moved beyond the threshold; "listed price is X% below/above market" indicator.
 
 **Done when:** a card can go from scanned → photographed → exported → listed → sold with realised profit, entirely tracked in-app.
 
@@ -240,7 +239,7 @@ The catalog import writes price rows for every card of every imported set (the p
 - **Open a product:** one flow "I opened this" → mark opened (date) → register what came out:
   - add pulled cards using the scanner from step 5 (or search), each linked back to that product,
   - include promos / extras (promo card, coins, code card, sleeves, etc.) — non-card extras logged as notes/items without a value,
-  - pulled cards default to acquisition = "Pulled" with an **optional cost allocation** (spread the product price across pulls by value, or leave at 0 — user picks the method).
+  - pulled cards default to acquisition = "Pulled" with an **optional cost allocation** (**decided 2026-11-10 (D8): no cost allocation**; pulled cards are excluded from P/L, which covers bought cards only, but count in collection value).
 - **Opening result report** per product: cost vs. value of what was pulled, best hit, hit rate. Across products: "am I net positive opening sealed vs. keeping it sealed vs. selling it sealed?" — the real business question.
 - Sealed products can also be tracked in the selling workflow (step 6): listed / sold sealed.
 - Dashboard: sealed value, opened-product ROI.
@@ -284,13 +283,13 @@ _Future — start only after the collection is large and scanning (step 5) works
 | #   | Decision                                                                 | Blocks                   | Notes                                                                                                                                                                     |
 | --- | ------------------------------------------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | D1  | **ANSWERED 2026-11-05: Tailscale** (private tailnet, no LAN exposure, no CA install; see decisions.md). Was: home-network only, or reachable from anywhere? | Step 5                   | Camera needs a secure connection on the phone. Home-network-only keeps "no cloud, no auth worry"; anywhere triggers auth/hardening. Recommend: home network only for now. |
-| D2  | Which marketplaces matter first (Vinted, Cardmarket, eBay, Marktplaats)? | Step 6c                  | Pick the top 2 for export formats.                                                                                                                                        |
-| D3  | Marketplace price sync: research feasibility/terms before any build      | Step 6d                  | Don't risk seller accounts. Start with reprice suggestions.                                                                                                               |
-| D4  | Other TCGs after Pokémon — which, and catalog source each                | Step 5 languages/catalog | Affects scan identification too.                                                                                                                                          |
+| D2  | **ANSWERED 2026-11-10: Vinted + Cardmarket** (Vinted title/description pack, Cardmarket bulk-upload sheet). | Step 6c | eBay and Marktplaats later. |
+| D3  | **ANSWERED 2026-11-10: daily reprice table, confirm = app only.** See 6d. | Step 6d | No push to platforms (Vinted has no seller API, Cardmarket restricted); revisit per platform later, eBay API possible. |
+| D4  | **ANSWERED 2026-11-10: Japanese Pokémon first** (TCGdex has Japanese data), other TCGs later. | Step 5 languages/catalog | Fixes the 2 Japanese slabs (Slowking 199, Charizard V 153). |
 | D5  | Switch on scheduler + backup schedule now?                               | Step 1–2                 | Backups matter more once photos and sales history exist. Backup schedule installed 2026-11-10; app scheduler still off.                                                                |
 | D6  | Switch to TCGdex before pokemontcg.io keys end (2027-03-01)              | —                        | Hard deadline. Do not leave until Feb 2027.                                                                                                                               |
 | D7  | Scan accuracy bar: is "pick from candidates" acceptable for every scan?  | Step 5                   | Assumed yes (never auto-add).                                                                                                                                             |
-| D8  | Cost allocation method for pulled cards                                  | Step 7                   | Default 0 vs. spread by value.                                                                                                                                            |
+| D8  | **ANSWERED 2026-11-10:** pulled cards carry no cost and are excluded from P/L (P/L only for bought cards); all cards, pulled and bought, count in collection value. | Step 7 | No cost allocation. |
 
 # Risks
 
