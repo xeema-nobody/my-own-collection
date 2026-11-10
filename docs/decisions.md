@@ -273,6 +273,12 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 - **Result:** top-1 14 -> 19, top-3 15 -> 21 of 42; correct number reads 14 -> 20. Wrong-but-real pairs (4/63, 2/83) still rank a wrong print and can show `exact`; a name check on the number hit is the next step.
 - **Not fixable by ranking:** Sprigatito MEP 061 (set missing from the catalog), IMG_3033/3052-3054 names (read failure on sideways sleeves).
 
+## Scan accuracy pass 3 (2026-11-10, roadmap Step 5 item 4)
+- **Measured first** (same 42 photos): top-1 23, top-3 26, in list 38, name 41, number read 31 (25 right). After: top-1 23, top-3 27, rest unchanged.
+- **Partial number signal.** OCR often loses the leading digit of the collector number. A print whose number ends with the read digits (read shorter than the number) gets `number_tail` (weight 2, between HP and the full number); `trusted` keeps the printed total for such a read instead of dropping it as unmatched. It is a hint: it is not `number`, so it never makes a hit `exact` (the user still picks). Rejected: treating it as a number match (a one-digit read ends many numbers: 177 and 187 tie for "7").
+- **Why the unread number lines stay unread:** experiments showed the line is legible in the crops, so resolution / warp quality is not the cause (a direct warp from the photo at 1x and 1.5x read nothing more). Tesseract loses it to glare streaks, the star, copyright text and the card edge in the same crop, and isolating glyph blobs before OCR was brittle (digits merge with the slash on a global cut, comb-pattern backgrounds win on e-Cards). Nothing of that was kept. Next lever is not more tesseract tuning: image-match fallback on the artwork, or a small digit-shape model.
+- **Not changed on purpose:** looser fuzzy name matching for fragments like "easel" (Sneasel 3033): catalog-wide false-hit risk without a better test set.
+
 ## Scan session mode (2026-11-08, roadmap Step 5 item 3b)
 - **Why:** the phone always opened on raw (its toggle is per device, default raw), so a slab scanned after "Start a scan" on the laptop came back as the raw card. Intent is known on the laptop before the phone is picked up.
 - **The session carries the mode** (`scan_sessions.mode`, `POST /api/scan/sessions {mode}`, default raw; old docs and old clients without a body are raw). Laptop has two start buttons; changing mode = Finish + the other button (one open session at a time already).

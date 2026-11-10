@@ -154,3 +154,20 @@ def test_owner_prefix_is_a_variant_of_the_bare_name():
     got = [n for n, _ in scan.with_suffix_variants(names, [("typhlosion", 1.0)])]
     assert got == ["ethan's typhlosion"]  # "dark typhlosion" has no owner 's
     assert [n for n, _ in scan.with_suffix_variants(names, [("mewtwo", 1.0)])] == ["team rocket's mewtwo"]
+
+
+async def test_a_dropped_leading_digit_still_ranks_the_print_but_is_never_exact(db):
+    scan.reset_names_cache()
+    await db.cards.insert_many([pc("a1", "94", 102, "AAA", "2020/01/01", "Gengar"), pc("a2", "9", 102, "BBB", "2021/01/01", "Gengar"),
+                                pc("a3", "30", 102, "CCC", "2022/01/01", "Gengar")])
+    res = await scan.identify(db, FieldOcr("Gengar", CardFields(number="4", printed_total=102, flat=True, votes=2)), b"x")
+    first = res["cards"][0]
+    assert first["set"]["id"] == "a1" and first["signals"] == ["name", "number_tail", "total"]
+    assert first["match_label"] == "name + partial number + printed total match"
+    assert res["exact"] is False  # a partial number is a hint, the user picks
+
+
+def test_number_tail_needs_a_shorter_read_that_ends_the_number():
+    assert scan._number_tail("94", "4") and scan._number_tail("187", "7") and scan._number_tail("TG04", "4") is False
+    assert not scan._number_tail("94", "94") and not scan._number_tail("94", "9") and not scan._number_tail("4", "94")
+    assert not scan._number_tail("94", None) and not scan._number_tail(None, "4")

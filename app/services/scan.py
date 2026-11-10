@@ -173,6 +173,8 @@ def signals_for(c: dict, fields: CardFields | None, name_hit: bool, codes: set[s
     if fields.number and (_num(c.get("number")) == _num(fields.number)
                           or (_digits(c.get("number")) and _digits(c.get("number")) == _digits(fields.number))):
         sig.append("number")
+    elif _number_tail(c.get("number"), fields.number):
+        sig.append("number_tail")
     if fields.printed_total and s.get("printed_total") == fields.printed_total:
         sig.append("total")
     code = (fields.set_code or "").lower()
@@ -183,10 +185,17 @@ def signals_for(c: dict, fields: CardFields | None, name_hit: bool, codes: set[s
     return sig
 
 
-SIGNAL_TEXT = {"name": "name", "number": "number", "total": "printed total", "set": "set code", "hp": "HP", "year": "year", "rarity": "rarity"}
+def _number_tail(card_number: str | None, read: str | None) -> bool:
+    """The read is the END of the card's number ("4" for 94, "7" for 187): OCR often drops the leading digit of the
+    collector number. A weak hint only, it never counts as the number and never makes a hit exact."""
+    have, got = _digits(card_number), _digits(read)
+    return bool(got) and len(got) < len(have) and have.endswith(got)
+
+
+SIGNAL_TEXT = {"name": "name", "number": "number", "number_tail": "partial number", "total": "printed total", "set": "set code", "hp": "HP", "year": "year", "rarity": "rarity"}
 # How much each agreeing signal counts when ranking prints. The collector number is the strongest read, the printed
 # total and set code say which set, HP only separates prints of one name (and the ex / non-ex forms).
-WEIGHT = {"name": 1.0, "number": 4.0, "total": 3.0, "set": 3.0, "hp": 1.0}
+WEIGHT = {"name": 1.0, "number": 4.0, "number_tail": 2.0, "total": 3.0, "set": 3.0, "hp": 1.0}
 
 
 def score(sig: list[str]) -> float:
@@ -195,13 +204,16 @@ def score(sig: list[str]) -> float:
 
 async def trusted(db, fields: CardFields | None) -> CardFields | None:
     """The read without its printed total when no catalog card carries that number / total pair: the total is the
-    weaker read ("137/412" for 137/128) and a wrong one would rank another set's print first. The number stays."""
+    weaker read ("137/412" for 137/128) and a wrong one would rank another set's print first. The number stays.
+    A number that only ENDS the read ("4" for 94) keeps the total too: the leading digit is the usual OCR loss."""
     if not fields or not fields.number:
         return fields
     if not fields.printed_total:
         return fields
+    digits = _digits(fields.number)
+    ends = {"number": {"$regex": f"{re.escape(digits)}$"}} if digits else {"number": {"$in": _number_forms(fields.number)}}
     hit = await db.cards.find_one({"tcg": "pokemon", "set.printed_total": fields.printed_total,
-                                   "number": {"$in": _number_forms(fields.number)}}, {"_id": 1})
+                                   "$or": [{"number": {"$in": _number_forms(fields.number)}}, ends]}, {"_id": 1})
     if hit:
         return fields
     return dataclasses.replace(fields, printed_total=None)
