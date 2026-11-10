@@ -13,7 +13,7 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 | `services/catalog_provider.py` | `get_catalog()`: picks the provider from `CATALOG_PROVIDER` (`pokemontcg` default, `tcgdex`), builds the id index TCGdex needs from the database |
 | `providers/catalog/pokemontcg.py` | httpx + tenacity retry on 429/5xx; a card page that still fails is re-fetched as smaller aligned pages (50/25/5, `orderBy=number`), windows dead at every size raise `IncompletePage` after the rest is yielded; maps payload to card/set docs, extracts price points |
 | `services/catalog_import.py` | per-set import (all / chosen sets / retry incomplete), upsert by `_id`, job logging, failed-set isolation; after each set stores `sets.imported_count` + `complete` (imported vs upstream `total`), a short set counts as failed (job `partial`), `incomplete_sets()` feeds the retry |
-| `scripts/backup.sh`, `scripts/restore.sh` | host-side `mongodump`/`mongorestore` through `docker compose exec` (creds from container env); see `backup.md` |
+| `scripts/backup.sh`, `scripts/restore.sh`, `scripts/backup_schedule.sh` (launchd daily job) | host-side `mongodump`/`mongorestore` through `docker compose exec` (creds from container env); see `backup.md` |
 | `services/portability.py` | collection export (JSON v1 lossless, CSV flat) and import (validates via `CollectionIn`, upsert on `stack_key`, per-row errors) |
 | `services/sets.py` | sets with imported / priced card counts |
 | `services/search.py` | builds Mongo query from `q` + filters |

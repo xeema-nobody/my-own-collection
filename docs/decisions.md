@@ -71,6 +71,7 @@ Defaults taken (assumptions): Q3 cardmarket aggregates from catalog payload; Q5 
 
 ## Phase 8: backup (2026-10-28, defaults by me, change on objection)
 - Host scripts, not app code: the app container cannot reach docker. `mongodump --archive --gzip` run inside the mongo container with its own env credentials, streamed to `backups/` on the host (written as `.part`, renamed when non-empty).
+- Schedule (2026-11-10): launchd via `scripts/backup_schedule.sh`, daily 05:30, keep 14 (two weeks). Chosen over the app scheduler (container has no docker access) and cron (launchd catches up after sleep). Restore verified with `--to-scratch` on a launchd-made archive: all 19 collection counts matched.
 - Full dump by default (catalog is re-importable but slow to rebuild); `--no-catalog` for a small user-data dump. Keep newest 14 (`MOC_BACKUP_KEEP`), pruning only `moc-*.archive.gz`.
 - Restore replaces archive collections (`--drop`) after a typed confirmation; `--to-scratch` verifies an archive without touching live data. Scheduling is documented (cron/launchd), not automated.
 

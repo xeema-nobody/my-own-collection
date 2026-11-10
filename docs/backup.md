@@ -32,20 +32,10 @@ docker compose restart app
 Replaces the collections contained in the archive (`--drop`); collections not in the archive (e.g. `cards` after a `--no-catalog` backup) are left alone. Never `docker compose down -v`: it deletes the volume.
 
 ## Schedule (host, Mac must be awake)
-The app container has no docker access, so scheduling is a host job. Daily 05:30 (before the 06:00 snapshot):
-```cron
-30 5 * * * cd /Users/xeema/xeema/projects/nobody/my-own-collection && scripts/backup.sh >> ~/.moc-backup.log 2>&1
+The app container has no docker access, so scheduling is a host launchd job (chosen over cron: it runs at the next wake if the Mac slept).
+```bash
+scripts/backup_schedule.sh install     # daily 05:30 (before the 06:00 snapshot), keeps newest 14
+scripts/backup_schedule.sh status      # loaded?, last exit code, newest archives, log tail
+scripts/backup_schedule.sh uninstall
 ```
-or launchd (`~/Library/LaunchAgents/local.moc.backup.plist`, then `launchctl load` it; runs at next wake if the Mac was asleep):
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>local.moc.backup</string>
-  <key>ProgramArguments</key><array><string>/Users/xeema/xeema/projects/nobody/my-own-collection/scripts/backup.sh</string></array>
-  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>5</integer><key>Minute</key><integer>30</integer></dict>
-  <key>StandardOutPath</key><string>/Users/xeema/.moc-backup.log</string>
-  <key>StandardErrorPath</key><string>/Users/xeema/.moc-backup.log</string>
-</dict></plist>
-```
-Docker Desktop must be running; the script exits non-zero with a message when the mongo container is down.
+Writes `~/Library/LaunchAgents/local.moc.backup.plist`, logs to `~/.moc-backup.log`. Change the time or retention at install: `MOC_BACKUP_HOUR=3 MOC_BACKUP_KEEP=30 scripts/backup_schedule.sh install`. Run once now: `launchctl kickstart gui/$(id -u)/local.moc.backup`. Docker Desktop must be running; the script exits non-zero with a message when the mongo container is down (see the log). Retention is count-based: 14 daily archives = two weeks of history.

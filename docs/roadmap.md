@@ -100,7 +100,7 @@ Row checkboxes and "Select all on this page" already exist, but the only bulk ac
 
 ## Step 5 — Scan cards with the phone camera `[~]`
 
-> **Next up (re-prioritised 2026-11-09 after the slice 4 phone check): 5h price scope and 5g coverage audit are done (the TCGdex-only extras import is parked, undecided), then slab slices 5 + 6 (done, see changelog), then the raw accuracy misses (item 4, pass 3 done 2026-11-10; the rest are OCR limits, see item 4).** 5f slices 1-4 are done (the phone result card works; slices 5-6 are polish). Backup schedule still before Step 6. 
+> **Next up (re-prioritised 2026-11-09 after the slice 4 phone check): 5h price scope and 5g coverage audit are done (the TCGdex-only extras import is parked, undecided), then slab slices 5 + 6 (done, see changelog), then the raw accuracy misses (item 4, pass 3 done 2026-11-10; the rest are OCR limits, see item 4).** 5f slices 1-4 are done (the phone result card works; slices 5-6 are polish). Backup schedule done 2026-11-10 (launchd, daily 05:30). 
 
 **Goal:** add a card to the collection in a few seconds by pointing the phone at it. "Super easy" is the acceptance bar.
 
@@ -287,7 +287,7 @@ _Future — start only after the collection is large and scanning (step 5) works
 | D2  | Which marketplaces matter first (Vinted, Cardmarket, eBay, Marktplaats)? | Step 6c                  | Pick the top 2 for export formats.                                                                                                                                        |
 | D3  | Marketplace price sync: research feasibility/terms before any build      | Step 6d                  | Don't risk seller accounts. Start with reprice suggestions.                                                                                                               |
 | D4  | Other TCGs after Pokémon — which, and catalog source each                | Step 5 languages/catalog | Affects scan identification too.                                                                                                                                          |
-| D5  | Switch on scheduler + backup schedule now?                               | Step 1–2                 | Backups matter more once photos and sales history exist. Recommend: install backup schedule before step 6.                                                                |
+| D5  | Switch on scheduler + backup schedule now?                               | Step 1–2                 | Backups matter more once photos and sales history exist. Backup schedule installed 2026-11-10; app scheduler still off.                                                                |
 | D6  | Switch to TCGdex before pokemontcg.io keys end (2027-03-01)              | —                        | Hard deadline. Do not leave until Feb 2027.                                                                                                                               |
 | D7  | Scan accuracy bar: is "pick from candidates" acceptable for every scan?  | Step 5                   | Assumed yes (never auto-add).                                                                                                                                             |
 | D8  | Cost allocation method for pulled cards                                  | Step 7                   | Default 0 vs. spread by value.                                                                                                                                            |
