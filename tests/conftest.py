@@ -54,6 +54,17 @@ def no_valuation_cache(monkeypatch):
     valuation_cache.bump()
 
 
+@pytest.fixture(autouse=True)
+def no_card_images(monkeypatch):
+    """The scan art match downloads catalog images: never in tests (a test that wants images passes its own client)."""
+    import httpx
+    from app.services import artmatch
+
+    def boom(request):
+        raise httpx.ConnectError("no network in tests")
+    monkeypatch.setattr(artmatch, "new_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(boom)))
+
+
 @pytest.fixture
 async def db():
     """Throwaway database on the compose mongo; global accessors point at it for the test."""

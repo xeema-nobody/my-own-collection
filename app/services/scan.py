@@ -16,6 +16,7 @@ from app.db.models import CollectionIn
 from app.providers.catalog.common import norm
 from app.providers.ocr import CardFields, ImageError, OcrLine, OcrUnavailable
 from app.providers.ocr.slabfields import cert_sure
+from app.services import artmatch
 from app.services import collection as collection_svc
 from app.services import slab as slab_svc
 from app.services import valuation_cache
@@ -192,10 +193,10 @@ def _number_tail(card_number: str | None, read: str | None) -> bool:
     return bool(got) and len(got) < len(have) and have.endswith(got)
 
 
-SIGNAL_TEXT = {"name": "name", "number": "number", "number_tail": "partial number", "total": "printed total", "set": "set code", "hp": "HP", "year": "year", "rarity": "rarity"}
+SIGNAL_TEXT = {"name": "name", "number": "number", "number_tail": "partial number", "total": "printed total", "set": "set code", "hp": "HP", "year": "year", "rarity": "rarity", "art": "artwork"}
 # How much each agreeing signal counts when ranking prints. The collector number is the strongest read, the printed
 # total and set code say which set, HP only separates prints of one name (and the ex / non-ex forms).
-WEIGHT = {"name": 1.0, "number": 4.0, "number_tail": 2.0, "total": 3.0, "set": 3.0, "hp": 1.0}
+WEIGHT = {"name": 1.0, "number": 4.0, "number_tail": 2.0, "total": 3.0, "set": 3.0, "hp": 1.0, "art": 3.0}
 
 
 def score(sig: list[str]) -> float:
@@ -331,6 +332,11 @@ async def identify_card(db, ocr, image: bytes) -> dict:
         found, sigs = [], {}
     # Most agreeing signals first; the stable sort keeps best name, then newest set, inside a tie.
     found.sort(key=lambda c: -score(sigs[c["_id"]]))
+    if keep and not (read and read.number and read.votes >= 2):
+        # number line unread or a lone read: compare the artwork of the best prints (never makes a hit exact)
+        for cid in await artmatch.matching(db, image, found):
+            sigs[cid].append("art")
+        found.sort(key=lambda c: -score(sigs[c["_id"]]))
     total = len(found)
     top = found[:MAX_CARDS]
     cards = await views(db, top)
