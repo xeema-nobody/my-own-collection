@@ -6,7 +6,8 @@ import { Badge, Button, Field, Input, Select, Stepper } from "../ui";
 
 /** Details for the picked version: condition, language, quantity, optional cost. Remembers the last choice. */
 export type SlabGrading = { company: string; grade: number; cert_number: string | null; grader_name?: string };
-export default function AddSheet({ card, initial, busy, error, slab, reportUrl, onBack, onAdd }: {
+export default function AddSheet({ card, initial, busy, error, slab, reportUrl, onBack, onAdd, savePhoto, onSavePhoto }: {
+  savePhoto?: boolean; onSavePhoto?: (v: boolean) => void; // shown only when there is a scan photo to keep
   card: ScanCard; initial: Choice; busy?: boolean; error?: string | null; slab?: ScanSlab | null; reportUrl?: string | null; onBack: () => void;
   onAdd: (body: { card_id: string; variant: string | null; language: string; condition?: string; grading?: SlabGrading; quantity: number; acquired?: Acquired }, choice: Choice) => void;
 }) {
@@ -87,6 +88,11 @@ export default function AddSheet({ card, initial, busy, error, slab, reportUrl, 
         <summary className="cursor-pointer text-sm font-medium">Cost and how you got it{hasAcq ? " (set)" : " (optional)"}</summary>
         <div className="pt-3"><AcquiredForm initial={acq} qty={qty} hideSubmit onChange={setAcq} /></div>
       </details>
+
+      {onSavePhoto && <label className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface p-3 text-sm">
+        <span><b>Save this photo with the card</b><span className="block text-xs text-muted">Kept on your computer for listings. You can add more later.</span></span>
+        <input type="checkbox" role="switch" aria-label="Save photo" className="h-5 w-5" checked={!!savePhoto} onChange={(e) => onSavePhoto(e.target.checked)} />
+      </label>}
 
       {error && <p role="alert" className="rounded bg-danger/15 px-3 py-2 text-sm text-danger">{error}</p>}
       <Button className="w-full py-3 text-base" disabled={busy || (isSlab && !slabOk)}

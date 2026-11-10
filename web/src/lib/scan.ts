@@ -105,3 +105,13 @@ export function parseSlabGrade(v: string): number | null {
   const n = Number(v.replace(",", "."));
   return v.trim() !== "" && n >= 1 && n <= 10 && Number.isInteger(n * 2) ? n : null;
 }
+
+const SAVE_PHOTO_KEY = "scan.savePhoto";
+/** "Save the scan photo with the card" switch; on by default, remembered on this phone. */
+export function loadSavePhoto(): boolean { try { return localStorage.getItem(SAVE_PHOTO_KEY) !== "0"; } catch { return true; } }
+export function saveSavePhoto(v: boolean) { try { localStorage.setItem(SAVE_PHOTO_KEY, v ? "1" : "0"); } catch { /* ignore */ } }
+/** Extra shots offered after an add, in order. */
+export const EXTRA_SHOTS = {
+  raw: [["back", "Back of the card"], ["corner", "A corner close-up"], ["surface", "Surface in the light"]],
+  slab: [["slab_back", "Back of the slab"]],
+} as const;

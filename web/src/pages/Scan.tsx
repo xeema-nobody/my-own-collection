@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, Laptop, ScanLine, Undo2 } from "lucide-react";
-import { api, type ScanCard, type ScanIdentify } from "../lib/api";
-import { friendlyScanError, loadChoice, loadMode, saveChoice, saveMode, type ScanMode } from "../lib/scan";
+import { api, type PhotoKind, type ScanCard, type ScanIdentify } from "../lib/api";
+import { EXTRA_SHOTS, friendlyScanError, loadChoice, loadMode, loadSavePhoto, saveChoice, saveMode, saveSavePhoto, type ScanMode } from "../lib/scan";
 import CameraCapture from "../components/scan/CameraCapture";
 import CandidatePicker from "../components/scan/CandidatePicker";
 import AddSheet from "../components/scan/AddSheet";
@@ -10,7 +10,7 @@ import SlabResult from "../components/scan/SlabResult";
 import JaImportPrompt from "../components/scan/JaImportPrompt";
 import { Button, Input } from "../components/ui";
 
-type Step = "camera" | "pick" | "details" | "done" | "review";
+type Step = "camera" | "pick" | "details" | "done" | "review" | "extra";
 type Row = { eventId: string; label: string; condition: string | null; quantity: number };
 const BATCH_KEY = "scan.batch";
 const EMPTY: ScanIdentify = { text: "", confidence: "none", names: [], total: 0, cards: [] };
@@ -30,6 +30,7 @@ export default function Scan() {
   const [batch, setBatchState] = useState(() => { try { return localStorage.getItem(BATCH_KEY) === "1"; } catch { return false; } });
   const [rows, setRows] = useState<Row[]>([]);
   const [last, setLast] = useState<Row | null>(null); // the add on the "done" screen, for undo
+  const [lastStack, setLastStack] = useState<{ id: string; kind: "raw" | "slab" } | null>(null);
   const setBatch = (v: boolean) => { setBatchState(v); try { localStorage.setItem(BATCH_KEY, v ? "1" : "0"); } catch { /* ignore */ } };
   // The laptop may have opened a session: poll (react-query pauses this while the page is hidden). No session = normal page.
   const sess = useQuery({ queryKey: ["scan", "session"], queryFn: api.scanSession, refetchInterval: 2500, retry: false });
@@ -43,6 +44,14 @@ export default function Scan() {
   }, [sessionId, sessionMode]);
 
   const lastPhoto = useRef<Blob | null>(null);   // kept so the match can run again after a Japanese set import
+  const [savePhoto, setSavePhotoState] = useState(loadSavePhoto);
+  const setSavePhoto = (v: boolean) => { setSavePhotoState(v); saveSavePhoto(v); };
+  const [photoNote, setPhotoNote] = useState<string | null>(null);
+  const [extra, setExtra] = useState<{ stackId: string; kind: "raw" | "slab"; i: number } | null>(null); // guided extra shots after an add
+  const keepPhoto = useMutation({
+    mutationFn: ({ stackId, photo, kind }: { stackId: string; photo: Blob; kind: PhotoKind }) => api.scanPhoto(stackId, photo, kind),
+    onError: () => setPhotoNote("The card was added, but its photo could not be saved."),
+  });
   const [jaDone, setJaDone] = useState<string | null>(null);
   const show = (r: ScanIdentify, q: string | null, page: number) => { setRes(r); setMore(q ? { q, page } : null); setErr(null); setStep("pick"); };
   const identify = useMutation({
@@ -68,6 +77,10 @@ export default function Scan() {
     mutationFn: ({ body }: { body: Parameters<typeof api.scanAdd>[0]; c: ReturnType<typeof loadChoice> }) => api.scanAdd(body, sessionId),
     onSuccess: (r, v) => {
       saveChoice(v.c); choice.current = v.c;
+      setPhotoNote(null);
+      const slabAdd = !!r.event.grading;
+      if (savePhoto && lastPhoto.current && !r.stack.duplicate) keepPhoto.mutate({ stackId: r.stack.id, photo: lastPhoto.current, kind: slabAdd ? "slab_front" : "front" });
+      setLastStack(r.stack.duplicate ? null : { id: r.stack.id, kind: slabAdd ? "slab" : "raw" });
       const row: Row = { eventId: r.event.id, label: r.label, condition: r.event.grading ? null : v.c.condition, quantity: r.stack.quantity };
       setDone(r.stack.duplicate ? `${r.label}: already in your collection, nothing changed` : r.label + (r.stack.quantity > 1 ? ` (now ${r.stack.quantity})` : "")); setErr(null);
       if (!r.stack.duplicate) { setLast(row); setRows((o) => [...o, row]); }
@@ -165,10 +178,26 @@ export default function Scan() {
         onPick={(c) => { setCard(c); setErr(null); setStep("details"); }}
         onSearch={(q) => search.mutate({ q, page: 1 })} onMore={() => more && search.mutate({ q: more.q, page: more.page + 1 })} onRetake={again} />}
       {step === "details" && card && <AddSheet card={card} initial={choice.current} reportUrl={res.cert?.report_url} busy={add.isPending} error={err} slab={slabForSheet}
-        onBack={() => { setErr(null); setStep("pick"); }} onAdd={(body, c) => add.mutate({ body, c })} />}
+        onBack={() => { setErr(null); setStep("pick"); }} onAdd={(body, c) => add.mutate({ body, c })}
+        {...(lastPhoto.current ? { savePhoto, onSavePhoto: setSavePhoto } : {})} />}
+      {step === "extra" && extra && <div className="space-y-3">
+        <h2 className="text-base font-semibold">{EXTRA_SHOTS[extra.kind][extra.i][1]}</h2>
+        <p className="text-sm text-muted">Photo {extra.i + 1} of {EXTRA_SHOTS[extra.kind].length}. It is kept with the card for listings.</p>
+        {keepPhoto.isPending
+          ? <p className="py-12 text-center text-muted" role="status">Saving…</p>
+          : <CameraCapture mode={extra.kind} onPhoto={(b) => keepPhoto.mutate({ stackId: extra.stackId, photo: b, kind: EXTRA_SHOTS[extra.kind][extra.i][0] as PhotoKind }, {
+            onSuccess: () => { if (extra.i + 1 < EXTRA_SHOTS[extra.kind].length) setExtra({ ...extra, i: extra.i + 1 }); else { setExtra(null); setStep("done"); } } })} />}
+        {photoNote && <p role="alert" className="rounded bg-danger/15 px-3 py-2 text-sm text-danger">{photoNote}</p>}
+        <div className="flex gap-2">
+          {extra.i + 1 < EXTRA_SHOTS[extra.kind].length && <Button variant="secondary" className="flex-1" onClick={() => setExtra({ ...extra, i: extra.i + 1 })}>Skip this one</Button>}
+          <Button variant="ghost" className="flex-1" onClick={() => { setExtra(null); setStep("done"); }}>Done with photos</Button>
+        </div>
+      </div>}
       {step === "done" && <div className="space-y-4 py-8 text-center">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-ok/15 text-ok"><Check size={28} /></div>
         <p className="text-lg font-semibold" role="status">{done?.includes("already in your collection") ? done : `Added: ${done}`}</p>
+        {photoNote && <p role="alert" className="rounded bg-danger/15 px-3 py-2 text-sm text-danger">{photoNote}</p>}
+        {lastStack && <Button variant="secondary" className="w-full" onClick={() => { setPhotoNote(null); setExtra({ stackId: lastStack.id, kind: lastStack.kind, i: 0 }); setStep("extra"); }}>Add more photos (back, corners)</Button>}
         <Button className="w-full py-3 text-base" onClick={again}>Scan the next card</Button>
         {last && <Button variant="ghost" className="w-full" disabled={undo.isPending} onClick={() => undo.mutate(last)}><Undo2 size={14} />Undo this add</Button>}
       </div>}

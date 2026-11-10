@@ -1,12 +1,12 @@
 // Collection list: URL params, mapping to the API, built-in presets. Shared by the page and its tests.
 export const COLLECTION_DEFAULTS = {
   q: "", set: "", rarity: "", type: "", language: "", condition: "", graded: "", grader: "", grade: "", acquisition: "",
-  price_min: "", price_max: "", pl: "", sale: "", platform: "", needs_price: "", stale: "", cost_missing: "",
+  price_min: "", price_max: "", pl: "", sale: "", platform: "", has_photos: "", needs_price: "", stale: "", cost_missing: "",
   sort: "added", order: "", page: "1", size: "50",
 };
 export type CollectionParams = typeof COLLECTION_DEFAULTS;
 export const FILTER_KEYS = ["q", "set", "rarity", "type", "language", "condition", "graded", "grader", "grade", "acquisition",
-  "price_min", "price_max", "pl", "sale", "platform", "needs_price", "stale", "cost_missing"] as const;
+  "price_min", "price_max", "pl", "sale", "platform", "has_photos", "needs_price", "stale", "cost_missing"] as const;
 /** What a saved preset covers: the filters plus the sort. */
 export const PRESET_KEYS = [...FILTER_KEYS, "sort", "order"] as const;
 export const DEFAULT_DESC = ["added", "value", "cost", "pl", "qty", "updated", "listed"];

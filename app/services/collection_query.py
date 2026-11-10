@@ -34,6 +34,7 @@ class Query:
     card_id: str | None = None
     sale: str | None = None                 # none|ready|listed|reserved|withdrawn|active (anything but none)
     platform: str | None = None             # a listing exists on this platform
+    has_photos: bool | None = None          # needs extra["photo_ids"] (stack ids that have photos)
     sort: str = "added"
     order: str | None = None
     page: int = 1
@@ -101,6 +102,8 @@ def _matches(r: dict, q: Query, text: str) -> bool:
         st = sale.status_of(it)
         if (st == "none") if q.sale == "active" else (st != q.sale):
             return False
+    if q.has_photos is not None and (str(it["_id"]) in q.extra.get("photo_ids", ())) != q.has_photos:
+        return False
     if q.platform and not any(l["platform"] == q.platform for l in sale.sale_of(it).get("listings") or []):
         return False
     if q.tcg and c.get("tcg") != q.tcg:

@@ -5,7 +5,7 @@ Two layers, use both:
 | | Covers | Use for |
 |---|---|---|
 | Settings -> Export JSON/CSV | your stacks only (acquired, notes, tags) | portability, spreadsheets, rebuilding on a fresh catalog |
-| `scripts/backup.sh` | whole database (catalog, prices, sales, snapshots, alerts, jobs) | disaster recovery |
+| `scripts/backup.sh` | whole database (catalog, prices, sales, snapshots, alerts, jobs, card photos) | disaster recovery |
 
 The only copy of the data is the docker volume `moc_mongo_data`. A backup lives on the host, outside it.
 
@@ -13,6 +13,7 @@ The only copy of the data is the docker volume `moc_mongo_data`. A backup lives 
 ```bash
 scripts/backup.sh                 # -> backups/moc-YYYYmmdd-HHMMSS.archive.gz
 scripts/backup.sh --no-catalog    # skip cards + sets (re-importable), ~1/3 the size
+scripts/backup.sh --no-photos     # skip card photos (not re-creatable: only for a quick dump)
 scripts/backup.sh /some/folder    # or MOC_BACKUP_DIR=...
 ```
 Newest `MOC_BACKUP_KEEP` (default 14) `moc-*.archive.gz` files stay; older ones are pruned. Nothing else in the folder is touched. `backups/` is gitignored. Credentials come from the mongo container's environment; the script never reads `.env`.

@@ -65,6 +65,9 @@ export type JaImportStatus = { state: "idle" | "running" | "done" | "partial" | 
 export type ScanCert = { cert: CertInfo; cards: ScanCard[]; how_exact: "exact" | "likely" | "possible" | "none"; needs_confirm: boolean; cached: boolean; report_url: string | null; warnings?: { code: string; text: string }[] };
 export type ScanIdentify = { text: string; confidence: "high" | "medium" | "low" | "none"; names: string[]; total: number; cards: ScanCard[]; read?: ScanRead | null; exact?: boolean; slab?: ScanSlab | null; detected?: boolean; cert?: ScanCert | null };
 export type ScanSearch = { total: number; page: number; cards: ScanCard[] };
+export type PhotoKind = "front" | "back" | "corner" | "surface" | "slab_front" | "slab_back" | "other";
+export type Photo = { id: string; stack_id: string; kind: PhotoKind; cover: boolean; order: number; w: number; h: number; bytes: number; created_at: string };
+export const photoUrl = (id: string, size: "full" | "thumb" = "full") => `${BASE}/api/photos/${id}?size=${size}`;
 export type ScanAdded = { label: string; stack: { id: string; quantity: number; type_conflict?: boolean; duplicate?: boolean }; event: ScanEvent };
 export type ScanEvent = { id: string; at: string; kind?: "add" | "undo"; card_id: string; label: string; quantity_added: number; quantity_after: number; type_conflict: boolean;
   condition?: string | null; language?: string | null; grading?: unknown; session_id?: string | null; undoes?: string | null };
@@ -222,6 +225,15 @@ export const api = {
   jaImport: (set: string) => req<{ started: boolean; set: string }>("/api/scan/ja/import" + qs({ set }), { method: "POST" }),
   jaImportStatus: () => req<JaImportStatus>("/api/scan/ja/import"),
   scanLookup: (number: string, set?: string) => req<ScanIdentify>("/api/scan/lookup" + qs({ number, set: set || undefined })),
+  photos: (stackId: string) => req<Photo[]>(`/api/collection/${stackId}/photos`),
+  uploadPhoto: (stackId: string, photo: Blob, kind: PhotoKind = "other") =>
+    req<Photo>(`/api/collection/${stackId}/photos` + qs({ kind }), { method: "POST", body: photo, headers: { "content-type": photo.type || "image/jpeg" } }),
+  scanPhoto: (stackId: string, photo: Blob, kind: PhotoKind = "other") =>
+    req<Photo>("/api/scan/photo" + qs({ stack_id: stackId, kind }), { method: "POST", body: photo, headers: { "content-type": photo.type || "image/jpeg" } }),
+  patchPhoto: (id: string, b: { kind?: PhotoKind; cover?: boolean; position?: number }) =>
+    req<Photo>(`/api/photos/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+  deletePhoto: (id: string) => req<void>(`/api/photos/${id}`, { method: "DELETE" }),
+  photoStats: () => req<{ count: number; bytes: number }>("/api/photos/stats"),
   scanUndo: (eventId: string) => req<ScanUndone>("/api/scan/undo", post({ event_id: eventId })),
   scanSession: () => req<{ session: ScanSession | null }>("/api/scan/session"),
   scanStartSession: (mode: "raw" | "slab" = "raw") => req<ScanSession>("/api/scan/sessions", post({ mode })),

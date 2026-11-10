@@ -8,6 +8,16 @@ import { Button, FileDrop, SegmentedControl, Section } from "../../components/ui
 
 const MODE_HINT = { set: "Sets each stack's quantity to the file value. Re-importing the same file changes nothing.", add: "Adds the file quantity to what you already own." };
 
+function PhotosSection() {
+  const q = useQuery({ queryKey: ["photos", "stats"], queryFn: api.photoStats });
+  if (!q.data) return null;
+  return (
+    <Section title="Photos">
+      <p className="text-sm"><span className="num font-semibold">{q.data.count}</span> photo{q.data.count === 1 ? "" : "s"} · <span className="num font-semibold">{(q.data.bytes / 1e6).toFixed(1)} MB</span> in the database.
+        <span className="text-muted"> Each daily backup holds a full copy; <code>scripts/backup.sh --no-photos</code> leaves them out.</span></p>
+    </Section>);
+}
+
 function SalesSection() {
   const q = useQuery({ queryKey: ["sales", "report"], queryFn: api.salesReport });
   const r = q.data;
@@ -79,6 +89,7 @@ export default function DataTab() {
           </div>)}
         {xfer.error && <p className="mt-3 text-sm text-danger">{errorText(xfer.error)}</p>}
       </Section>
+      <div className="lg:col-span-2"><PhotosSection /></div>
       <div className="lg:col-span-2"><SalesSection /></div>
       <div className="lg:col-span-2"><ExitsSection /></div>
     </div>);

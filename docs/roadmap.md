@@ -193,9 +193,12 @@ The catalog import writes price rows for every card of every imported set (the p
 
 # Phase 3 — Turn the collection into cash
 
-## Step 6 — Photos, listings tracker and selling `[ ]`
+## Step 6 — Photos, listings tracker and selling `[~]` HIGH PRIORITY chain (user 2026-11-11): 6a photos -> 6c listing pack -> 6e assisted Vinted publish -> 6d reprice + sold alerts
 
-### 6a. Photos on my cards `[ ]`
+### 6a. Photos on my cards `[x]` built 2026-11-11, awaiting the user's check (decided: Mongo `photos` collection, compressed JPEG, photos belong to the stack; decisions.md 'Photos on stacks and assisted publish')
+
+- **Built:** phone add sheet "Save photo with the card" (default on, remembered; saves the guide crop the OCR used, <= 1000 px), "Add more photos (back, corners)" after the add, drawer `PhotosPanel` (upload, cover, reorder, delete, full size), Collection filter "Photos", Settings > Data > Photos (count, MB), `backup.sh --no-photos`. Not built: guided capture is not offered in batch mode; no cover thumbnail in the grid view / card page; no photo in export/import JSON (backup only); photos are not kept after a stack is sold or removed.
+- **Saved at scan time (user 2026-11-11):** when a card is scanned (raw or slab) the phone can keep that photo with the card ("Save photo", remembered, default on), and add more right after identification (guided back / corners) or later from the card drawer. Stored compressed (long side 1600 px, JPEG), in the app's own database, so listings can reuse them.
 
 - Attach photos to any stack/copy: front, back, corners/surface close-ups, slab front/back. A guided capture flow from the phone ("front → back → corners") so listing photos are consistent.
 - Photos belong to a _specific copy_ (a PSA 9 and a raw copy of the same card have different photos).
@@ -212,18 +215,25 @@ The catalog import writes price rows for every card of every imported set (the p
 - Views: "Ready to list", "Listed (by platform)", "Sold" with totals — € listed, € sold, realised profit, average days to sell.
 - Dashboard shows listed value separately from unlisted.
 
-### 6c. Export for listing `[ ]`
+### 6c. Export for listing `[ ]` (HIGH PRIO, after 6a)
 
 - Select copies → export a **listing pack**: title, description text (card, set, number, language, condition, edition, cert for slabs), suggested price, photos, in a ready-to-paste form per platform. Platform formats differ (Vinted title/limits, Cardmarket bulk-upload sheet) — start with the 2 the founder uses most.
 - Suggested price from market data with a choice of strategy (match market / slightly under / floor price), always editable.
 - After export, offer to mark them "Listed" with the platform and date.
 
-### 6d. Price sync with platforms `[ ]` _(stretch — high value, uncertain feasibility)_
+### 6e. Assisted publish on Vinted `[ ]` (HIGH PRIO, after 6c; user wish 2026-11-11: creating the listing in the app should create the publication)
+
+- Vinted has no seller API, so "automatic" means **assisted**: from a listing in the app (title, description, price, photos from 6a, category, condition) Claude in Chrome fills the Vinted sell form in the user's own logged-in browser and the user presses Publish. No Vinted login or token is stored by the app. After publishing, the app stores the listing link and marks it Listed.
+- Process per platform is researched and written down before building (Vinted first: required fields, photo limits, category / brand / condition mapping, shipping size). Other platforms (Cardmarket sheet, eBay API, Marktplaats) follow the same pattern.
+- Not wanted: unattended publishing with stored credentials (account-ban and terms risk).
+
+### 6d. Price watch for listings `[ ]` (HIGH PRIO, after 6e or alongside 6c)
+- **Added 2026-11-11:** daily notification / alert about (a) the market price of each listed card moving and (b) the same card **selling** elsewhere (sold comps from the existing sold-price pool), so the asking price can be corrected.
 
 - **Decided 2026-11-10 (D3):** a **daily price sync for listed items** (reuse the scheduled refresh) feeds a **Reprice table**: card, platform, current asking price, new market price, change in % and amount, **suggested price = market + markup (default 10 %, configurable)**. The user edits the price if wanted and confirms; confirm saves the new asking price on the listing in the app and flags "update on platform". It does **not** push to the marketplace (Vinted has no seller API, Cardmarket access is restricted; nothing that risks the seller account). Per-platform push is researched later (eBay API possible).
 - Alert/inbox item when a sync finds listings whose market moved beyond the threshold; "listed price is X% below/above market" indicator.
 
-**Done when:** a card can go from scanned → photographed → exported → listed → sold with realised profit, entirely tracked in-app.
+**Done when:** a card can go from scanned → photographed → exported → (published) → listed → sold with realised profit, entirely tracked in-app.
 
 ---
 
@@ -284,7 +294,7 @@ _Future — start only after the collection is large and scanning (step 5) works
 | --- | ------------------------------------------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | D1  | **ANSWERED 2026-11-05: Tailscale** (private tailnet, no LAN exposure, no CA install; see decisions.md). Was: home-network only, or reachable from anywhere? | Step 5                   | Camera needs a secure connection on the phone. Home-network-only keeps "no cloud, no auth worry"; anywhere triggers auth/hardening. Recommend: home network only for now. |
 | D2  | **ANSWERED 2026-11-10: Vinted + Cardmarket** (Vinted title/description pack, Cardmarket bulk-upload sheet). | Step 6c | eBay and Marktplaats later. |
-| D3  | **ANSWERED 2026-11-10: daily reprice table, confirm = app only.** See 6d. | Step 6d | No push to platforms (Vinted has no seller API, Cardmarket restricted); revisit per platform later, eBay API possible. |
+| D3  | **ANSWERED 2026-11-10: daily reprice table, confirm = app only.** See 6d. **Amended 2026-11-11:** Vinted gets assisted publish (6e, browser filled, user clicks Publish). | Step 6d / 6e | No API push to platforms (Vinted has no seller API, Cardmarket restricted); eBay API possible. |
 | D4  | **ANSWERED 2026-11-10: Japanese Pokémon first** (TCGdex has Japanese data), other TCGs later. BUILT 2026-11-10: Settings > Catalog > Japanese sets (import on demand). | Step 5 languages/catalog | Fixes the 2 Japanese slabs (Slowking 199, Charizard V 153). |
 | D5  | Switch on scheduler + backup schedule now?                               | Step 1–2                 | Backups matter more once photos and sales history exist. Backup schedule installed 2026-11-10; app scheduler still off.                                                                |
 | D6  | **DONE 2026-11-10: default flipped to TCGdex** (rehearsed on a scratch copy; Cardmarket-led prices accepted). Image re-point BUILT 2026-11-10 (Settings > Catalog > Card images; run it before 2027-03-01, decisions.md "Catalog default flipped to TCGdex"). | —                        | Rollback: `CATALOG_PROVIDER=pokemontcg`. |
@@ -296,7 +306,7 @@ _Future — start only after the collection is large and scanning (step 5) works
 - **Scrapers break** when a site changes layout; bulk fetch (step 1) will surface this faster and louder. Show per-source health on the dashboard. Paid/official price API remains an open option.
 - **Bulk scraping gets blocked** (Cloudflare/rate limits). Keep pacing conservative; slow completion is acceptable.
 - **Scan misidentifies a variant** (1st edition vs. unlimited) → wrong value. Mitigated by never auto-adding and highlighting variant markers.
-- **Marketplace terms.** Automating Vinted/Cardmarket may violate terms. Stay with export + tracking unless an official route exists.
+- **Marketplace terms.** Unattended automation of Vinted/Cardmarket may violate terms. Decided 2026-11-11: assisted publish only (the user is in the loop and presses Publish in their own browser, no stored credentials); no unattended posting unless an official route exists.
 - **Photos grow backups and disk.** Plan storage/backup before step 6a.
 - **Single user, no auth + phone access** = exposure if it leaves the home network (D1).
 
@@ -332,3 +342,5 @@ _Future — start only after the collection is large and scanning (step 5) works
 | 2026-11-10 | D6   | Catalog default flipped to TCGdex: weekly import skips known cards (no per-card requests), Pocket / declined sets never listed, audit fixed for bare set docs, provider tests. Rehearsal on a scratch DB: 18 of 19 tracked cards priced, 11 headline prices moved >20 % (Cardmarket-only). Images still on images.pokemontcg.io (open). |
 | 2026-11-10 | D6   | Image re-point built: `services/catalog_images.py`, admin routes `catalog/images/{status,repoint,restore}`, Settings > Catalog "Card images". Reversible (`images_legacy`), idempotent, one request per set. Real run waits for the user's OK (backup first). |
 | 2026-11-10 | 6b   | Sale status built: `sale` on a stack (ready / listed with listings per platform / reserved / withdrawn), sold = exit with platform, fees, shipping, realised profit, days listed and delist hint; filters, presets, bulk status, Dashboard listed value, Settings > Data > Sales. Whole-stack granularity. |
+| 2026-11-11 | 6a   | Photos built: `photos` collection (Pillow-compressed JPEG + thumb), API + phone `POST /api/scan/photo` (only for a just-scanned stack), save toggle + extra shots on the phone, `PhotosPanel` in the drawer, `has_photos` filter, Settings > Data > Photos, `backup.sh --no-photos`. Tests: test_photos.py, Scan.photo / PhotosPanel vitest. |
+| 2026-11-11 | 6    | Re-prioritised after the user's request: photos saved at scan + added later (6a, building), listing pack (6c), assisted Vinted publish (new 6e), daily reprice + sold-comps alerts (6d) all high priority, in that order. D3 amended. |

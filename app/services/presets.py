@@ -10,7 +10,7 @@ from app.services.collection import oid
 
 # URL params a list page may save (filters, sort, view); anything else is rejected, not stored
 ALLOWED = {"q", "tcg", "set", "rarity", "type", "language", "condition", "graded", "grader", "grade",
-           "acquisition", "sale", "platform", "cost_missing", "needs_price", "stale", "price_min", "price_max", "pl",
+           "acquisition", "sale", "platform", "has_photos", "cost_missing", "needs_price", "stale", "price_min", "price_max", "pl",
            "sort", "order", "size", "filter", "view"}
 MAX_PRESETS = 50
 

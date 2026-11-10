@@ -47,6 +47,8 @@ export default function Filters({ f, set, facets, dir, onDir }: {
         <div className="w-40"><Select aria-label="Sale status" value={f.sale} onChange={(v) => set({ sale: v })} allLabel="Any sale status"
           options={[{ value: "active", label: "Marked for sale" }, { value: "ready", label: "Ready to list" }, { value: "listed", label: "Listed" },
             { value: "reserved", label: "Reserved" }, { value: "withdrawn", label: "Withdrawn" }, { value: "none", label: "Not for sale" }]} /></div>
+        <div className="w-32"><Select aria-label="Photos" value={f.has_photos} onChange={(v) => set({ has_photos: v })} allLabel="Any photos"
+          options={[{ value: "true", label: "Has photos" }, { value: "false", label: "No photos" }]} /></div>
         <div className="w-36"><Select aria-label="Platform" value={f.platform} onChange={(v) => set({ platform: v })} allLabel="Any platform"
           options={opts(facets?.platforms, ["vinted", "cardmarket", "ebay", "marktplaats", "other"], (v) => PLATFORM_LABEL[v as Platform] ?? v)} /></div>
         <div className="flex items-center gap-1" role="group" aria-label="Price per copy">

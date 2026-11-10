@@ -22,6 +22,7 @@ import { usePriceFetchJob } from "../lib/fetchJob";
 import BulkRemoveDrawer from "../components/BulkRemoveDrawer";
 import RemoveStack from "../components/collection/RemoveStack";
 import SalePanel, { SaleBadge } from "../components/collection/SalePanel";
+import PhotosPanel from "../components/collection/PhotosPanel";
 import { Badge, Button, Card, Checkbox, Drawer, EmptyState, Kpi, Pagination, Select, Skeleton, SortTh, Table, THead, Td, Th, Tr, ViewToggle, VIEWS } from "../components/ui";
 
 const COLS: { key: string; label: string; num?: boolean }[] = [
@@ -88,6 +89,7 @@ function Details({ i, onGone }: { i: any; onGone?: () => void }) {
       </div>
       <CostSection i={i} />
       <SalePanel key={`${i.id}-${JSON.stringify(i.sale)}`} id={i.id} sale={i.sale} />
+      <PhotosPanel key={`photos-${i.id}`} id={i.id} graded={!!i.grading} />
       <RemoveStack id={i.id} quantity={i.quantity} name={i.card?.name ?? "card"} cost={i.cost} onDone={onGone} />
       <SourceCompare row={i} />
     </div>);

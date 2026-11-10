@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Dump the collection database to a gzip archive on the host.
-# Usage: scripts/backup.sh [--no-catalog] [dir]
+# Usage: scripts/backup.sh [--no-catalog] [--no-photos] [dir]
 #   dir               target folder (default: $MOC_BACKUP_DIR or ./backups)
 #   --no-catalog      skip cards + sets (re-importable); much smaller
+#   --no-photos       skip the photos collection (card photos for listings; NOT re-creatable)
 # Env: MOC_BACKUP_KEEP (default 14) newest archives kept, MOC_DB (default owncollection),
 #      MOC_COMPOSE_SERVICE (default mongo).
 # Credentials come from the mongo container's own env; .env is never read here.
@@ -14,13 +15,16 @@ SVC="${MOC_COMPOSE_SERVICE:-mongo}"
 KEEP="${MOC_BACKUP_KEEP:-14}"
 DIR="${MOC_BACKUP_DIR:-$ROOT/backups}"
 EXCLUDE=""
+NO_PHOTOS=""
 for a in "$@"; do
   case "$a" in
     --no-catalog) EXCLUDE="--excludeCollection=cards --excludeCollection=sets" ;;
+    --no-photos) NO_PHOTOS="--excludeCollection=photos" ;;
     -*) echo "unknown option $a" >&2; exit 2 ;;
     *) DIR="$a" ;;
   esac
 done
+EXCLUDE="$EXCLUDE $NO_PHOTOS"
 mkdir -p "$DIR"
 OUT="$DIR/moc-$(date +%Y%m%d-%H%M%S).archive.gz"
 trap 'rm -f "$OUT.part"' EXIT

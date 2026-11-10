@@ -234,6 +234,7 @@ async def remove(db, item_id: str, quantity: int = 1, reason: str = "removed", p
     try:
         if left <= 0:
             await db.collection_items.delete_one({"_id": it["_id"]})
+            await db.photos.delete_many({"stack_id": str(it["_id"])})  # photos go with the stack
         else:
             await db.collection_items.update_one({"_id": it["_id"]}, {"$set": {"quantity": left, "updated_at": now}})
     finally:

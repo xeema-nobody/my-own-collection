@@ -513,6 +513,7 @@ async def undo(db, event_id: str) -> dict:
     try:
         if left <= 0:
             await db.collection_items.delete_one({"_id": stack["_id"]})
+            await db.photos.delete_many({"stack_id": str(stack["_id"])})
         else:
             fields = {"quantity": left, "updated_at": datetime.now(timezone.utc)}
             if ev.get("existed"):

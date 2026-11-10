@@ -15,7 +15,8 @@ PHONE_ALLOWED = {("GET", "/api/scan/me"), ("POST", "/api/scan/identify"),
                  ("GET", "/api/scan/search"), ("POST", "/api/scan/add"), ("GET", "/health"),
                  ("GET", "/api/scan/session"), ("POST", "/api/scan/undo"), ("GET", "/api/scan/lookup"),
                  ("GET", "/api/scan/cert"), ("GET", "/api/scan/ja/suggest"),
-                 ("POST", "/api/scan/ja/import"), ("GET", "/api/scan/ja/import")}
+                 ("POST", "/api/scan/ja/import"), ("GET", "/api/scan/ja/import"),
+                 ("POST", "/api/scan/photo")}
 
 
 def gate_state(request: Request) -> str:

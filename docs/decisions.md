@@ -344,3 +344,11 @@ User: store and fetch prices only for cards the user selects into the collection
 - `asking_base` is frozen at save time (rate then), so listed value never needs rates and the cached valuation stays pure. Listed value uses the lowest asking price per copy x quantity. It is part of Value, shown separately, never subtracted.
 - Listing edits and status changes are not written to `collection_edits` (they hold no cost data); bulk status clears listings and reports how many were dropped. Sale state is not in export/import v1.
 - Not built (later): per-copy listings, delist-others action, listing pack (6c), reprice (6d), "days listed" on rows.
+
+## Photos on stacks and assisted publish (2026-11-11, roadmap Step 6a / 6e)
+- **Storage (user)**: Mongo `photos` collection (bytes + thumbnail), so mongodump / restore already cover them. JPEG, EXIF orientation applied then metadata stripped (no GPS), long side 1600 px, thumb 320 px. Limit per stack and upload size are settings.
+- **Granularity**: a photo belongs to the stack (copies are only a counter). Raw and PSA 9 of the same card are different stacks, so they have different photos. Photos are deleted with the stack (sold stacks too: listing photos are only needed while selling).
+- **Phone**: `POST /api/scan/photo?stack_id=` is allowed through the gate only for stacks in a recent scan event; nothing else about photos is reachable from the phone.
+- **Vinted (user, amends D3)**: no seller API, so publishing is assisted: Claude in Chrome fills the form in the user's logged-in browser, the user presses Publish; no credentials stored by the app; no unattended posting (ban / terms risk).
+- **Backup**: daily full dumps x14 multiply photo size; `backup.sh --no-photos` and a size readout exist for that.
+
