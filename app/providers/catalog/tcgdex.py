@@ -83,19 +83,31 @@ def _asset(url: str | None, name: str) -> str | None:
     return f"{url}/{name}" if url else None
 
 
-def map_set(s: dict) -> dict:
+def id_prefix(lang: str = "en") -> str:
+    """English ids stay `pokemon:`; other languages are namespaced (`pokemon-ja:SV2a-151`), set codes can repeat."""
+    return "pokemon" if lang == "en" else f"pokemon-{lang}"
+
+
+def lang_base_url(lang: str) -> str:
+    """`TCGDEX_BASE_URL` ends with the English language segment; swap it for `lang`."""
+    return re.sub(r"/[a-z]{2}/?$", "", settings.tcgdex_base_url) + f"/{lang}"
+
+
+def map_set(s: dict, lang: str = "en") -> dict:
     cc = s.get("cardCount") or {}
+    ja = lang != "en"
     return {
-        "_id": f"pokemon:{s['id']}", "tcg": "pokemon", "external_id": s["id"], "name": s["name"],
+        "_id": f"{id_prefix(lang)}:{s['id']}", "tcg": "pokemon", "external_id": s["id"], "name": s["name"],
+        "language": lang,
         "series": (s.get("serie") or {}).get("name"), "release_date": _date(s.get("releaseDate")),
         "printed_total": cc.get("official") or None, "total": cc.get("total"),
-        "ptcgo_code": (s.get("abbreviation") or {}).get("official"),
+        "ptcgo_code": s["id"] if ja else (s.get("abbreviation") or {}).get("official"),
         "logo_url": f"{s['logo']}.webp" if s.get("logo") else None,
         "symbol_url": f"{s['symbol']}.webp" if s.get("symbol") else None,
     }
 
 
-def map_card(c: dict, set_id: str, set_doc: dict) -> dict:
+def map_card(c: dict, set_id: str, set_doc: dict, lang: str = "en", name_en: str | None = None) -> dict:
     """Full card doc (same shape as pokemontcg `map_card`) for a card we do not hold yet."""
     number = card_number(c["localId"])
     name = (c.get("name") or "").replace("☆", "★")  # TCGdex writes the Gold Star as a white star
@@ -108,8 +120,8 @@ def map_card(c: dict, set_id: str, set_doc: dict) -> dict:
                                 ("holofoil", v.get("holo"))) if on]
     img = c.get("image")
     doc = {
-        "_id": f"pokemon:{set_id}-{number}", "tcg": "pokemon", "external_id": f"{set_id}-{number}",
-        "name": name, "name_norm": norm(name), "number": number, "number_sort": _num_sort(number),
+        "_id": f"{id_prefix(lang)}:{set_id}-{number}", "tcg": "pokemon", "external_id": f"{set_id}-{number}",
+        "name": name, "name_norm": norm(name_en or name), "name_en": name_en, "dex_id": (c.get("dexId") or [None])[0], "number": number, "number_sort": _num_sort(number),
         "supertype": SUPERTYPES.get(c.get("category")), "subtypes": [c["stage"]] if c.get("stage") else [],
         "types": types, "hp": str(c["hp"]) if c.get("hp") else None, "rarity": c.get("rarity"),
         "artist": c.get("illustrator"), "flavor_text": c.get("description"), "rules_text": rules,
@@ -118,29 +130,33 @@ def map_card(c: dict, set_id: str, set_doc: dict) -> dict:
                 "total": set_doc.get("total"), "ptcgo_code": set_doc.get("ptcgo_code"),
                 "logo_url": set_doc.get("logo_url"), "symbol_url": set_doc.get("symbol_url")},
         "images": {"small": _asset(img, "low.webp"), "large": _asset(img, "high.webp")} if img else {},
-        "variants": variants, "language": "en", "external_ids": {"tcgplayer_url": None, "cardmarket_url": None},
+        "variants": variants, "language": lang, "external_ids": {"tcgplayer_url": None, "cardmarket_url": None},
         "updated_at": datetime.now(timezone.utc),
     }
     doc["search_text"] = norm(" ".join(filter(None, [
-        name, set_doc.get("name"), number, f"{number}/{set_doc.get('printed_total')}",
+        name, name_en, set_doc.get("name"), number, f"{number}/{set_doc.get('printed_total')}",
         " ".join(types), " ".join(doc["subtypes"]), c.get("rarity"), " ".join(rules)])))
+    if lang != "en":  # norm() drops kana: keep the native text searchable too
+        doc["search_text"] += " " + " ".join(filter(None, [name, set_doc.get("name")])).lower()
     doc["_prices_raw"], doc["_sources"] = _raw_prices(c), SOURCES
     return doc
 
 
-def prices_only(c: dict, set_id: str) -> dict:
+def prices_only(c: dict, set_id: str, lang: str = "en") -> dict:
     """Stub for a card we already hold: just enough for `store_card_prices`; never written to `cards`."""
     cid = f"{set_id}-{card_number(c['localId'])}"
-    return {"_id": f"pokemon:{cid}", "tcg": "pokemon", "external_id": cid, "set": {"id": set_id},
+    return {"_id": f"{id_prefix(lang)}:{cid}", "tcg": "pokemon", "external_id": cid, "set": {"id": set_id},
             "_prices_raw": _raw_prices(c), "_sources": SOURCES, "_prices_only": True}
 
 
 class TcgdexCatalog:
     tcg = "pokemon"
 
+    lang = "en"
+
     def __init__(self, index: CatalogIndex | None = None, client: httpx.AsyncClient | None = None):
         self.index = index or CatalogIndex()
-        self._client = client or httpx.AsyncClient(base_url=settings.tcgdex_base_url, timeout=60)
+        self._client = client or httpx.AsyncClient(base_url=lang_base_url(self.lang), timeout=60)
         self._sem = asyncio.Semaphore(CONCURRENCY)
         self._sets: list[dict] | None = None
         self._map: dict[str, str] | None = None
@@ -202,6 +218,92 @@ class TcgdexCatalog:
             if number in known:
                 jobs.append((stub, None))
             elif room:
+                jobs.append((stub, set_doc))
+        missing: list[tuple[int, int]] = []
+        for i in range(0, len(jobs), BATCH):
+            chunk = jobs[i:i + BATCH]
+            res = await asyncio.gather(*[self._one(s, set_id, d) for s, d in chunk], return_exceptions=True)
+            for k, r in enumerate(res):
+                if isinstance(r, Exception):
+                    log.warning("card %s failed: %s", chunk[k][0].get("id"), r)
+                    missing.append((i + k, 1))
+                else:
+                    yield r
+        if missing:
+            raise IncompletePage(missing)
+
+
+class TcgdexJaCatalog(TcgdexCatalog):
+    """Japanese cards (`/v2/ja`), namespaced ids `pokemon-ja:{set}-{num}`, language 'ja'.
+
+    No English counterpart sets, so no id/name matching: every wanted set is stored in full. The English species
+    name (`name_en`, via the card's dexId and TCGdex's English card list) makes the cards findable by "Slowking".
+    `list_sets(wanted)` stores only the chosen sets; `iter_cards(set, only)` skips numbers already held unless `only`
+    names them (price refresh).
+    """
+    lang = "ja"
+
+    def __init__(self, index: CatalogIndex | None = None, client: httpx.AsyncClient | None = None,
+                 en_client: httpx.AsyncClient | None = None, wanted: set[str] | None = None):
+        super().__init__(index, client)
+        self._en = en_client or httpx.AsyncClient(base_url=lang_base_url("en"), timeout=60)
+        self._dex: dict[int, str | None] = {}
+        self.wanted = wanted
+
+    async def _en_get(self, path: str):
+        async for attempt in AsyncRetrying(retry=retry_if_exception(_retryable), stop=stop_after_attempt(4),
+                                           wait=wait_random_exponential(multiplier=1, max=20), reraise=True):
+            with attempt:
+                async with self._sem:
+                    r = await self._en.get(path)
+                r.raise_for_status()
+                return r.json()
+
+    async def name_en(self, dex_id: int | None) -> str | None:
+        """Species name for a Pokédex number: the shortest English card name of that dex id (cached)."""
+        if not dex_id:
+            return None
+        if dex_id not in self._dex:
+            try:
+                names = [c["name"] for c in await self._en_get(f"/cards?dexId={dex_id}") if c.get("name")]
+            except Exception as e:  # noqa: BLE001 - a missing English name must not fail the card
+                log.warning("english name for dex %s failed: %s", dex_id, e)
+                names = []
+            self._dex[dex_id] = min(names, key=len) if names else None
+        return self._dex[dex_id]
+
+    async def available_sets(self) -> list[dict]:
+        """Live brief set list (duplicates by id collapsed: BW3a / BW8a appear twice upstream, first one wins)."""
+        seen: dict[str, dict] = {}
+        for s in await self._get("/sets"):
+            seen.setdefault(s["id"], s)
+        return list(seen.values())
+
+    async def list_sets(self) -> list[dict]:
+        return [map_set(await self._get(f"/sets/{s['id']}"), self.lang)
+                for s in await self.available_sets() if self.wanted is None or s["id"] in self.wanted]
+
+    async def _one(self, stub: dict, set_id: str, set_doc: dict | None) -> dict:
+        c = await self._get(f"/cards/{stub['id']}")
+        if not set_doc:
+            return prices_only(c, set_id, self.lang)
+        dex = (c.get("dexId") or [None])[0]
+        return map_card(c, set_id, set_doc, self.lang, await self.name_en(dex))
+
+    async def iter_cards(self, set_id: str | None = None, only: set[str] | None = None) -> AsyncIterator[dict]:
+        if set_id is None:
+            raise ValueError("pass a set id")
+        detail = await self._get(f"/sets/{set_id}")
+        set_doc = map_set(detail, self.lang)
+        known = self.index.numbers.get(set_id, set())
+        jobs: list[tuple[dict, dict | None]] = []
+        for stub in detail.get("cards", []):
+            number = card_number(stub["localId"])
+            cid = f"{id_prefix(self.lang)}:{set_id}-{number}"
+            if only is not None:
+                if cid in only:
+                    jobs.append((stub, None if number in known else set_doc))
+            elif number not in known:
                 jobs.append((stub, set_doc))
         missing: list[tuple[int, int]] = []
         for i in range(0, len(jobs), BATCH):

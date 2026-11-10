@@ -70,7 +70,7 @@ async def sync_set_fields(db, sets: list[dict], only: list[str] | None = None) -
         keys = ("ptcgo_code", "name", "printed_total", "total") if not only or s["external_id"] in only else ("ptcgo_code",)
         fields = {f"set.{k}": s.get(k) for k in keys if s.get(k) is not None}
         if fields:
-            n += (await db.cards.update_many({"tcg": "pokemon", "set.id": s["external_id"]}, {"$set": fields})).modified_count
+            n += (await db.cards.update_many({"tcg": "pokemon", "language": {"$ne": "ja"}, "set.id": s["external_id"]}, {"$set": fields})).modified_count
     return n
 
 
@@ -86,7 +86,7 @@ async def _record_completeness(db, sid: str) -> bool:
     """Store `imported_count` / `complete` on the set doc (imported vs upstream `total`); True when complete."""
     doc = await db.sets.find_one({"_id": f"pokemon:{sid}"}) or {}
     expected = doc.get("total") or doc.get("printed_total")
-    count = await db.cards.count_documents({"tcg": "pokemon", "set.id": sid})
+    count = await db.cards.count_documents({"tcg": "pokemon", "language": {"$ne": "ja"}, "set.id": sid})
     complete = expected is None or count >= expected
     await db.sets.update_one({"_id": f"pokemon:{sid}"}, {"$set": {"imported_count": count, "complete": complete}})
     return complete

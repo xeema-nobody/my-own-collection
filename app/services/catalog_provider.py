@@ -3,13 +3,13 @@ because its ids differ from the pokemontcg.io ids every collection row is keyed 
 from app.config import settings
 from app.db.mongo import get_db
 from app.providers.catalog.pokemontcg import PokemonTcgCatalog
-from app.providers.catalog.tcgdex import CatalogIndex, TcgdexCatalog
+from app.providers.catalog.tcgdex import CatalogIndex, TcgdexCatalog, TcgdexJaCatalog
 
 
 async def build_index(db) -> CatalogIndex:
-    sets = {s["external_id"]: s async for s in db.sets.find({"tcg": "pokemon"}, {"external_id": 1, "name": 1, "total": 1})}
+    sets = {s["external_id"]: s async for s in db.sets.find({"tcg": "pokemon", "language": {"$ne": "ja"}}, {"external_id": 1, "name": 1, "total": 1})}
     numbers: dict[str, set[str]] = {}
-    async for c in db.cards.find({"tcg": "pokemon"}, {"number": 1, "set.id": 1}):
+    async for c in db.cards.find({"tcg": "pokemon", "language": {"$ne": "ja"}}, {"number": 1, "set.id": 1}):
         numbers.setdefault(c["set"]["id"], set()).add(c["number"])
     return CatalogIndex(sets=sets, numbers=numbers)
 
@@ -21,3 +21,9 @@ async def get_catalog():
     if name == "pokemontcg":
         return PokemonTcgCatalog()
     raise ValueError(f"unknown CATALOG_PROVIDER {name!r} (pokemontcg | tcgdex)")
+
+
+async def get_ja_catalog():
+    """Japanese provider (always TCGdex /ja): knows which ja card numbers we hold."""
+    from app.services.catalog_ja import ja_index
+    return TcgdexJaCatalog(await ja_index(get_db()))

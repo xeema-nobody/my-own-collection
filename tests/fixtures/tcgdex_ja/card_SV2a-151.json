@@ -1,0 +1,6 @@
+{"category":"Pokemon","id":"SV2a-151","localId":"151","name":"ミュウex","image":"https://assets.tcgdex.net/ja/SV/SV2a/151",
+ "rarity":"Double rare","illustrator":"aky CG Works",
+ "set":{"id":"SV2a","name":"ポケモンカード151","cardCount":{"official":165,"total":210}},
+ "variants":{"holo":true,"normal":false,"reverse":false,"firstEdition":false,"wPromo":false},
+ "pricing":{"cardmarket":{"unit":"EUR","avg":1.46,"low":0.2,"trend":1.6,"avg7":1.2,"avg30":1.5}},
+ "dexId":[151],"hp":180,"types":["Psychic"],"stage":"Basic","suffix":"EX"}

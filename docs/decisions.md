@@ -318,3 +318,12 @@ User: store and fetch prices only for cards the user selects into the collection
 ## TCGdex extras import (2026-11-10)
 - Catalog only, never the collection. `import_extras()` (not an API route; run once via `docker compose run`) wraps `TcgdexCatalog` so new sets outside the list are not stored (Pocket etc.) and known numbers are not re-fetched. TCGdex `abbreviation.official` is stored as `ptcgo_code` on new sets/cards (typed number + set code works, e.g. `61` + `MEP`); `printed_total` 0 is stored as None.
 - Left out on purpose: TCG Pocket sets (digital), cel25c (other numbering), the small oddities (miscp, wp, sp, ex5.5, exu, xya) not on the user's list. `jumbo`/`rc` have no cards upstream.
+
+## Japanese Pokémon (2026-11-10, D4)
+- **Scope (user)**: selected sets on demand, not all 204 (13,156 cards, one request per card, ~30 % have images). Settings > Catalog > "Japanese sets": load the live list, tick sets, import (job type `catalog_import`, `stats.language='ja'`). Catalog only, never the collection.
+- **Storage (user)**: same `sets` / `cards` collections, `language:'ja'`, ids `pokemon-ja:{set}-{num}` (set `pokemon-ja:{set}`); English ids untouched, no migration. TCGdex ja ids are product codes (`SV2a`, `S12a`); only `neo1-4` repeat English ids, and `BW3a` / `BW8a` are listed twice upstream (first wins). `ptcgo_code` = set id, so typed number + code (`151` + `SV2a`) works.
+- **Names**: `norm()` drops kana, so `name_norm` / `name_en` hold the English species name (shortest English card name for the card's dexId, cached per job); `search_text` also keeps the native text, search accepts kana tokens and mixed-case codes.
+- **Isolation**: English scans never see ja prints (name pool, number-only pool, typed number without a set code); a typed set code (`SV2a`) offers the ja print. Slab: a Japanese cert page matches ja prints first, then falls back to any print with that number + printed total (old behaviour). `/api/sets` and the coverage audit are English only unless `?language=ja|all`; Search uses `all` and gets a Language filter + JA badge.
+- **Prices**: Cardmarket EUR only (embedded in the card); price refresh routes ja cards to TCGdex `/ja` whatever `CATALOG_PROVIDER` says; missing = None.
+- **Open**: Slowking 199 / Charizard V 153 are in no ja set by that number (the user has to name the printed set); the user wants sets importable when needed, so a scan / slab with no match could offer "import this set" (not built; today: Settings or ask).
+

@@ -1,9 +1,15 @@
-async def sets_with_stats(db, tcg: str | None = None) -> list[dict]:
+def language_filter(language: str | None) -> dict:
+    """None = the English catalog (Japanese sets are managed on their own: ids can repeat), 'all' = both."""
+    return {} if language == "all" else {"language": language} if language and language != "en" else {"language": {"$ne": "ja"}}
+
+
+async def sets_with_stats(db, tcg: str | None = None, language: str | None = None) -> list[dict]:
     """Sets (newest first) with imported card count and how many of those have a price."""
+    lf = language_filter(language)
     counts = {r["_id"]: r async for r in db.cards.aggregate([
-        {"$group": {"_id": "$set.id", "total": {"$sum": 1},
+        {"$match": lf}, {"$group": {"_id": "$set.id", "total": {"$sum": 1},
                     "priced": {"$sum": {"$cond": [{"$ne": [{"$ifNull": ["$price_base", None]}, None]}, 1, 0]}}}}])}   # absent price_base = unpriced
-    flt = {"tcg": tcg} if tcg else {}
+    flt = {**lf, **({"tcg": tcg} if tcg else {})}
     out = []
     async for s in db.sets.find(flt).sort("release_date", -1):
         c = counts.get(s["external_id"], {})

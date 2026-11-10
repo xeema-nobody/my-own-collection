@@ -111,7 +111,7 @@ async def _sets(db) -> list[dict]:
         return _sets_cache[1]
     out = []
     async for d in db.cards.aggregate([
-            {"$match": {"tcg": "pokemon"}},
+            {"$match": {"tcg": "pokemon", "language": {"$ne": "ja"}}},   # ja set names are kana: never name-matched
             {"$group": {"_id": "$set.id", "name": {"$first": "$set.name"}, "rd": {"$first": "$set.release_date"},
                         "pt": {"$first": "$set.printed_total"}}}]):
         rd = d.get("rd")
@@ -206,13 +206,19 @@ def how_exact(grader: str, cards: list[dict]) -> str:
     return "possible"
 
 
+def _lang_filter(info: CertInfo) -> dict:
+    """A Japanese cert page only matches Japanese prints (ids `pokemon-ja:`), every other page the rest."""
+    seen = norm(" ".join(x for x in (info.language, info.set_name, info.name) if x))
+    return {"language": "ja"} if "japan" in seen else {"language": {"$ne": "ja"}}
+
+
 async def _global_pool(db, info: CertInfo) -> list[dict]:
     """Name-only candidates when the set is unknown or has no hit: catalog cards sharing a distinctive page word."""
     toks = [t for t in dict.fromkeys(words(info.name)) if len(t) >= 3 and t not in NOISE]
     if not toks:
         return []
     rx = "|".join("'?".join(re.escape(ch) for ch in t) for t in toks)  # the catalog keeps apostrophes: farfetch'd
-    return [c async for c in db.cards.find({"tcg": "pokemon", "name_norm": {"$regex": rf"\b(?:{rx})\b"}},
+    return [c async for c in db.cards.find({"tcg": "pokemon", **_lang_filter(info), "name_norm": {"$regex": rf"\b(?:{rx})\b"}},
                                            {"raw": 0}).limit(POOL * 3)]
 
 
@@ -231,9 +237,13 @@ async def match_catalog(db, info: CertInfo) -> list[dict]:
         hits = name_hits(info, pool)
     found = [c for c in pool if c["_id"] in hits]
     if not found and info.number and info.printed_total:
-        found = [c async for c in db.cards.find(
-            {"tcg": "pokemon", "set.printed_total": info.printed_total,
-             "number": {"$in": scan._number_forms(info.number.split("/")[0])}}, {"raw": 0}).limit(MAX_CARDS)]
+        # Japanese page: Japanese prints first, then (as before) any print with that number / printed total.
+        for lang in (_lang_filter(info), {}):
+            found = [c async for c in db.cards.find(
+                {"tcg": "pokemon", **lang, "set.printed_total": info.printed_total,
+                 "number": {"$in": scan._number_forms(info.number.split("/")[0])}}, {"raw": 0}).limit(MAX_CARDS)]
+            if found:
+                break
     sigs = {c["_id"]: signals(info, c, hits.get(c["_id"]), set_ids) for c in found}
     stamp = lambda c: str((c.get("set") or {}).get("release_date") or "")  # noqa: E731
     found.sort(key=stamp, reverse=True)

@@ -41,6 +41,8 @@ async def init_indexes() -> None:
     await db.cards.create_index([("tcg", 1), ("set.id", 1), ("number_sort", 1)])
     await db.cards.create_index([("tcg", 1), ("rarity", 1)])
     await db.cards.create_index([("tcg", 1), ("types", 1)])
+    await db.cards.create_index([("tcg", 1), ("language", 1)])
+    await db.sets.create_index([("tcg", 1), ("language", 1)])
     await db.sets.create_index([("tcg", 1), ("release_date", -1)])
     # One stack per card/variant/language/condition/grade; slabs with a cert are unique via cert.
     await db.collection_items.create_index(

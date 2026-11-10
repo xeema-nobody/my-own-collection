@@ -8,7 +8,7 @@ export const SORT_OPTIONS = [
   { value: "price_asc", label: "Price low→high" },
 ];
 
-const SIMPLE: [string, string][] = [["type", "Type"], ["rarity", "Rarity"], ["supertype", "Supertype"]];
+const SIMPLE: [string, string][] = [["type", "Type"], ["rarity", "Rarity"], ["supertype", "Supertype"], ["language", "Language"]];
 
 /** Filters currently applied in the URL, one entry per removable chip. `setName` resolves the set id. */
 export function activeFilters(sp: URLSearchParams, setName?: (id: string) => string | undefined): ActiveFilter[] {

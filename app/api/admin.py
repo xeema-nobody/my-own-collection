@@ -7,7 +7,7 @@ from app.db.models import FetchControlIn, FetchIn
 from app.providers.fetcher import FetcherClient, FetcherUnavailable
 from app.providers.price import registry_json
 from app.services.catalog_import import import_catalog, incomplete_sets
-from app.services import catalog_audit, jobs as jobs_svc
+from app.services import catalog_audit, catalog_ja, jobs as jobs_svc
 from app.services.price_fetch import fetch_prices, resolve_bulk, resolve_targets
 from app.services.refresh import SCOPES, refresh_prices
 from app.services.snapshots import take_snapshot
@@ -29,6 +29,22 @@ async def catalog_import(tcg: str = "pokemon", sets: list[str] | None = Query(No
     await ensure_idle("catalog_import")
     spawn(import_catalog(sets or None))
     return {"started": True}
+
+
+@router.get("/catalog/ja/sets")
+async def catalog_ja_sets():
+    """Japanese sets TCGdex lists (one live request) with how many cards we hold."""
+    try:
+        return await catalog_ja.list_ja_sets()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"catalog provider unavailable: {e}") from None
+
+
+@router.post("/catalog/ja/import", status_code=202)
+async def catalog_ja_import(sets: list[str] = Query(...)):
+    await ensure_idle("catalog_import")
+    spawn(catalog_ja.import_ja_sets(sets))
+    return {"started": True, "sets": sets}
 
 
 @router.post("/catalog/import/retry-incomplete", status_code=202)

@@ -2,7 +2,7 @@ import logging
 
 from app.config import settings
 from app.db.mongo import get_db
-from app.services.catalog_provider import get_catalog
+from app.services.catalog_provider import get_catalog, get_ja_catalog
 from app.services import jobs
 from app.services.pricing import get_rates, store_card_prices, tracked_card_ids
 from app.services.snapshots import take_snapshot
@@ -29,13 +29,18 @@ async def refresh_prices(scope: str = "tracked", sets: list[str] | None = None, 
             want |= set(await db.collection_items.distinct("card_id"))
         if scope in ("tracked", "wishlist"):
             want |= set(await db.wishlist.distinct("card_id"))
-        by_set: dict[str, set[str]] = {}
-        async for c in db.cards.find({"_id": {"$in": sorted(want)}}, {"set.id": 1}):
-            by_set.setdefault(c["set"]["id"], set()).add(c["_id"])
-        for sid in sorted(set(sets) & by_set.keys() if sets else by_set):
-            ids = by_set[sid]
+        by_set: dict[tuple[str, str], set[str]] = {}   # (language, set id): ja set codes may repeat English ones
+        async for c in db.cards.find({"_id": {"$in": sorted(want)}}, {"set.id": 1, "language": 1}):
+            by_set.setdefault((c.get("language") or "en", c["set"]["id"]), set()).add(c["_id"])
+        ja = None
+        for key in sorted(k for k in by_set if not sets or k[1] in sets):
+            lang, sid = key
+            ids = by_set[key]
             try:
-                async for card in provider.iter_cards(sid, only=ids):
+                if lang == "ja":   # Japanese cards always come from TCGdex /ja, whatever CATALOG_PROVIDER says
+                    ja = ja or await get_ja_catalog()
+                prov = ja if lang == "ja" else provider
+                async for card in prov.iter_cards(sid, only=ids):
                     if card["_id"] not in ids:
                         continue
                     stats["prices"] += await store_card_prices(db, card, rates)
@@ -70,10 +75,10 @@ async def refresh_card_price(db, card_id: str, provider=None) -> dict:
     """One-card catalog price fetch (a user action: card opened / just added). Stores that card's prices only.
 
     Not a job (small, synchronous). Returns {"found", "prices", "tracked"}; raises LookupError for an unknown card."""
-    card = await db.cards.find_one({"_id": card_id}, {"set.id": 1})
+    card = await db.cards.find_one({"_id": card_id}, {"set.id": 1, "language": 1})
     if not card:
         raise LookupError(card_id)
-    provider = provider or await get_catalog()
+    provider = provider or (await get_ja_catalog() if card.get("language") == "ja" else await get_catalog())
     rates = await get_rates(db)
     out = {"found": False, "prices": 0, "tracked": card_id in await tracked_card_ids(db)}
     async for c in provider.iter_cards(card["set"]["id"], only={card_id}):

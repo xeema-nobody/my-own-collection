@@ -21,7 +21,7 @@ export default function Search() {
 
   const params = Object.fromEntries(sp.entries());
   const filters = useQuery({ queryKey: ["filters"], queryFn: api.filters });
-  const sets = useQuery({ queryKey: ["sets"], queryFn: () => api.sets() });
+  const sets = useQuery({ queryKey: ["sets"], queryFn: () => api.sets(false, "all") });
   const cards = useQuery({ queryKey: ["cards", params], queryFn: () => api.cards({
     ...params, price_min: params.price_min ? +params.price_min * 100 : undefined,
     price_max: params.price_max ? +params.price_max * 100 : undefined }) });
@@ -54,6 +54,7 @@ export default function Search() {
         </Field>
         {sel("type", "Type", (filters.data?.types ?? []).map((t: string) => ({ v: t, l: t })))}
         {sel("rarity", "Rarity", (filters.data?.rarities ?? []).map((t: string) => ({ v: t, l: t })))}
+        {(filters.data?.languages ?? []).length > 1 && sel("language", "Language", (filters.data?.languages ?? []).map((t: string) => ({ v: t, l: t.toUpperCase() })))}
         {sel("supertype", "Supertype", (filters.data?.supertypes ?? []).map((t: string) => ({ v: t, l: t })))}
         <div className="flex gap-2">
           <Input className="w-1/2" placeholder="min €" aria-label="Min price" defaultValue={sp.get("price_min") ?? ""} onBlur={(e) => set("price_min", e.target.value)} />
@@ -97,6 +98,7 @@ export default function Search() {
               <Link to={`/cards/${encodeURIComponent(c.id)}`} className="block rounded-lg bg-surface p-3 shadow-card transition hover:ring-2 hover:ring-accent/60">
                 <div className="absolute right-3 top-3 flex gap-1">
                   {c.wished && <Badge tone="warn" title="On your wishlist" aria-label="On wishlist"><Heart size={11} className="fill-current" /></Badge>}
+                  {c.language === "ja" && <Badge title="Japanese print">JA</Badge>}
                   {c.owned_qty > 0 && <Badge tone="accent" className="num">×{c.owned_qty}</Badge>}
                 </div>
                 <img src={c.images?.small} alt={c.name} loading="lazy" className="mx-auto h-52 object-contain" />

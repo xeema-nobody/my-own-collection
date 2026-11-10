@@ -38,9 +38,9 @@ async def audit(db=None, provider=None) -> dict:
     db = get_db() if db is None else db
     provider = provider or await get_catalog()
     theirs = {s["external_id"]: s for s in await provider.list_sets()}
-    ours = {s["external_id"]: s async for s in db.sets.find({"tcg": "pokemon"})}
+    ours = {s["external_id"]: s async for s in db.sets.find({"tcg": "pokemon", "language": {"$ne": "ja"}})}
     have = {r["_id"]: r["n"] async for r in db.cards.aggregate(
-        [{"$match": {"tcg": "pokemon"}}, {"$group": {"_id": "$set.id", "n": {"$sum": 1}}}])}
+        [{"$match": {"tcg": "pokemon", "language": {"$ne": "ja"}}}, {"$group": {"_id": "$set.id", "n": {"$sum": 1}}}])}
     rows = []
     for sid in sorted(set(theirs) | set(ours)):
         p, o = theirs.get(sid), ours.get(sid)

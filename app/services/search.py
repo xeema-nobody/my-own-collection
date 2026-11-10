@@ -8,11 +8,16 @@ ID_RE = re.compile(r"^[a-z0-9]+-[a-z0-9]+$")
 
 def build_query(q: str | None, tcg=None, set_id=None, type_=None, rarity=None, supertype=None,
                 price_min: int | None = None, price_max: int | None = None,
-                has_price: bool | None = None, owned_ids: list[str] | None = None) -> dict:
+                has_price: bool | None = None, owned_ids: list[str] | None = None,
+                language: str | None = None) -> dict:
     conds: list[dict] = []
-    for tok in norm(q or "").split():
+    for raw in (q or "").lower().split():
+        tok = norm(raw)
+        if not tok:  # kana / kanji: norm() drops them, search the native text as typed
+            conds.append({"search_text": {"$regex": re.escape(raw)}})
+            continue
         if ID_RE.match(tok) and any(ch.isdigit() for ch in tok):
-            conds.append({"external_id": tok})
+            conds.append({"external_id": {"$regex": f"^{re.escape(tok)}$", "$options": "i"}})  # ja codes: 'SV2a-151'
             continue
         m = NUM_RE.match(tok)
         if m and (m.group(2) or tok.startswith("#")):
@@ -23,6 +28,8 @@ def build_query(q: str | None, tcg=None, set_id=None, type_=None, rarity=None, s
         conds.append({"search_text": {"$regex": re.escape(tok)}})
     if tcg:
         conds.append({"tcg": tcg})
+    if language:
+        conds.append({"language": language})
     if set_id:
         conds.append({"set.id": set_id})
     if type_:

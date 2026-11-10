@@ -11,7 +11,7 @@ import SalesList from "../components/SalesList";
 import { CompareCopies } from "../components/SourceCompare";
 import CardCollection from "../components/CardCollection";
 import CardWishlist from "../components/CardWishlist";
-import { Section } from "../components/ui";
+import { Badge, Section } from "../components/ui";
 import { usePriceGrade } from "../lib/priceGrade";
 
 
@@ -31,7 +31,7 @@ export default function CardDetail() {
     <div className="grid gap-8 md:grid-cols-[340px_1fr]">
       <img src={c.images?.large} alt={c.name} className="w-full max-w-sm self-start rounded-lg shadow-card md:sticky md:top-20" />
       <div className="max-w-5xl space-y-5">
-        <div><h1 className="text-3xl font-semibold tracking-tight">{c.name}</h1>
+        <div><h1 className="text-3xl font-semibold tracking-tight">{c.name}{c.language === "ja" && <span className="ml-3 align-middle"><Badge title="Japanese print">JA</Badge></span>}</h1>
           <p className="text-muted">{c.set?.name} · #{c.number}/{c.set?.printed_total} · {c.rarity} · {c.types?.join(", ")}</p>
           {c.flavor_text && <p className="mt-1 text-sm italic">{c.flavor_text}</p>}</div>
 

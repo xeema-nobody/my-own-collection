@@ -1,0 +1,4 @@
+{"id":"SV2a","name":"ポケモンカード151","releaseDate":"2023-06-16","serie":{"id":"SV","name":"スカーレット&バイオレット"},
+ "cardCount":{"official":165,"total":2},
+ "cards":[{"id":"SV2a-151","localId":"151","name":"ミュウex","image":"https://assets.tcgdex.net/ja/SV/SV2a/151"},
+          {"id":"SV2a-152","localId":"152","name":"ヤドキング"}]}

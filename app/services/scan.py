@@ -47,7 +47,7 @@ async def card_names(db) -> list[str]:
     """Distinct normalised card names (cached; the catalog changes at most weekly)."""
     global _names
     if _names is None or time.monotonic() - _names[0] > NAME_TTL_S:
-        _names = (time.monotonic(), sorted(await db.cards.distinct("name_norm", {"tcg": "pokemon"})))
+        _names = (time.monotonic(), sorted(await db.cards.distinct("name_norm", {"tcg": "pokemon", "language": {"$ne": "ja"}})))
     return _names[1]
 
 
@@ -316,7 +316,7 @@ async def identify_card(db, ocr, image: bytes) -> dict:
     rank = {n: i for i, (n, _) in enumerate(keep)}
     stamp = lambda c: str((c.get("set") or {}).get("release_date") or "")  # noqa: E731
     if keep:
-        found = [c async for c in db.cards.find({"tcg": "pokemon", "name_norm": {"$in": list(rank)}}, {"raw": 0})
+        found = [c async for c in db.cards.find({"tcg": "pokemon", "language": {"$ne": "ja"}, "name_norm": {"$in": list(rank)}}, {"raw": 0})
                  .limit(POOL)]
         found.sort(key=stamp, reverse=True)  # newest set first ...
         found.sort(key=lambda c: rank[c["name_norm"]])  # ... best name first (stable)
@@ -324,7 +324,8 @@ async def identify_card(db, ocr, image: bytes) -> dict:
     elif fields and fields.number and fields.printed_total:
         # No readable name: number + printed total alone still narrow the catalog to a handful of prints.
         found = [c async for c in db.cards.find(
-            {"tcg": "pokemon", "set.printed_total": fields.printed_total, "number": {"$in": _number_forms(fields.number)}},
+            {"tcg": "pokemon", "language": {"$ne": "ja"}, "set.printed_total": fields.printed_total,
+             "number": {"$in": _number_forms(fields.number)}},
             {"raw": 0}).limit(NUMBER_ONLY_MAX)]
         found.sort(key=stamp, reverse=True)
         sigs = {c["_id"]: signals_for(c, fields, False, codes) for c in found}
@@ -379,6 +380,8 @@ async def lookup(db, number: str, set_q: str | None = None) -> dict:
     if total:
         flt["set.printed_total"] = total
     q = (set_q or "").strip()
+    if not q:  # a Japanese print is offered only when the typed set code asks for it (code = set id, 'SV2a')
+        flt["language"] = {"$ne": "ja"}
     if q:
         rx = {"$regex": re.escape(q), "$options": "i"}
         # The printed code is read from the sets collection: the card's embedded set may predate the code.
