@@ -111,10 +111,32 @@ def locate_label(img: Image.Image, box: tuple[int, int, int, int]) -> tuple[int,
     return None
 
 
-def _label_crop(img: Image.Image, lb: tuple[int, int, int, int]) -> Image.Image:
+def label_tilt(c: Image.Image, lim: float = 12.0, step: float = 0.5) -> float:
+    """Tilt of the label's text lines in degrees: the rotation that makes the rows of ink sharpest (row sums vary
+    most when lines are level). A phone photo of a slab is rarely level, and tesseract returns garbage on text
+    tilted by more than ~4 degrees (IMG_3019: 8.5 degrees, nothing read; level, everything read)."""
+    g = np.asarray(c.convert("L").resize((600, max(1, round(c.height * 600 / c.width)))))
+    ink = cv2.adaptiveThreshold(g, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 12)
+    h, w = ink.shape
+    best, best_a = -1.0, 0.0
+    for a in np.arange(-lim, lim + step, step):
+        r = cv2.warpAffine(ink, cv2.getRotationMatrix2D((w / 2, h / 2), float(a), 1.0), (w, h))
+        v = float(np.var(r.sum(1) / 255.0))
+        if v > best:
+            best, best_a = v, float(a)
+    return best_a
+
+
+def _label_crop(img: Image.Image, lb: tuple[int, int, int, int], deskew: bool = False) -> Image.Image:
     pad = round((lb[3] - lb[1]) * 0.15)
     c = img.crop((lb[0], max(0, lb[1] - pad), lb[2], min(img.height, lb[3] + pad)))
-    return ImageOps.autocontrast(c.resize((LABEL_W, max(1, round(c.height * LABEL_W / c.width))), Image.LANCZOS), cutoff=1)
+    c = ImageOps.autocontrast(c.resize((LABEL_W, max(1, round(c.height * LABEL_W / c.width))), Image.LANCZOS), cutoff=1)
+    a = label_tilt(c) if deskew else 0.0
+    if abs(a) >= 1.0:
+        edge = np.asarray(c.convert("L"))
+        fill = int(np.median(np.concatenate([edge[:4].ravel(), edge[-4:].ravel()])))
+        c = c.rotate(a, resample=Image.BICUBIC, fillcolor=(fill,) * 3 if c.mode == "RGB" else fill)
+    return c
 
 
 async def _cert_lines(label: Image.Image) -> list[str]:
@@ -126,27 +148,31 @@ async def _cert_lines(label: Image.Image) -> list[str]:
     return [ln for got in await asyncio.gather(*[one(*v) for v in CERT_CORNERS]) for ln in got]
 
 
-GRADE_COLUMN = (0.70, 700)  # x share where the grade column starts (every grader prints the grade right), width after scaling
+# (x share where the grade column starts, psms): every grader prints the grade right; the label is tilted in a phone
+# photo, so one cut clips a glyph the other keeps (0.70 reads BGS 9.5 whole, 0.62 reads a lone PSA 9). Reads are pooled.
+GRADE_COLUMNS = ((0.70, (11, 6)), (0.62, (11, 6, 7)))
+GRADE_COL_W = 700  # width after scaling
 
 
 async def _grade_column(label: Image.Image) -> list[tuple[float, int]]:
     """Grade tokens (value, glyph height) from the label's right column, digits only. The grade is the biggest
     number there (ACE, Beckett: above the tier word; PSA: below it); the cert is too long to look like a grade."""
-    x0, w = GRADE_COLUMN
-    c = label.crop((int(label.width * x0), 0, label.width, label.height)).convert("L")
-    k = w / c.width
-    c = ImageOps.expand(c.resize((w, max(1, round(c.height * k))), Image.LANCZOS), 20, fill=255)
-    found = []
-    for words in await asyncio.gather(*[T._run_words(c, psm, "0123456789.") for psm in (11, 6)]):
-        for text, conf, _, _, _, h in words:
+    async def one(x0: float, psm: int) -> list[tuple[float, int]]:
+        c = label.crop((int(label.width * x0), 0, label.width, label.height)).convert("L")
+        k = GRADE_COL_W / c.width
+        c = ImageOps.expand(c.resize((GRADE_COL_W, max(1, round(c.height * k))), Image.LANCZOS), 20, fill=255)
+        out = []
+        for text, conf, _, _, _, h in await T._run_words(c, psm, "0123456789."):
             m = GRADE_RE.fullmatch(text)
             if m and conf >= 40:
-                found.append((float(m.group(1)), round(h / k)))
-    return found
+                out.append((float(m.group(1)), round(h / k)))
+        return out
+    got = await asyncio.gather(*[one(x0, psm) for x0, psms in GRADE_COLUMNS for psm in psms])
+    return [g for gs in got for g in gs]
 
 
-async def _read_label_crop(img: Image.Image, lb: tuple[int, int, int, int]) -> SlabRead | None:
-    label = await asyncio.to_thread(_label_crop, img, lb)
+async def _read_label_crop(img: Image.Image, lb: tuple[int, int, int, int], deskew: bool = False) -> SlabRead | None:
+    label = await asyncio.to_thread(_label_crop, img, lb, deskew)
     x0, sc = RIGHT_HALF
     right = label.crop((int(label.width * x0), 0, label.width, label.height))
     right = right.resize((round(right.width * sc), round(right.height * sc)), Image.LANCZOS)
@@ -242,11 +268,13 @@ async def _grade_near(img: Image.Image, anchor) -> list[tuple[float, int]]:
 def pick_grade(found: list[tuple[float, int]], tier: str | None = None) -> float | None:
     """Largest glyphs win (the grade is bigger than subgrades, cert and card text); equal size: most reads.
     Reads the tier word does not allow (a GEM MINT 4) are dropped first."""
-    found = [(v, h) for v, h in found if plausible(tier, v)]
+    # "GEM" is often lost from "GEM MINT", so a 9.5 survives a MINT tier; whole-number reads stay strict
+    found = [(v, h) for v, h in found if plausible(tier, v) or (tier == "MINT" and v == 9.5)]
     if not found:
         return None
     top = max(h for _, h in found)
     near = [v for v, h in found if h >= 0.8 * top]
+    near = [v for v in near if not (v == int(v) and (v + 0.5) in near)]  # a 9 beside a 9.5 is the 9.5 cut short
     return max(set(near), key=lambda v: (v == 10 or v != int(v), near.count(v)))  # 9.5 / 10 beat a lone 5 / 1 cut from them
 
 
@@ -281,6 +309,12 @@ async def read_slab(img: Image.Image) -> SlabRead | None:
     got = await _read_label_crop(img, lb) if lb else None
     if got and got.label.cert and got.label.cert_sure:  # a missing grade is no reason to look again: the cert page has it
         return got
+    if lb:  # tilted text reads as garbage: level the label and read it again before the slow tile reader
+        # (leveling everywhere was measured worse: it moved clean reads, ACE 9 -> "PSA 2023 1519", BGS 9.5 -> 10)
+        level = await _read_label_crop(img, lb, deskew=True)
+        if level and level.label.cert and level.label.cert_sure:
+            return _merge(level, got)
+        got = _merge(got, level)
     # no label band, nothing label-like in it, or a cert / grade the cheap read could not settle: the tile readers
     # (slower, ~6 s) look again; their sure cert / grade fills what the cheap read lacked
     slow = await _read_tiles_path(img)

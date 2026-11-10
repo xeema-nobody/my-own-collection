@@ -63,6 +63,12 @@ def test_pick_grade_largest_glyph_then_most_reads():
     assert pick_grade([]) is None
 
 
+def test_pick_grade_half_grade_beats_its_cut_and_survives_clipped_tier():
+    assert pick_grade([(9.5, 119), (9.0, 113), (10.0, 33)], tier="GEM MINT") == 9.5
+    assert pick_grade([(9.5, 119), (9.0, 113)], tier="MINT") == 9.5  # GEM clipped off the tier word
+    assert pick_grade([(10.0, 119)], tier="MINT") is None  # whole numbers stay strict
+
+
 # --- slices 5 + 6: per-grader cert rules, targeted cert reads, grader from the cert length ---
 from app.providers.ocr.slabfields import cert_candidates, cert_sure, grader_for_cert  # noqa: E402
 
