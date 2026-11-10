@@ -88,7 +88,8 @@ def map_set(s: dict) -> dict:
     return {
         "_id": f"pokemon:{s['id']}", "tcg": "pokemon", "external_id": s["id"], "name": s["name"],
         "series": (s.get("serie") or {}).get("name"), "release_date": _date(s.get("releaseDate")),
-        "printed_total": cc.get("official"), "total": cc.get("total"),
+        "printed_total": cc.get("official") or None, "total": cc.get("total"),
+        "ptcgo_code": (s.get("abbreviation") or {}).get("official"),
         "logo_url": f"{s['logo']}.webp" if s.get("logo") else None,
         "symbol_url": f"{s['symbol']}.webp" if s.get("symbol") else None,
     }
@@ -114,8 +115,8 @@ def map_card(c: dict, set_id: str, set_doc: dict) -> dict:
         "artist": c.get("illustrator"), "flavor_text": c.get("description"), "rules_text": rules,
         "set": {"id": set_id, "name": set_doc.get("name"), "series": set_doc.get("series"),
                 "release_date": set_doc.get("release_date"), "printed_total": set_doc.get("printed_total"),
-                "total": set_doc.get("total"), "logo_url": set_doc.get("logo_url"),
-                "symbol_url": set_doc.get("symbol_url")},
+                "total": set_doc.get("total"), "ptcgo_code": set_doc.get("ptcgo_code"),
+                "logo_url": set_doc.get("logo_url"), "symbol_url": set_doc.get("symbol_url")},
         "images": {"small": _asset(img, "low.webp"), "large": _asset(img, "high.webp")} if img else {},
         "variants": variants, "language": "en", "external_ids": {"tcgplayer_url": None, "cardmarket_url": None},
         "updated_at": datetime.now(timezone.utc),

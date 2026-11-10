@@ -300,3 +300,7 @@ User: store and fetch prices only for cards the user selects into the collection
 - **D4** after English Pokémon: Japanese Pokémon first (TCGdex data), other TCGs later.
 - **D8** pulled cards have no cost and are excluded from P/L; P/L covers bought cards only. All cards, pulled and bought, count in collection value.
 - Work order agreed: TCGdex extras import (all) -> slab leftovers -> image-match fallback -> Japanese.
+
+## TCGdex extras import (2026-11-10)
+- Catalog only, never the collection. `import_extras()` (not an API route; run once via `docker compose run`) wraps `TcgdexCatalog` so new sets outside the list are not stored (Pocket etc.) and known numbers are not re-fetched. TCGdex `abbreviation.official` is stored as `ptcgo_code` on new sets/cards (typed number + set code works, e.g. `61` + `MEP`); `printed_total` 0 is stored as None.
+- Left out on purpose: TCG Pocket sets (digital), cel25c (other numbering), the small oddities (miscp, wp, sp, ex5.5, exu, xya) not on the user's list. `jumbo`/`rc` have no cards upstream.

@@ -164,3 +164,38 @@ async def test_set_numbered_differently_is_not_duplicated():
     odd = [str(i) + "_A" for i in range(1, 25)]  # like cel25c: '17_A' here, 'CC015' upstream
     p, _ = provider(index(odd))
     assert [c async for c in p.iter_cards("sv3pt5")] == []  # no number lines up: nothing matched, nothing created
+
+
+async def test_extras_import_only_wanted_sets_and_missing_numbers(db):
+    """Catalog extras: unwanted new sets are not stored, known numbers are not re-fetched, code comes from TCGdex."""
+    from app.services.catalog_extras import ExtrasCatalog
+    from app.services.catalog_import import import_catalog
+    SETS.extend([{"id": "mep", "name": "MEP Black Star Promos", "cardCount": {"total": 2, "official": 0}},
+                 {"id": "A1", "name": "Genetic Apex", "cardCount": {"total": 1, "official": 1}}])
+    try:
+        calls = []
+
+        def handler(req):
+            calls.append(req.url.path)
+            if req.url.path == "/sets":
+                return httpx.Response(200, json=SETS)
+            if req.url.path == "/sets/mep":
+                return httpx.Response(200, json={**SETS[-2], "abbreviation": {"official": "MEP"}, "releaseDate": "2025-09-26",
+                                                 "cards": [{"id": "mep-060", "localId": "060"}, {"id": "mep-061", "localId": "061"}]})
+            if req.url.path.startswith("/cards/mep-"):
+                return httpx.Response(200, json=stub_card(req.url.path[-3:], id=req.url.path[-7:]))
+            if req.url.path.startswith("/sets/"):
+                sid = req.url.path.rsplit("/", 1)[-1]
+                return httpx.Response(200, json={**next(x for x in SETS if x["id"] == sid), "cards": []})
+            return httpx.Response(404)
+        inner = TcgdexCatalog(index(COMPLETE), httpx.AsyncClient(base_url="http://up", transport=httpx.MockTransport(handler)))
+        prov = ExtrasCatalog(inner, ["mep"])
+        await import_catalog(["mep", "sv3pt5"], provider=prov)
+        assert {s["external_id"] async for s in db.sets.find({})} >= {"mep"}
+        assert not await db.sets.find_one({"external_id": "A1"})
+        assert (await db.sets.find_one({"external_id": "mep"}))["ptcgo_code"] == "MEP"
+        c = await db.cards.find_one({"_id": "pokemon:mep-61"})
+        assert c and c["set"]["ptcgo_code"] == "MEP"
+        assert not any(p.startswith("/cards/sv03.5") for p in calls)   # sv3pt5 complete: nothing fetched
+    finally:
+        del SETS[-2:]

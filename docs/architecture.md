@@ -10,6 +10,7 @@ Browser (Vite React SPA :5180) -> FastAPI (:8100) -> MongoDB 7 (compose network 
 |---|---|
 | `providers/catalog/common.py` | `norm`, price units, `extract_prices` shared by every catalog provider |
 | `providers/catalog/tcgdex.py` | TCGdex adapter (`CATALOG_PROVIDER=tcgdex`): matches its sets to ours by id then name, cards by number; one request per wanted card (8 in parallel); known cards only refresh Cardmarket prices (`_prices_only`), cards of sets we never imported are created in full; no TCGplayer prices (`_sources`) |
+| `services/catalog_extras.py` | One-off import of TCGdex-only sets/cards while `CATALOG_PROVIDER=pokemontcg`: wraps `TcgdexCatalog`, stores only the wanted new sets, fetches only numbers we lack (catalog only, no collection) |
 | `services/catalog_provider.py` | `get_catalog()`: picks the provider from `CATALOG_PROVIDER` (`pokemontcg` default, `tcgdex`), builds the id index TCGdex needs from the database |
 | `providers/catalog/pokemontcg.py` | httpx + tenacity retry on 429/5xx; a card page that still fails is re-fetched as smaller aligned pages (50/25/5, `orderBy=number`), windows dead at every size raise `IncompletePage` after the rest is yielded; maps payload to card/set docs, extracts price points |
 | `services/catalog_import.py` | per-set import (all / chosen sets / retry incomplete), upsert by `_id`, job logging, failed-set isolation; after each set stores `sets.imported_count` + `complete` (imported vs upstream `total`), a short set counts as failed (job `partial`), `incomplete_sets()` feeds the retry |
