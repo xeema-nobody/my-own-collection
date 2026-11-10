@@ -27,7 +27,7 @@ async def stack(db, qty=3, cost=500):
 async def test_partial_sold_keeps_stack_and_logs_price_and_cost(db, client):
     sid = await stack(db)
     r = await client.post(f"/api/collection/{sid}/remove", json={"quantity": 1, "reason": "sold", "price": 1200})
-    assert r.json() == {"deleted": False, "quantity": 2, "removed": 1}
+    assert r.json() == {"deleted": False, "quantity": 2, "removed": 1, "realised": 700, "delist": []}
     ex = (await client.get("/api/collection/exits")).json()
     assert len(ex) == 1 and ex[0]["reason"] == "sold" and ex[0]["price"] == 1200
     assert ex[0]["acquired"]["price"] == 500 and ex[0]["card"]["name"]  # cost basis survives

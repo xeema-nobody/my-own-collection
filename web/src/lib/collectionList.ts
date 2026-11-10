@@ -1,20 +1,21 @@
 // Collection list: URL params, mapping to the API, built-in presets. Shared by the page and its tests.
 export const COLLECTION_DEFAULTS = {
   q: "", set: "", rarity: "", type: "", language: "", condition: "", graded: "", grader: "", grade: "", acquisition: "",
-  price_min: "", price_max: "", pl: "", needs_price: "", stale: "", cost_missing: "",
+  price_min: "", price_max: "", pl: "", sale: "", platform: "", needs_price: "", stale: "", cost_missing: "",
   sort: "added", order: "", page: "1", size: "50",
 };
 export type CollectionParams = typeof COLLECTION_DEFAULTS;
 export const FILTER_KEYS = ["q", "set", "rarity", "type", "language", "condition", "graded", "grader", "grade", "acquisition",
-  "price_min", "price_max", "pl", "needs_price", "stale", "cost_missing"] as const;
+  "price_min", "price_max", "pl", "sale", "platform", "needs_price", "stale", "cost_missing"] as const;
 /** What a saved preset covers: the filters plus the sort. */
 export const PRESET_KEYS = [...FILTER_KEYS, "sort", "order"] as const;
-export const DEFAULT_DESC = ["added", "value", "cost", "pl", "qty", "updated"];
+export const DEFAULT_DESC = ["added", "value", "cost", "pl", "qty", "updated", "listed"];
 
 export const SORT_OPTIONS = [
   { value: "added", label: "Date added" }, { value: "value", label: "Value" }, { value: "cost", label: "Cost" },
   { value: "pl", label: "P/L" }, { value: "name", label: "Name" }, { value: "set", label: "Set" },
   { value: "qty", label: "Quantity" }, { value: "updated", label: "Last price update" },
+  { value: "asking", label: "Asking value" }, { value: "listed", label: "Listing date" },
 ];
 
 /** Euros typed in the URL/UI ("1.5") -> integer cents string; "" when empty or invalid. */
@@ -37,5 +38,7 @@ export const BUILTIN_PRESETS: BuiltinPreset[] = [
   { name: "Needs price", query: { needs_price: "true" } },
   { name: "Price stale", query: { stale: "true" } },
   { name: "No cost", query: { cost_missing: "true" } },
+  { name: "Ready to list", query: { sale: "ready" } },
+  { name: "Listed", query: { sale: "listed", sort: "listed" } },
   { name: "Losing money", query: { pl: "negative", sort: "pl", order: "asc" } },
 ];

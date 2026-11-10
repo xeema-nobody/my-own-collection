@@ -202,7 +202,7 @@ The catalog import writes price rows for every card of every imported set (the p
 - Mark one as the cover photo; reorder; delete; replace.
 - Photos stay on the user's own machine (no cloud) and are included in backup/export.
 
-### 6b. Mark cards for sale and track their status `[ ]`
+### 6b. Mark cards for sale and track their status `[x]` built 2026-11-10 (awaiting user check; decisions.md "Sale status and realised profit")
 
 - Each copy has a sale status: **Not for sale → Ready to list → Listed → Sold** (also: Reserved, Withdrawn).
 - "Listed" records **where**: Vinted, Cardmarket, eBay, Marktplaats, other — a copy can be listed in more than one place at once.
@@ -331,3 +331,4 @@ _Future — start only after the collection is large and scanning (step 5) works
 | 2026-11-10 | 5    | "Import this Japanese set" prompt on a scan / slab with no match (`JaImportPrompt`, `services/ja_suggest.py`, `/api/scan/ja/*`, phone gate +3 routes): suggest by printed set code / English name alias / search, one confirm, progress, match runs again; catalog only. The two ja slabs read from the photos: Charizard V = S9 #103 (sample label 153 was wrong), Slowking = Neo Genesis, not in TCGdex ja. |
 | 2026-11-10 | D6   | Catalog default flipped to TCGdex: weekly import skips known cards (no per-card requests), Pocket / declined sets never listed, audit fixed for bare set docs, provider tests. Rehearsal on a scratch DB: 18 of 19 tracked cards priced, 11 headline prices moved >20 % (Cardmarket-only). Images still on images.pokemontcg.io (open). |
 | 2026-11-10 | D6   | Image re-point built: `services/catalog_images.py`, admin routes `catalog/images/{status,repoint,restore}`, Settings > Catalog "Card images". Reversible (`images_legacy`), idempotent, one request per set. Real run waits for the user's OK (backup first). |
+| 2026-11-10 | 6b   | Sale status built: `sale` on a stack (ready / listed with listings per platform / reserved / withdrawn), sold = exit with platform, fees, shipping, realised profit, days listed and delist hint; filters, presets, bulk status, Dashboard listed value, Settings > Data > Sales. Whole-stack granularity. |

@@ -87,6 +87,7 @@ export default function Dashboard() {
             hint={plPct == null ? undefined : `${plPct >= 0 ? "+" : ""}${plPct.toFixed(1)}% vs cost`} />
           <Kpi label="P/L excl. pulled" value={s?.pl_ex_pulled == null ? "—" : money(s.pl_ex_pulled)} tone={s?.pl_ex_pulled == null ? undefined : s.pl_ex_pulled >= 0 ? "ok" : "danger"}
             hint={plxPct == null ? undefined : `${plxPct >= 0 ? "+" : ""}${plxPct.toFixed(1)}% vs cost`} />
+          {(s?.listed_stacks ?? 0) > 0 && <Kpi label="Listed for sale" value={money(s.listed_value)} hint={`${s.listed_stacks} stack${s.listed_stacks === 1 ? "" : "s"}, part of Value`} />}
           <Kpi label="Cost" value={money(s?.cost)} hint={s?.cost_missing > 0 ? `${s.cost_missing} stack${s.cost_missing === 1 ? "" : "s"} without cost` : undefined} />
         </div>)}
 

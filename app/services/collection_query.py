@@ -5,11 +5,11 @@ even at 10k stacks. Money = integer cents. Rows are read-only."""
 from dataclasses import dataclass, field
 
 from app.providers.catalog.common import norm
-from app.services import acquisition
+from app.services import acquisition, sale
 from app.services.collection import present
 
-SORTS = ("added", "value", "cost", "pl", "qty", "name", "set", "updated")
-DEFAULT_DESC = {"added", "value", "cost", "pl", "qty", "updated"}
+SORTS = ("added", "value", "cost", "pl", "qty", "name", "set", "updated", "asking", "listed")
+DEFAULT_DESC = {"added", "value", "cost", "pl", "qty", "updated", "listed"}
 
 
 @dataclass
@@ -32,6 +32,8 @@ class Query:
     price_max: int | None = None
     pl: str | None = None                   # positive | negative
     card_id: str | None = None
+    sale: str | None = None                 # none|ready|listed|reserved|withdrawn|active (anything but none)
+    platform: str | None = None             # a listing exists on this platform
     sort: str = "added"
     order: str | None = None
     page: int = 1
@@ -95,6 +97,12 @@ def _matches(r: dict, q: Query, text: str) -> bool:
         u = _unit(r)
         if u is None or (q.price_min is not None and u < q.price_min) or (q.price_max is not None and u > q.price_max):
             return False
+    if q.sale:
+        st = sale.status_of(it)
+        if (st == "none") if q.sale == "active" else (st != q.sale):
+            return False
+    if q.platform and not any(l["platform"] == q.platform for l in sale.sale_of(it).get("listings") or []):
+        return False
     if q.tcg and c.get("tcg") != q.tcg:
         return False
     if q.set and (c.get("set") or {}).get("id") != q.set:
@@ -118,6 +126,9 @@ SORT_KEYS = {
     "set": lambda r: ((_card(r).get("set") or {}).get("name", ""), _card(r).get("number_sort", 0), _card(r).get("number", ""))
         if _card(r) else None,
     "updated": _updated,
+    "asking": lambda r: sale.listed_base(r["item"]) or None,
+    "listed": lambda r: max((l.get("listed_at") or "" for l in sale.sale_of(r["item"]).get("listings") or []),
+                            default="") or None,
 }
 
 
@@ -139,7 +150,10 @@ def totals(rows: list[dict]) -> dict:
             "pl_ex_pulled": cs["pl_ex_pulled"], "cost_basis_cost": cs["cost_basis_cost"],
             "cost_basis_cost_ex_pulled": cs["cost_basis_cost_ex_pulled"], "cost_missing": cs["cost_missing"],
             "needs_price": sum(1 for r in rows if r["needs_price"]),
-            "unpriced": sum(1 for r in rows if r["value"] is None)}
+            "unpriced": sum(1 for r in rows if r["value"] is None),
+            "listed_stacks": sum(1 for r in rows if sale.status_of(r["item"]) == "listed"),
+            "listed_value": sum(sale.listed_base(r["item"]) for r in rows),
+            "ready_stacks": sum(1 for r in rows if sale.status_of(r["item"]) == "ready")}
 
 
 def query(rows: list[dict], q: Query) -> dict:
@@ -173,4 +187,6 @@ def facets(rows: list[dict]) -> dict:
             "types": count(t for r in rows for t in (_card(r).get("types") or [])),
             "languages": count(r["item"].get("language") for r in rows),
             "conditions": count(r["item"].get("condition") for r in rows),
-            "graders": count(g.get("company") for g in gr), "grades": grades}
+            "graders": count(g.get("company") for g in gr), "grades": grades,
+            "sale_statuses": count(sale.status_of(r["item"]) for r in rows),
+            "platforms": count(l["platform"] for r in rows for l in sale.sale_of(r["item"]).get("listings") or [])}

@@ -33,9 +33,17 @@ const qs = (p: Record<string, unknown>) => {
 const post = (b: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(b) });
 
 export type ExitReason = "sold" | "gifted" | "removed";
-export type RemoveExtra = { reason?: ExitReason; price?: number | null; currency?: string; note?: string | null };
+export type Platform = "vinted" | "cardmarket" | "ebay" | "marktplaats" | "other";
+export type SaleStatus = "none" | "ready" | "listed" | "reserved" | "withdrawn";
+export type Listing = { platform: Platform; asking_price: number; currency: string; listed_at?: string | null; url?: string | null; notes?: string | null; shipping?: number | null; asking_base?: number | null };
+export type StackSale = { status: SaleStatus; listings: Listing[] };
+export type RemoveExtra = { reason?: ExitReason; price?: number | null; currency?: string; note?: string | null;
+  platform?: Platform | null; fees?: number | null; shipping_paid?: number | null };
+export type SalesReport = { by_status: Record<string, { stacks: number; cards: number }>; listed_value: number;
+  platforms: Record<string, { stacks: number; cards: number; value: number }>;
+  sold: { sales: number; cards: number; revenue: number; fees: number; shipping: number; realised: number | null; realised_known: number; avg_days_to_sell: number | null } };
 export type BulkRemoveResult = { removed: number; copies?: number; failed: number; results: { id: string; ok: boolean; removed?: number; error?: string }[] };
-export type CollectionExit = { id: string; card_id: string; quantity: number; reason: ExitReason; price: number | null; currency: string; date: string; note: string | null; created_at: string; card: { name: string; number: string; set: string; image: string | null } | null };
+export type CollectionExit = { id: string; card_id: string; quantity: number; reason: ExitReason; price: number | null; currency: string; date: string; note: string | null; created_at: string; platform?: Platform | null; fees?: number | null; shipping_paid?: number | null; realised?: number | null; listed_days?: number | null; delist?: string[]; card: { name: string; number: string; set: string; image: string | null } | null };
 
 /** One card version offered by the phone scanner (`/api/scan/*`). Money = cents in the base currency. */
 export type ScanCard = {
@@ -103,11 +111,11 @@ export type AcqEdit = { id: string; action: "edit" | "bulk" | "merge" | "import"
 
 /** Totals of the whole filtered set (not just the page). Money = cents; pl is null when no stack has cost + value. */
 export type CollectionTotals = { stacks: number; cards: number; value: number; cost: number; pl: number | null; pl_ex_pulled: number | null;
-  cost_basis_cost: number; cost_basis_cost_ex_pulled: number; cost_missing: number; needs_price: number; unpriced: number };
+  cost_basis_cost: number; cost_basis_cost_ex_pulled: number; cost_missing: number; needs_price: number; unpriced: number; listed_stacks?: number; listed_value?: number; ready_stacks?: number };
 export type CollectionPage = { total: number; items: any[]; totals?: CollectionTotals };
 export type FacetValue = { value: string; count: number; label?: string };
 export type CollectionFacets = { sets: FacetValue[]; rarities: FacetValue[]; types: FacetValue[]; languages: FacetValue[];
-  conditions: FacetValue[]; graders: FacetValue[]; grades: FacetValue[] };
+  conditions: FacetValue[]; graders: FacetValue[]; grades: FacetValue[]; platforms: FacetValue[]; sale_statuses: FacetValue[] };
 export type PresetScope = "collection" | "wishlist";
 export type Preset = { id: string; name: string; scope: PresetScope; query: Record<string, string> };
 
@@ -152,9 +160,13 @@ export const api = {
   collectionSummary: () => req<any>("/api/collection/summary"),
   addToCollection: (b: unknown) => req<any>("/api/collection", post(b)),
   removeFromCollection: (id: string, quantity = 1, extra: RemoveExtra = {}) =>
-    req<{ deleted: boolean; quantity: number; removed: number }>(`/api/collection/${id}/remove`, post({ quantity, ...extra })),
+    req<{ deleted: boolean; quantity: number; removed: number; realised?: number | null; delist?: string[] }>(`/api/collection/${id}/remove`, post({ quantity, ...extra })),
   bulkRemoveStacks: (ids: string[], reason: ExitReason, note?: string | null) =>
     req<BulkRemoveResult>("/api/collection/bulk-remove", post({ ids, reason, note: note || null })),
+  setSale: (id: string, b: StackSale) => req<{ id: string; sale: StackSale }>(`/api/collection/${id}/sale`, { method: "PUT", body: JSON.stringify(b) }),
+  bulkSale: (ids: string[], status: Exclude<SaleStatus, "listed">) =>
+    req<{ updated: number; failed: number; results: { id: string; ok: boolean; dropped_listings?: number; error?: string }[] }>("/api/collection/bulk-sale", post({ ids, status })),
+  salesReport: () => req<SalesReport>("/api/collection/sales/report"),
   collectionExits: () => req<CollectionExit[]>("/api/collection/exits"),
   deleteItem: (id: string) => req<void>(`/api/collection/${id}`, { method: "DELETE" }),
   history: (days: number) => req<any[]>(`/api/dashboard/history?days=${days}`),

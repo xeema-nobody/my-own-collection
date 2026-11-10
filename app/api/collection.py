@@ -6,10 +6,11 @@ from fastapi.responses import Response
 from app.services import valuation_cache
 from app.api.deps import get_db, spawn
 from app.config import settings
-from app.db.models import BulkAcquiredIn, BulkRemoveIn, CollectionIn, CollectionPatch, PresetIn, RemoveIn
+from app.db.models import (BulkAcquiredIn, BulkRemoveIn, BulkSaleIn, CollectionIn, CollectionPatch, PresetIn, RemoveIn,
+                           StackSaleIn)
 from app.services import acquisition
 from app.services import collection_query as cq
-from app.services import presets
+from app.services import presets, sale
 from app.services import collection as svc
 from app.services import portability
 from app.services.price_fetch import price_freshness
@@ -66,6 +67,8 @@ async def list_items(q: str | None = None, tcg: str | None = None, set: str | No
                      acquisition_type: str | None = Query(None, alias="acquisition", pattern="^(purchased|pulled|traded|gift|other|unset)$"),
                      price_min: int | None = Query(None, ge=0), price_max: int | None = Query(None, ge=0),
                      pl: str | None = Query(None, pattern="^(positive|negative)$"),
+                     sale_status: str | None = Query(None, alias="sale", pattern="^(none|ready|listed|reserved|withdrawn|active)$"),
+                     platform: str | None = Query(None, pattern="^(vinted|cardmarket|ebay|marktplaats|other)$"),
                      sort: str = Query("added", pattern=f"^({'|'.join(cq.SORTS)})$"),
                      order: str | None = Query(None, pattern="^(asc|desc)$"),
                      page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200)):
@@ -73,7 +76,7 @@ async def list_items(q: str | None = None, tcg: str | None = None, set: str | No
     query = cq.Query(q=q, tcg=tcg, set=set, rarity=rarity, type=type, graded=graded, grader=grader, grade=grade,
                      language=language, condition=condition, card_id=card_id, needs_price=needs_price, stale=stale,
                      cost_missing=cost_missing, acquisition=acquisition_type, price_min=price_min,
-                     price_max=price_max, pl=pl, sort=sort, order=order, page=page, page_size=page_size)
+                     price_max=price_max, pl=pl, sale=sale_status, platform=platform, sort=sort, order=order, page=page, page_size=page_size)
     return cq.query(await svc.valuate(get_db()), query)
 
 
@@ -81,6 +84,22 @@ async def list_items(q: str | None = None, tcg: str | None = None, set: str | No
 async def exits(limit: int = Query(100, ge=1, le=500)):
     """Sold / gifted / removed history, newest first."""
     return await svc.exits(get_db(), limit)
+
+
+@router.get("/sales/report")
+async def sales_report():
+    """Ready / listed (by platform) now plus sold totals (revenue, fees, realised profit, days to sell)."""
+    return await sale.report(get_db())
+
+
+@router.post("/bulk-sale")
+async def bulk_sale(body: BulkSaleIn):
+    return await sale.bulk_set(get_db(), body)
+
+
+@router.put("/{item_id}/sale")
+async def put_sale(item_id: str, body: StackSaleIn):
+    return await sale.set_sale(get_db(), item_id, body)
 
 
 @router.get("/facets")
@@ -123,6 +142,8 @@ async def summary():
                           "far": pct is not None and abs(pct) > settings.outlier_pct}
     return {"by_source": by_source, "distinct": len(rows), "cards": sum(r["item"]["quantity"] for r in rows),
             "value_by_source": value, "value": best, **costs,
+            "listed_value": sum(sale.listed_base(r["item"]) for r in rows),
+            "listed_stacks": sum(1 for r in rows if sale.status_of(r["item"]) == "listed"),
             "value_by_kind": {k: sum(r["value"] for r in rows if r["price_kind"] == k)
                               for k in {r["price_kind"] for r in rows if r["value"] is not None}},
             "unpriced": sum(1 for r in rows if r["value"] is None),

@@ -105,14 +105,52 @@ class CollectionPatch(BaseModel):
     tags: list[str] | None = None
 
 
+Platform = Literal["vinted", "cardmarket", "ebay", "marktplaats", "other"]
+SaleStatus = Literal["none", "ready", "listed", "reserved", "withdrawn"]
+
+
 class RemoveIn(BaseModel):
-    """Take copies out of a stack. Sold may carry the sale price per copy (cents); gifted / removed need none."""
+    """Take copies out of a stack. Sold may carry the sale price per copy (cents), the platform and the
+    fees / shipping paid for the whole sale (cents); gifted / removed need none."""
     quantity: int = Field(default=1, ge=1)
     reason: Literal["sold", "gifted", "removed"] = "removed"
     price: int | None = Field(default=None, ge=0, description="cents per copy, sold only")
     currency: str = "EUR"
     date: dt.date | None = None
     note: str | None = Field(default=None, max_length=300)
+    platform: Platform | None = None
+    fees: int | None = Field(default=None, ge=0, description="cents, whole sale, sold only")
+    shipping_paid: int | None = Field(default=None, ge=0, description="cents, whole sale, sold only")
+
+
+class Listing(BaseModel):
+    platform: Platform
+    asking_price: int = Field(ge=0, description="cents per copy")
+    currency: str = "EUR"
+    listed_at: dt.date | None = None
+    url: str | None = Field(default=None, max_length=300, pattern=r"^https?://")  # rendered as a link: no javascript:
+    notes: str | None = Field(default=None, max_length=300)
+    shipping: int | None = Field(default=None, ge=0, description="cents assumed")
+
+
+class StackSaleIn(BaseModel):
+    """Sale state of a whole stack. `listed` needs at least one listing; `none` clears the listings."""
+    status: SaleStatus
+    listings: list[Listing] = Field(default_factory=list, max_length=10)
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.status == "listed" and not self.listings:
+            raise ValueError("listed needs at least one listing")
+        if self.status == "none":
+            self.listings = []
+        return self
+
+
+class BulkSaleIn(BaseModel):
+    """Same non-listed status for many stacks (listings need a price per stack: use the stack form)."""
+    ids: list[str] = Field(min_length=1, max_length=500)
+    status: Literal["none", "ready", "reserved", "withdrawn"]
 
 
 class PresetIn(BaseModel):

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ACQ_TYPES } from "../AcquiredForm";
-import { type CollectionFacets, type FacetValue } from "../../lib/api";
+import { type CollectionFacets, type FacetValue, type Platform } from "../../lib/api";
+import { PLATFORM_LABEL } from "./SalePanel";
 import { FILTER_KEYS, SORT_OPTIONS, type CollectionParams } from "../../lib/collectionList";
 import { Button, Checkbox, Input, Select, SegmentedControl } from "../ui";
 
@@ -43,6 +44,11 @@ export default function Filters({ f, set, facets, dir, onDir }: {
           options={[...ACQ_TYPES, { value: "unset", label: "Not set" }]} /></div>
         <div className="w-36"><Select aria-label="Profit or loss" value={f.pl} onChange={(v) => set({ pl: v })} allLabel="Any P/L"
           options={[{ value: "positive", label: "In profit" }, { value: "negative", label: "At a loss" }]} /></div>
+        <div className="w-40"><Select aria-label="Sale status" value={f.sale} onChange={(v) => set({ sale: v })} allLabel="Any sale status"
+          options={[{ value: "active", label: "Marked for sale" }, { value: "ready", label: "Ready to list" }, { value: "listed", label: "Listed" },
+            { value: "reserved", label: "Reserved" }, { value: "withdrawn", label: "Withdrawn" }, { value: "none", label: "Not for sale" }]} /></div>
+        <div className="w-36"><Select aria-label="Platform" value={f.platform} onChange={(v) => set({ platform: v })} allLabel="Any platform"
+          options={opts(facets?.platforms, ["vinted", "cardmarket", "ebay", "marktplaats", "other"], (v) => PLATFORM_LABEL[v as Platform] ?? v)} /></div>
         <div className="flex items-center gap-1" role="group" aria-label="Price per copy">
           <div className="w-24"><Input aria-label="Min price per copy" type="number" min="0" step="0.01" placeholder="Min €" value={f.price_min} onChange={(e) => set({ price_min: e.target.value })} /></div>
           <span className="text-muted">–</span>

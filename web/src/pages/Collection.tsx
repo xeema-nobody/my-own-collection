@@ -21,7 +21,8 @@ import ValueChart from "../components/ValueChart";
 import { usePriceFetchJob } from "../lib/fetchJob";
 import BulkRemoveDrawer from "../components/BulkRemoveDrawer";
 import RemoveStack from "../components/collection/RemoveStack";
-import { Badge, Button, Card, Checkbox, Drawer, EmptyState, Kpi, Pagination, Skeleton, SortTh, Table, THead, Td, Th, Tr, ViewToggle, VIEWS } from "../components/ui";
+import SalePanel, { SaleBadge } from "../components/collection/SalePanel";
+import { Badge, Button, Card, Checkbox, Drawer, EmptyState, Kpi, Pagination, Select, Skeleton, SortTh, Table, THead, Td, Th, Tr, ViewToggle, VIEWS } from "../components/ui";
 
 const COLS: { key: string; label: string; num?: boolean }[] = [
   { key: "name", label: "Card" }, { key: "set", label: "Set" }, { key: "", label: "Details" },
@@ -86,7 +87,8 @@ function Details({ i, onGone }: { i: any; onGone?: () => void }) {
         </div>
       </div>
       <CostSection i={i} />
-      <RemoveStack id={i.id} quantity={i.quantity} name={i.card?.name ?? "card"} onDone={onGone} />
+      <SalePanel key={`${i.id}-${JSON.stringify(i.sale)}`} id={i.id} sale={i.sale} />
+      <RemoveStack id={i.id} quantity={i.quantity} name={i.card?.name ?? "card"} cost={i.cost} onDone={onGone} />
       <SourceCompare row={i} />
     </div>);
 }
@@ -118,6 +120,10 @@ export default function Collection() {
   const pickedCards = [...new Set(pickedIds.map((id) => info.current.get(id)?.card_id).filter(Boolean) as string[])];
   const pickedCopies = pickedIds.reduce((n, id) => n + (info.current.get(id)?.quantity ?? 0), 0);
   const [removeOpen, setRemoveOpen] = useState(false);
+  const [saleOpen, setSaleOpen] = useState(false);
+  const [saleStatus, setSaleStatus] = useState<"none" | "ready" | "reserved" | "withdrawn">("ready");
+  const saleBulk = useMutation({ mutationFn: () => api.bulkSale(pickedIds, saleStatus),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["collection"] }); qc.invalidateQueries({ queryKey: ["sales"] }); } });
   const fetchPicked = useMutation({ mutationFn: () => api.fetchPrices({ cards: pickedCards }),
     onSettled: () => qc.invalidateQueries({ queryKey: ["jobs"] }) });
   const dirty = activeFilterCount(f) > 0;
@@ -171,6 +177,7 @@ export default function Collection() {
         <span className="num text-muted">{t.cards} cards</span>
         <span className="num">Value <span className="font-semibold">{money(t.value)}</span></span>
         <span className="num">Cost <span className="font-semibold">{money(t.cost)}</span>{t.cost_missing > 0 && <span className="text-muted"> ({t.cost_missing} without)</span>}</span>
+        {(t.listed_stacks ?? 0) > 0 && <span className="num">Listed <span className="font-semibold">{money(t.listed_value)}</span> ({t.listed_stacks})</span>}
         <span className={`num ${t.pl == null ? "text-muted" : t.pl >= 0 ? "text-ok" : "text-danger"}`}>P/L <span className="font-semibold">{t.pl == null ? "—" : money(t.pl)}</span></span>
       </div>}
       <div className="flex justify-end"><ViewToggle value={view} onChange={setView} /></div>
@@ -182,6 +189,7 @@ export default function Collection() {
         <span>{picked.size} stack{picked.size === 1 ? "" : "s"} selected</span>
         <Button size="sm" onClick={() => { bulk.reset(); setBulkOpen(true); }}>Edit cost &amp; type</Button>
         <Button size="sm" variant="secondary" disabled={!!running || fetchPicked.isPending} onClick={() => fetchPicked.mutate()}>Fetch prices</Button>
+        <Button size="sm" variant="secondary" onClick={() => { saleBulk.reset(); setSaleOpen(true); }}>Sale status</Button>
         <Button size="sm" variant="secondary" onClick={() => setRemoveOpen(true)}>Remove</Button>
         <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>Clear selection</Button>
         {fetchPicked.isSuccess && <span className="text-muted">Fetching {fetchPicked.data.cards} card{fetchPicked.data.cards === 1 ? "" : "s"}: progress shows at the top of the page.</span>}
@@ -204,7 +212,7 @@ export default function Collection() {
                 <Td>{i.card?.images?.small && <img src={i.card.images.small} alt="" loading="lazy" className="h-12 rounded-sm" />}</Td>
                 <Td><Link className="font-medium hover:underline" to={`/cards/${encodeURIComponent(i.card_id)}`} onClick={(e) => e.stopPropagation()}>{i.card?.name}</Link></Td>
                 <Td className="text-muted">{i.card?.set?.name} #{i.card?.number}</Td>
-                <Td className="text-muted">{detail(i)}</Td>
+                <Td className="text-muted">{detail(i)} <SaleBadge sale={i.sale} /></Td>
                 <Td num>{i.quantity}</Td>
                 <Td num><Value i={i} /></Td>
                 <Td num><div>{money(i.cost)}</div><AcqBadge type={i.acquired?.type} /></Td>
@@ -224,6 +232,16 @@ export default function Collection() {
       <BulkRemoveDrawer kind="stacks" ids={pickedIds} copies={pickedCopies} open={removeOpen} onClose={() => setRemoveOpen(false)}
         onDone={() => setPicked(new Set())}
         onChanged={() => { qc.invalidateQueries({ queryKey: ["collection"] }); qc.invalidateQueries({ queryKey: ["dashboard"] }); qc.invalidateQueries({ queryKey: ["exits"] }); }} />
+      <Drawer open={saleOpen} onClose={() => { setSaleOpen(false); if (saleBulk.isSuccess) setPicked(new Set()); }} title={`Sale status · ${picked.size} stack${picked.size === 1 ? "" : "s"}`}>
+        <div className="space-y-3 text-sm">
+          <Select aria-label="New sale status" value={saleStatus} onChange={(v) => setSaleStatus(v as typeof saleStatus)}
+            options={[{ value: "ready", label: "Ready to list" }, { value: "reserved", label: "Reserved" }, { value: "withdrawn", label: "Withdrawn" }, { value: "none", label: "Not for sale" }]} />
+          <p className="text-xs text-muted">Listings need a price per stack: open a stack and use Edit sale. Changing status here clears existing listings.</p>
+          <Button disabled={saleBulk.isPending} onClick={() => saleBulk.mutate()}>Apply to {picked.size}</Button>
+          {saleBulk.error && <p role="alert" className="text-danger">{String((saleBulk.error as Error).message)}</p>}
+          {saleBulk.isSuccess && <p role="status" className="text-ok">Updated {saleBulk.data.updated}{saleBulk.data.failed ? `, ${saleBulk.data.failed} failed` : ""}.</p>}
+        </div>
+      </Drawer>
       <Drawer open={bulkOpen} onClose={() => { setBulkOpen(false); if (bulk.isSuccess) setPicked(new Set()); }} title={`Edit cost & type · ${picked.size} stack${picked.size === 1 ? "" : "s"}`}>
         <AcquiredForm bulk busy={bulk.isPending} submitLabel={`Apply to ${picked.size}`} onSubmit={(p) => bulk.mutate(p)} />
         {bulk.error && <p role="alert" className="mt-2 text-sm text-danger">{String((bulk.error as Error).message)}</p>}

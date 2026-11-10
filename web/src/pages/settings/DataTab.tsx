@@ -8,6 +8,29 @@ import { Button, FileDrop, SegmentedControl, Section } from "../../components/ui
 
 const MODE_HINT = { set: "Sets each stack's quantity to the file value. Re-importing the same file changes nothing.", add: "Adds the file quantity to what you already own." };
 
+function SalesSection() {
+  const q = useQuery({ queryKey: ["sales", "report"], queryFn: api.salesReport });
+  const r = q.data;
+  if (!r) return null;
+  const n = (s: string) => r.by_status[s]?.stacks ?? 0;
+  const sold = r.sold;
+  return (
+    <Section title="Sales">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
+        <div>Ready <span className="num font-semibold">{n("ready")}</span></div>
+        <div>Listed <span className="num font-semibold">{n("listed")}</span> <span className="num text-muted">{money(r.listed_value)}</span></div>
+        <div>Reserved / withdrawn <span className="num font-semibold">{n("reserved") + n("withdrawn")}</span></div>
+        <div>Sold <span className="num font-semibold">{sold.sales}</span> <span className="num text-muted">{money(sold.revenue)}</span></div>
+        <div>Fees + shipping <span className="num font-semibold">{money(sold.fees + sold.shipping)}</span></div>
+        <div>Realised profit <span className="num font-semibold">{sold.realised == null ? "—" : money(sold.realised)}</span>
+          {sold.realised != null && sold.realised_known < sold.sales && <span className="text-muted"> ({sold.realised_known}/{sold.sales} with cost)</span>}</div>
+        <div>Avg days to sell <span className="num font-semibold">{sold.avg_days_to_sell ?? "—"}</span></div>
+      </div>
+      {Object.keys(r.platforms).length > 0 && <ul className="mt-2 text-sm text-muted">
+        {Object.entries(r.platforms).map(([p, v]) => <li key={p} className="num">{p}: {v.stacks} stack{v.stacks === 1 ? "" : "s"} · {money(v.value)}</li>)}</ul>}
+    </Section>);
+}
+
 function ExitsSection() {
   const q = useQuery({ queryKey: ["exits"], queryFn: api.collectionExits });
   const rows = q.data ?? [];
@@ -18,7 +41,7 @@ function ExitsSection() {
           {rows.slice(0, 30).map((x) => (
             <li key={x.id} className="flex items-baseline justify-between gap-3 py-1.5">
               <span>{x.card?.name ?? x.card_id} <span className="text-muted">{x.card?.set} · ×{x.quantity}{x.note ? ` · ${x.note}` : ""}</span></span>
-              <span className="num shrink-0 text-muted">{exitLabel(x.reason)}{x.price != null ? ` ${money(x.price, x.currency)}/ea` : ""} · {x.date}</span>
+              <span className="num shrink-0 text-muted">{exitLabel(x.reason)}{x.price != null ? ` ${money(x.price, x.currency)}/ea` : ""}{x.platform ? ` · ${x.platform}` : ""}{x.realised != null ? ` · realised ${money(x.realised, x.currency)}` : ""} · {x.date}</span>
             </li>))}
         </ul>)}
     </Section>);
@@ -56,6 +79,7 @@ export default function DataTab() {
           </div>)}
         {xfer.error && <p className="mt-3 text-sm text-danger">{errorText(xfer.error)}</p>}
       </Section>
+      <div className="lg:col-span-2"><SalesSection /></div>
       <div className="lg:col-span-2"><ExitsSection /></div>
     </div>);
 }

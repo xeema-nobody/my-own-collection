@@ -190,8 +190,19 @@ async def needs_price_card_ids(db) -> list[str]:
     return sorted({v["item"]["card_id"] for v in await valuate(db) if v["needs_price"]})
 
 
+def realised(acquired: dict | None, qty: int, price: int | None, currency: str,
+             fees: int | None, shipping: int | None) -> int | None:
+    """Profit of a sale in cents: price x qty - fees - shipping - cost. None (never 0) when the sale price or the
+    cost is unknown, or the cost is in another currency than the sale (no rate applied here)."""
+    a = acquired or {}
+    if price is None or (a.get("price") or 0) <= 0 or a.get("currency", "EUR") != currency:
+        return None
+    return price * qty - (fees or 0) - (shipping or 0) - a["price"] * qty
+
+
 async def remove(db, item_id: str, quantity: int = 1, reason: str = "removed", price: int | None = None,
-                  currency: str = "EUR", date=None, note: str | None = None) -> dict:
+                  currency: str = "EUR", date=None, note: str | None = None, platform: str | None = None,
+                  fees: int | None = None, shipping_paid: int | None = None) -> dict:
     """Take copies out of a stack (sold / gifted / removed). Always logs a `collection_exits` row with the
     stack snapshot (cost basis included) so nothing leaves silently; asking for more than owned removes all."""
     it = await db.collection_items.find_one({"_id": oid(item_id)})
@@ -199,13 +210,27 @@ async def remove(db, item_id: str, quantity: int = 1, reason: str = "removed", p
         raise HTTPException(404, "item not found")
     qty = min(quantity, it["quantity"])
     now = datetime.now(timezone.utc)
+    sold = reason == "sold"
+    day = date.isoformat() if date else now.date().isoformat()
+    listings = (it.get("sale") or {}).get("listings") or []
+    left = it["quantity"] - qty
+    listed_days = None
+    if sold:
+        starts = [l["listed_at"] for l in listings if l.get("listed_at") and (not platform or l["platform"] == platform)]
+        if starts:
+            listed_days = max((datetime.fromisoformat(day) - datetime.fromisoformat(min(starts))).days, 0)
     await db.collection_exits.insert_one({
         "card_id": it["card_id"], "stack_key": it.get("stack_key"), "variant": it.get("variant"),
         "language": it.get("language"), "condition": it.get("condition"), "grading": it.get("grading"),
         "acquired": it.get("acquired"), "quantity": qty, "reason": reason,
-        "price": price if reason == "sold" else None, "currency": currency,
-        "date": date.isoformat() if date else now.date().isoformat(), "note": note, "created_at": now})
-    left = it["quantity"] - qty
+        "price": price if sold else None, "currency": currency,
+        "date": day, "note": note, "created_at": now,
+        "platform": platform if sold else None, "fees": fees if sold else None,
+        "shipping_paid": shipping_paid if sold else None,
+        "realised": realised(it.get("acquired"), qty, price, currency, fees, shipping_paid) if sold else None,
+        "listed_days": listed_days,
+        # other platforms still listing a stack that is now gone: the user must delist there
+        "delist": sorted({l["platform"] for l in listings if l["platform"] != platform}) if sold and left <= 0 else []})
     try:
         if left <= 0:
             await db.collection_items.delete_one({"_id": it["_id"]})
@@ -213,7 +238,9 @@ async def remove(db, item_id: str, quantity: int = 1, reason: str = "removed", p
             await db.collection_items.update_one({"_id": it["_id"]}, {"$set": {"quantity": left, "updated_at": now}})
     finally:
         valuation_cache.bump()
-    return {"deleted": left <= 0, "quantity": max(left, 0), "removed": qty}
+    return {"deleted": left <= 0, "quantity": max(left, 0), "removed": qty,
+            "realised": realised(it.get("acquired"), qty, price, currency, fees, shipping_paid) if sold else None,
+            "delist": sorted({l["platform"] for l in listings if l["platform"] != platform}) if sold and left <= 0 else []}
 
 
 async def remove_many(db, ids: list[str], reason: str = "removed", note: str | None = None) -> dict:
@@ -242,7 +269,8 @@ async def exits(db, limit: int = 100) -> list[dict]:
     for r in rows:
         c = cards.get(r["card_id"]) or {}
         out.append({"id": str(r.pop("_id")), **{k: r.get(k) for k in (
-            "card_id", "quantity", "reason", "price", "currency", "date", "note", "condition", "grading", "acquired")},
+            "card_id", "quantity", "reason", "price", "currency", "date", "note", "condition", "grading", "acquired",
+            "platform", "fees", "shipping_paid", "realised", "listed_days", "delist")},
             "created_at": r["created_at"].isoformat(),
             "card": {"name": c.get("name"), "number": c.get("number"), "set": (c.get("set") or {}).get("name"),
                      "image": (c.get("images") or {}).get("small")} if c else None})
