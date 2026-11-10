@@ -342,4 +342,4 @@ def test_caddy_gate_forwards_exactly_the_app_phone_allowlist():
     if "@phone_api" not in text:
         pytest.skip("lan/Caddyfile not mounted in this container")
     line = re.search(r"@phone_api \{.*?path ([^\n]+)", text, re.S).group(1).split()
-    assert sorted(line) == sorted(p for _, p in PHONE_ALLOWED if p != "/health")
+    assert sorted(line) == sorted({p for _, p in PHONE_ALLOWED if p != "/health"})

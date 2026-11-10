@@ -52,6 +52,8 @@ export type ScanSlab = { grader: string | null; grade: number | null; cert: stri
 export type CertInfo = { grader: string; cert: string; status: string; url: string | null; name?: string | null; number?: string | null;
   printed_total?: number | null; set_name?: string | null; year?: number | null; language?: string | null; variant?: string | null;
   grade?: number | null; tier?: string | null; detail?: string | null };
+export type JaSuggest = { id: string; name: string; total: number | null; printed_total: number | null; imported: number; reason: string };
+export type JaImportStatus = { state: "idle" | "running" | "done" | "partial" | "error"; set: string | null; done: number; expected: number | null; failed: string[] };
 export type ScanCert = { cert: CertInfo; cards: ScanCard[]; how_exact: "exact" | "likely" | "possible" | "none"; needs_confirm: boolean; cached: boolean; report_url: string | null; warnings?: { code: string; text: string }[] };
 export type ScanIdentify = { text: string; confidence: "high" | "medium" | "low" | "none"; names: string[]; total: number; cards: ScanCard[]; read?: ScanRead | null; exact?: boolean; slab?: ScanSlab | null; detected?: boolean; cert?: ScanCert | null };
 export type ScanSearch = { total: number; page: number; cards: ScanCard[] };
@@ -200,6 +202,10 @@ export const api = {
     req<ScanCert>("/api/scan/cert" + qs({ grader, cert, refresh: opts.refresh ? 1 : undefined, grade: opts.grade ?? undefined, tier: opts.tier ?? undefined })),
   scanSearch: (q: string, page = 1) => req<ScanSearch>("/api/scan/search" + qs({ q, page })),
   scanAdd: (b: unknown, sessionId?: string | null) => req<ScanAdded>("/api/scan/add" + qs({ session_id: sessionId }), post(b)),
+  jaSuggest: (p: { code?: string | null; total?: number | null; set_name?: string | null; q?: string }) =>
+    req<{ sets: JaSuggest[] }>("/api/scan/ja/suggest" + qs({ code: p.code || undefined, total: p.total || undefined, set_name: p.set_name || undefined, q: p.q || undefined })),
+  jaImport: (set: string) => req<{ started: boolean; set: string }>("/api/scan/ja/import" + qs({ set }), { method: "POST" }),
+  jaImportStatus: () => req<JaImportStatus>("/api/scan/ja/import"),
   scanLookup: (number: string, set?: string) => req<ScanIdentify>("/api/scan/lookup" + qs({ number, set: set || undefined })),
   scanUndo: (eventId: string) => req<ScanUndone>("/api/scan/undo", post({ event_id: eventId })),
   scanSession: () => req<{ session: ScanSession | null }>("/api/scan/session"),

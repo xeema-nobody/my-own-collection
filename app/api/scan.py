@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from app.api.deps import get_db, spawn
+from app.api.deps import ensure_idle, get_db, spawn
 from app.config import settings
 from app.db.models import CollectionIn, ScanSessionIn
 from app.providers.ocr import ImageError, OcrUnavailable, get_ocr
@@ -116,3 +116,36 @@ async def close_session(session_id: str):
 @router.get("/events", dependencies=[Depends(require_laptop)])
 async def events(after: str | None = None, session_id: str | None = None):
     return await svc.events_after(get_db(), after, session_id)
+
+
+@router.get("/ja/suggest")
+async def ja_suggest(code: str | None = Query(None, max_length=20), total: int | None = Query(None, ge=1, le=1000),
+                     set_name: str | None = Query(None, max_length=80), q: str | None = Query(None, max_length=40)):
+    """Japanese sets worth importing for a scan / slab with no match (live set list, cached; [] when TCGdex is down)."""
+    from app.services import ja_suggest as ja
+    try:
+        return {"sets": await ja.suggest(code, total, set_name, q)}
+    except Exception:  # noqa: BLE001 - upstream down: the prompt just offers nothing
+        return {"sets": []}
+
+
+@router.post("/ja/import", status_code=202)
+async def ja_import(set: str = Query(..., min_length=1, max_length=20)):
+    """Import ONE Japanese set into the catalog (never the collection). The id must be in TCGdex's live ja list."""
+    from app.services import catalog_ja, ja_suggest as ja
+    try:
+        found = await ja.find_set(set)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"catalog provider unavailable: {e}") from None
+    if not found:
+        raise HTTPException(404, "unknown Japanese set")
+    await ensure_idle("catalog_import")
+    ja.reset_cache()   # held counts change as the job runs
+    spawn(catalog_ja.import_ja_sets([set], trigger="scan"))
+    return {"started": True, "set": set}
+
+
+@router.get("/ja/import")
+async def ja_import_status():
+    from app.services import ja_suggest as ja
+    return await ja.import_status(get_db())

@@ -7,6 +7,7 @@ import CameraCapture from "../components/scan/CameraCapture";
 import CandidatePicker from "../components/scan/CandidatePicker";
 import AddSheet from "../components/scan/AddSheet";
 import SlabResult from "../components/scan/SlabResult";
+import JaImportPrompt from "../components/scan/JaImportPrompt";
 import { Button, Input } from "../components/ui";
 
 type Step = "camera" | "pick" | "details" | "done" | "review";
@@ -41,9 +42,11 @@ export default function Scan() {
     if (sessionId && sessionId !== appliedId.current) { appliedId.current = sessionId; if (sessionMode) setModeState(sessionMode); }
   }, [sessionId, sessionMode]);
 
+  const lastPhoto = useRef<Blob | null>(null);   // kept so the match can run again after a Japanese set import
+  const [jaDone, setJaDone] = useState<string | null>(null);
   const show = (r: ScanIdentify, q: string | null, page: number) => { setRes(r); setMore(q ? { q, page } : null); setErr(null); setStep("pick"); };
   const identify = useMutation({
-    mutationFn: (photo: Blob) => api.scanIdentify(photo, slabMode),
+    mutationFn: (photo: Blob) => { lastPhoto.current = photo; return api.scanIdentify(photo, slabMode); },
     onSuccess: (r) => show(r, r.names[0] ?? null, 0),
     onError: (e) => setErr(friendlyScanError(e)),
   });
@@ -97,7 +100,15 @@ export default function Scan() {
   const lastRow = rows[rows.length - 1] ?? null;
   const slabForSheet = res.slab ? { ...res.slab, grade: res.slab.grade ?? res.cert?.cert.grade ?? null } : slabMode ? { grader: null, grade: null, cert: null } : null;
   const showSlab = slabMode && !!(res.slab || res.cert || res.cards.length === 0);
-  const again = () => { setStep("camera"); setErr(null); setCard(null); setRes(EMPTY); };
+  const again = () => { setStep("camera"); setErr(null); setCard(null); setRes(EMPTY); setJaDone(null); };
+  // Nothing matched after a photo / typed number: offer the likely Japanese set (catalog import), then match again.
+  const offerJa = step === "pick" && res.cards.length === 0 && !!(res.read || res.cert) && !identify.isPending && !relookup.isPending && !search.isPending;
+  const rematch = (set: string) => {
+    setJaDone(set);
+    const c = res.cert?.cert;
+    if (slabMode && c?.grader && c.cert) relookup.mutate({ grader: c.grader, cert: c.cert });
+    else if (lastPhoto.current) identify.mutate(lastPhoto.current);
+  };
   return (
     <main className="mx-auto max-w-lg space-y-4 px-4 py-4">
       <h1 className="flex items-center gap-2 text-lg font-semibold"><ScanLine size={20} className="text-accent" />Add a card</h1>
@@ -147,6 +158,8 @@ export default function Scan() {
       {step === "pick" && showSlab &&
         <SlabResult key={`${res.slab?.grader}:${res.slab?.cert}:${res.cert?.cert.status}`} slab={res.slab} result={res.cert} busy={relookup.isPending} error={err}
           onLookup={(grader, cert) => relookup.mutate({ grader, cert })} />}
+      {offerJa && <JaImportPrompt key={`${res.read?.set_code}:${res.cert?.cert.cert}:${jaDone}`} code={res.read?.set_code} total={res.read?.printed_total ?? res.cert?.cert.printed_total}
+        setName={res.cert?.cert.set_name} importedSet={jaDone} onImported={rematch} />}
       {step === "pick" && <CandidatePicker quiet={slabMode && !!(res.slab || res.cert)} initialQuery={res.cert?.cert.name ?? undefined} cards={res.cards} total={res.total} confidence={res.confidence} text={res.text} read={res.read} searching={search.isPending}
         canMore={!!more && res.cards.length < res.total}
         onPick={(c) => { setCard(c); setErr(null); setStep("details"); }}

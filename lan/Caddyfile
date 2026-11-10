@@ -18,7 +18,7 @@
 
 	@phone_api {
 		method GET POST
-		path /api/scan/me /api/scan/identify /api/scan/search /api/scan/add /api/scan/session /api/scan/lookup /api/scan/undo /api/scan/cert
+		path /api/scan/me /api/scan/identify /api/scan/search /api/scan/add /api/scan/session /api/scan/lookup /api/scan/undo /api/scan/cert /api/scan/ja/suggest /api/scan/ja/import
 	}
 	handle @phone_api {
 		reverse_proxy app:8000 {

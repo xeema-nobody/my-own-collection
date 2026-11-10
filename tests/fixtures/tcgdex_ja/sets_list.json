@@ -1,0 +1,9 @@
+[
+  {"id": "S9", "name": "スターバース", "cardCount": {"total": 127, "official": 100}},
+  {"id": "S9a", "name": "バトルリージョン", "cardCount": {"total": 93, "official": 67}},
+  {"id": "SV2a", "name": "ポケモンカード151", "cardCount": {"total": 210, "official": 165}},
+  {"id": "neo1", "name": "金、銀、新世界へ...", "cardCount": {"total": 96, "official": 96}},
+  {"id": "neo2", "name": "遺跡をこえて...", "cardCount": {"total": 57, "official": 56}},
+  {"id": "neo3", "name": "めざめる伝説", "cardCount": {"total": 57, "official": 57}},
+  {"id": "neo4", "name": "闇、そして光へ...", "cardCount": {"total": 113, "official": 113}}
+]
