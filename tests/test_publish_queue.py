@@ -138,3 +138,21 @@ async def test_pack_prefills_from_published_listing_market_is_suggestion(db, cli
     assert pack["stored"]["price"] == 1234 and "market_price" in pack
     cm = (await client.post("/api/collection/listing-pack", json={"ids": [sid], "platform": "cardmarket"})).json()["items"][0]
     assert cm["stored"] is None and cm["title"] != "My own title"
+
+
+async def test_pack_shows_queued_payload_for_active_entry_not_market_price(db, client):
+    sid = await stack(db, client, 4)
+    await confirm(client, row(sid, title="Queued title", description="Queued text", price=450, condition="Good", parcel="medium"))
+    for active in ("confirmed", "publishing"):
+        if active == "publishing":
+            assert (await client.post("/api/publish/queue/next")).status_code == 200
+        p = (await client.post("/api/collection/listing-pack", json={"ids": [sid], "platform": "vinted"})).json()["items"][0]
+        assert p["queued"] is True and p["price"] == 450 and p["title"] == "Queued title" and p["description"] == "Queued text"
+        assert (p["vinted_condition"], p["vinted_parcel"]) == ("Good", "medium")
+        assert not any(w.startswith("needs price") for w in p["warnings"])
+    cm = (await client.post("/api/collection/listing-pack", json={"ids": [sid], "platform": "cardmarket"})).json()["items"][0]
+    assert cm["queued"] is False and cm["title"] != "Queued title"
+    qid = (await client.get("/api/publish/queue", params={"item_id": sid})).json()[0]["id"]
+    await client.post(f"/api/publish/queue/{qid}/cancel")
+    p = (await client.post("/api/collection/listing-pack", json={"ids": [sid], "platform": "vinted"})).json()["items"][0]
+    assert p["queued"] is False and p["title"] != "Queued title"

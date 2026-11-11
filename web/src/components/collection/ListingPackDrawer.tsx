@@ -87,7 +87,8 @@ export default function ListingPackDrawer({ ids, open, onClose }: { ids: string[
               {platform === "vinted" && p.market_price != null && p.market_price !== priceOf(p) && (
                 <p className="flex flex-wrap items-center gap-2 text-xs text-muted">Market suggests {money(p.market_price, p.currency)}
                   <Button size="sm" variant="ghost" onClick={() => set(p.item_id, { price: euros(p.market_price!) })}>Use market price</Button></p>)}
-              {platform === "vinted" && p.stored && <p className="text-xs text-muted">Prefilled from what you last published on Vinted.</p>}
+              {platform === "vinted" && p.queued && <p className="text-xs text-accent">Already queued: showing the queued price and text ({money(p.price ?? 0, p.currency)}), not today's market price.</p>}
+              {platform === "vinted" && p.stored && !p.queued && <p className="text-xs text-muted">Prefilled from what you last published on Vinted.</p>}
               {platform === "vinted" && (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Select aria-label={`Condition ${n + 1}`} value={e.condition ?? p.vinted_condition} onChange={(v) => set(p.item_id, { condition: v as VintedCondition })} options={CONDITIONS} />

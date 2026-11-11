@@ -104,6 +104,16 @@ async def _stored_vinted(db, stack_id: str, item: dict) -> dict | None:
             "price": listing["asking_price"]}
 
 
+async def _queued_vinted(db, stack_id: str) -> dict | None:
+    """Payload of the stack's active (confirmed / publishing) queue entry, shown instead of today's market price."""
+    cur = await db.publish_queue.find_one({"item_id": stack_id, "state": {"$in": ["confirmed", "publishing"]}},
+                                          sort=[("updated_at", -1)])
+    if not cur:
+        return None
+    p = cur["payload"]
+    return {k: p[k] for k in ("title", "description", "condition", "parcel", "price")}
+
+
 async def build_pack(db, ids: list[str], platform: str, strategy: str = "market", pct: int = 5) -> dict:
     if strategy not in STRATEGIES:
         raise ValueError(f"strategy must be one of {', '.join(STRATEGIES)}")
@@ -131,11 +141,16 @@ async def build_pack(db, ids: list[str], platform: str, strategy: str = "market"
             warnings.append("slab: not a Cardmarket single, left out of the sheet")
         stored = await _stored_vinted(db, sid, r["item"]) if platform == "vinted" else None
         market = price
-        if stored:  # an earlier publish: its edited price / text win, the market price stays a suggestion only
+        queued = await _queued_vinted(db, sid) if platform == "vinted" else None
+        if queued:  # confirmed / publishing: what is about to go out wins over everything, incl. the stored listing
+            stored = {k: queued[k] for k in ("title", "description", "condition", "parcel", "price")}
+            title, desc, price = queued["title"], queued["description"], queued["price"]
+            warnings = [w for w in warnings if not w.startswith("needs price")]
+        elif stored:  # an earlier publish: its edited price / text win, the market price stays a suggestion only
             title, desc, price = stored["title"], stored["description"], stored["price"]
             warnings = [w for w in warnings if not w.startswith("needs price")]
         out.append({"item_id": sid, "card_id": r["item"]["card_id"], "title": title, "description": desc,
-                    "price": price, "market_price": market, "stored": stored, "currency": "EUR", "sale": r["item"].get("sale"), "quantity": r["item"]["quantity"], "photos": photos,
+                    "price": price, "market_price": market, "stored": stored, "queued": bool(queued), "currency": "EUR", "sale": r["item"].get("sale"), "quantity": r["item"]["quantity"], "photos": photos,
                     "slab": bool(r["item"].get("grading")), "vinted_condition": (stored or {}).get("condition") or VINTED_COND["slab" if r["item"].get("grading") else "raw"],
                     "vinted_parcel": (stored or {}).get("parcel") or VINTED_PARCEL["slab" if r["item"].get("grading") else "raw"],
                     "vinted_url": next((l.get("url") for l in (r["item"].get("sale") or {}).get("listings") or []

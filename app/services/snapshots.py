@@ -3,7 +3,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 from app.config import settings
-from app.services import acquisition, alerts
+from app.services import acquisition, alerts, reprice
 from app.services.collection import source_ids, valuate
 
 log = logging.getLogger(__name__)
@@ -52,4 +52,5 @@ async def take_snapshot(db) -> dict:
         await alerts.evaluate(db, vals)
     except Exception:  # noqa: BLE001 - alerts must never break a snapshot
         log.exception("alert evaluation failed")
+    await reprice.evaluate(db)   # listed stacks: price moves + sold comps (never raises)
     return doc

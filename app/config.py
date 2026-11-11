@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     scheduler_fetch_wishlist: bool = True
     # read alert events older than this many days are deleted by the scheduler; 0 keeps them all
     alert_events_keep_days: int = 90
+    # Step 6d reprice: suggested asking price = market x (1 + markup); inbox event when market and asking differ by >= threshold
+    reprice_markup_pct: int = 10
+    reprice_threshold_pct: int = 5
     # alt.xyz sold-list pages read per card (page 1 + more while listings stay inside the sold window)
     altxyz_max_pages: int = 3
     # ...and no sale older than this many days is kept: stale sales skew toward lower values

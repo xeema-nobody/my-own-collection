@@ -10,7 +10,7 @@ export type PackStrategy = "market" | "under" | "floor";
 export type PackItem = { item_id: string; card_id: string; title: string; description: string; price: number | null; currency: string;
   quantity: number; photos: string[]; warnings: string[]; sale?: StackSale | null;
   slab: boolean; vinted_condition: VintedCondition; vinted_parcel: VintedParcel; vinted_url: string | null;
-  market_price?: number | null; stored?: { title: string; description: string; condition: VintedCondition; parcel: VintedParcel; price: number } | null };
+  market_price?: number | null; queued?: boolean; stored?: { title: string; description: string; condition: VintedCondition; parcel: VintedParcel; price: number } | null };
 export type VintedCondition = "New with tags" | "New without tags" | "Very good" | "Good" | "Satisfactory";
 export type VintedParcel = "small" | "medium" | "large";
 export type PublishState = "confirmed" | "publishing" | "published" | "failed" | "cancelled";
@@ -19,6 +19,13 @@ export type PublishEntry = { id: string; item_id: string; state: PublishState; m
   photos: number; payload: PublishRow; updated_at: string };
 export type PublishConfirmResult = { queued: number; failed: number; results: { item_id: string; ok: boolean; id?: string; error?: string }[] };
 export type ListingPack = { platform: string; strategy: PackStrategy; pct: number; items: PackItem[]; missing: string[] };
+
+export type RepriceRow = {
+  item_id: string; card_id: string; name: string | null; set: string | null; number: string | null; grade_key: string; quantity: number;
+  platform: Platform; url: string | null; currency: string; asking_price: number | null; market: number | null;
+  change_pct: number | null; change_amount: number | null; suggested: number | null; needs_platform_update: boolean; warnings: string[];
+  last_sold: { price: number; currency: string | null; price_base: number | null; source: string | null; sold_at: string | null; condition_unknown: boolean } | null };
+export type RepriceTable = { markup_pct: number; threshold_pct: number; rows: RepriceRow[] };
 
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -49,7 +56,7 @@ const post = (b: unknown): RequestInit => ({ method: "POST", body: JSON.stringif
 export type ExitReason = "sold" | "gifted" | "removed";
 export type Platform = "vinted" | "cardmarket" | "ebay" | "marktplaats" | "other";
 export type SaleStatus = "none" | "ready" | "listed" | "reserved" | "withdrawn";
-export type Listing = { platform: Platform; asking_price: number; currency: string; listed_at?: string | null; url?: string | null; notes?: string | null; shipping?: number | null; asking_base?: number | null };
+export type Listing = { platform: Platform; asking_price: number; currency: string; listed_at?: string | null; url?: string | null; notes?: string | null; shipping?: number | null; asking_base?: number | null; needs_platform_update?: boolean };
 export type StackSale = { status: SaleStatus; listings: Listing[] };
 export type RemoveExtra = { reason?: ExitReason; price?: number | null; currency?: string; note?: string | null;
   platform?: Platform | null; fees?: number | null; shipping_paid?: number | null };
@@ -98,7 +105,7 @@ export type AlertRule = {
   enabled: boolean; triggered: boolean; last_value: number | null; last_pct: number | null; last_eval: string | null;
 };
 export type AlertEvent = {
-  id: string; type: "alert" | "system"; rule: string; card_id: string | null; name: string | null;
+  id: string; type: "alert" | "system" | "reprice" | "sold_comp"; rule: string; card_id: string | null; name: string | null;
   value?: number; prev?: number | null; pct?: number | null; price_kind?: string | null; thin?: boolean;
   estimated?: boolean; source?: string | null; fired_at: string; read: boolean;
 };
@@ -225,6 +232,9 @@ export const api = {
     req<WishEntry>(`/api/wishlist/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
   bulkRemoveWishes: (ids: string[]) => req<BulkRemoveResult>("/api/wishlist/bulk-remove", post({ ids })),
   removeWish: (id: string) => req<void>(`/api/wishlist/${id}`, { method: "DELETE" }),
+  reprice: () => req<RepriceTable>("/api/reprice"),
+  repriceConfirm: (b: { item_id: string; platform: Platform; asking_price: number }) => req<{ id: string }>("/api/reprice/confirm", post(b)),
+  repriceEvaluate: () => req<{ price_moves: number; sold_comps: number }>("/api/reprice/evaluate", post({})),
   alerts: () => req<AlertRule[]>("/api/alerts"),
   createAlert: (b: AlertIn) => req<AlertRule>("/api/alerts", post(b)),
   patchAlert: (id: string, b: Partial<Pick<AlertRule, "enabled" | "include_estimated" | "kind" | "threshold">>) =>

@@ -131,6 +131,14 @@ class Listing(BaseModel):
     url: str | None = Field(default=None, max_length=300, pattern=r"^https?://")  # rendered as a link: no javascript:
     notes: str | None = Field(default=None, max_length=300)
     shipping: int | None = Field(default=None, ge=0, description="cents assumed")
+    needs_platform_update: bool = Field(default=False, description="price changed in the app (reprice), not yet on the platform")
+
+
+class RepriceConfirmIn(BaseModel):
+    """The user's confirmation of a new asking price for one listing (app only, nothing is pushed to the platform)."""
+    item_id: str = Field(max_length=40)
+    platform: Platform
+    asking_price: int = Field(ge=1, description="cents per copy")
 
 
 class StackSaleIn(BaseModel):

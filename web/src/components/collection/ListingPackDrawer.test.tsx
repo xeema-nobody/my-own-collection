@@ -70,3 +70,12 @@ it("shows the market price as a suggestion when the stored price differs and Use
   expect((screen.getByLabelText("Price 1") as HTMLInputElement).value).toBe("12.50");
   expect(screen.getByRole("button", { name: "Confirm update on Vinted" })).toBeTruthy();
 });
+
+it("an already queued card shows the queued note and price, not the stored-prefill note", async () => {
+  const pack = { ...PACK, items: [{ ...PACK.items[0], price: 450, market_price: 1250, queued: true, stored: { title: "T", description: "D", condition: "Good", parcel: "small", price: 450 } }] };
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => ({ ok: true, status: 200, json: async () => (String(url).includes("listing-pack") ? pack : []), text: async () => "{}" })));
+  wrap(<ListingPackDrawer ids={["s1"]} open onClose={() => {}} />);
+  expect((await screen.findByLabelText("Price 1") as HTMLInputElement).value).toBe("4.50");
+  expect(screen.getByText(/Already queued/)).toBeTruthy();
+  expect(screen.queryByText(/Prefilled from what you last published/)).toBeNull();
+});

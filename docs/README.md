@@ -122,6 +122,9 @@ Settings -> Data: JSON (lossless) or CSV (spreadsheet; money in cents; includes 
 `scripts/backup.sh` dumps the whole database to `backups/`; `scripts/restore.sh` restores (or `--to-scratch` verifies). Daily at 05:30 via launchd (`scripts/backup_schedule.sh install|status|uninstall`), newest 14 kept. Restore steps: `docs/backup.md`.
 
 ## Alerts
+
+**Reprice** (nav "Reprice"): listed cards with market vs asking price and a suggested price (market + 10 %, `REPRICE_MARKUP_PCT`). Confirm saves it in the app only and flags "update on <platform>"; for Vinted use "Update on Vinted". The inbox also shows price moves (>= 5 %, `REPRICE_THRESHOLD_PCT`) and "sold elsewhere" comps for your listed cards, checked after every snapshot or via "Check now".
+
 Alerts page (nav badge = unread; two columns: Inbox left; "How alerts work" explainer, Rules table and the new-rule form right). The form reads as a sentence ("Alert me when [collection total | a card | a single stack] [searchable picker] [goes above | drops below | rises by | falls by] [amount] ...") with a live preview of the resulting rule; the picker searches all owned stacks server-side with "Show more" (no 200 cap). Rules can be disabled or deleted (delete asks to confirm). Add a rule on a stack, a card, a wishlist card or the collection total (above/below a EUR amount, or up/down N% over D days; sold/market/any; optionally include estimated values). Rules are checked after every price fetch, refresh and snapshot ("Check now" re-checks). Each crossing gives one inbox item; the rule re-arms when the condition clears. A rule that is already true fires on the next check. The inbox also warns when a scheduled fetch was skipped (fetcher down / login needed). While the host fetcher runs it also shows a macOS notification for each new alert (one summary when several arrive; settings in `fetcher/README.md`).
 
 ## Scheduler

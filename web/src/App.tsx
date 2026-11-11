@@ -13,6 +13,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./lib/api";
 import FetcherBadge from "./components/FetcherBadge";
+import Reprice from "./pages/Reprice";
 import ThemeToggle from "./components/ThemeToggle";
 
 const link = ({ isActive }: { isActive: boolean }) =>
@@ -37,6 +38,7 @@ export default function App() {
           <NavLink to="/collection" className={link}>Collection</NavLink>
           <NavLink to="/wishlist" className={link}>Wishlist</NavLink>
           <NavLink to="/dashboard" className={link}>Dashboard</NavLink>
+          <NavLink to="/reprice" className={link}>Reprice</NavLink>
           <AlertsLink />
           <NavLink to="/settings" className={link}>Settings</NavLink>
           <div className="ml-auto flex items-center gap-4"><FetcherBadge /><ThemeToggle /></div>
@@ -50,6 +52,7 @@ export default function App() {
         <Route path="/wishlist" element={<Wishlist />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/alerts" element={<Alerts />} />
+        <Route path="/reprice" element={<Reprice />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<NotFound />} />
       </Routes></ErrorBoundary>

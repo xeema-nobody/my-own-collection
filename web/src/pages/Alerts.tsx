@@ -44,6 +44,8 @@ function Inbox() {
   const unread = (ev.data ?? []).filter((e) => !e.read);
   const line = (e: AlertEvent) => e.type === "system"
     ? <span className="text-warn">{e.rule}</span>
+    : e.type === "reprice" || e.type === "sold_comp"
+    ? <span>{e.type === "sold_comp" && <Badge tone="warn" className="mr-1.5">sold elsewhere</Badge>}{e.rule} <Link className="text-accent hover:underline" to="/reprice">open reprice</Link></span>
     : <span><b>{e.name}</b>: {e.rule} <span className="text-muted">— now</span> <span className="num font-medium">{money(e.value)}</span>
       {e.prev != null && <span className="num text-muted"> (was {money(e.prev)}, {e.pct! > 0 ? "+" : ""}{e.pct}%)</span>}</span>;
   return (
