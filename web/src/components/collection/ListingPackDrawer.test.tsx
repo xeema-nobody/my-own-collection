@@ -58,3 +58,15 @@ it("Confirm publish sends the edited row (price cents, condition, parcel) and on
   const call = f.mock.calls.find(([u]) => String(u).includes("/api/publish/confirm"))!;
   expect(JSON.parse(String(call[1]!.body)).items).toMatchObject([{ item_id: "s1", price: 950, condition: "Very good", parcel: "small" }]);
 });
+
+it("shows the market price as a suggestion when the stored price differs and Use market price applies it", async () => {
+  const pack = { ...PACK, items: [{ ...PACK.items[0], price: 1000, market_price: 1250, stored: { title: "T", description: "D", condition: "Good", parcel: "small", price: 1000 }, vinted_url: "https://www.vinted.nl/items/1-x" }] };
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => ({ ok: true, status: 200, json: async () => (String(url).includes("listing-pack") ? pack : []), text: async () => "{}" })));
+  wrap(<ListingPackDrawer ids={["s1"]} open onClose={() => {}} />);
+  expect((await screen.findByLabelText("Price 1") as HTMLInputElement).value).toBe("10.00");
+  expect(screen.getByText(/Market suggests/)).toBeTruthy();
+  expect(screen.getByText(/Prefilled from what you last published/)).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Use market price" }));
+  expect((screen.getByLabelText("Price 1") as HTMLInputElement).value).toBe("12.50");
+  expect(screen.getByRole("button", { name: "Confirm update on Vinted" })).toBeTruthy();
+});

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, money, type PackItem, type PackStrategy, type PublishEntry, type VintedCondition, type VintedParcel } from "../../lib/api";
+import { api, money, type PackItem, type PackStrategy, type VintedCondition, type VintedParcel } from "../../lib/api";
+import { QueueList } from "./PublishQueue";
 import { Button, Drawer, Field, Input, Select, Skeleton } from "../ui";
 
 type Edit = { title?: string; description?: string; price?: string; condition?: VintedCondition; parcel?: VintedParcel };
@@ -83,6 +84,10 @@ export default function ListingPackDrawer({ ids, open, onClose }: { ids: string[
               <Field label={`Asking price (${p.currency}) per copy`}>
                 <Input aria-label={`Price ${n + 1}`} inputMode="decimal" value={e.price ?? euros(p.price)} placeholder="no price" onChange={(ev) => set(p.item_id, { price: ev.target.value })} />
               </Field>
+              {platform === "vinted" && p.market_price != null && p.market_price !== priceOf(p) && (
+                <p className="flex flex-wrap items-center gap-2 text-xs text-muted">Market suggests {money(p.market_price, p.currency)}
+                  <Button size="sm" variant="ghost" onClick={() => set(p.item_id, { price: euros(p.market_price!) })}>Use market price</Button></p>)}
+              {platform === "vinted" && p.stored && <p className="text-xs text-muted">Prefilled from what you last published on Vinted.</p>}
               {platform === "vinted" && (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Select aria-label={`Condition ${n + 1}`} value={e.condition ?? p.vinted_condition} onChange={(v) => set(p.item_id, { condition: v as VintedCondition })} options={CONDITIONS} />
@@ -118,24 +123,4 @@ export default function ListingPackDrawer({ ids, open, onClose }: { ids: string[
         {listed.isSuccess && <p role="status" className="text-ok">Marked {listed.data} stack{listed.data === 1 ? "" : "s"} as Listed.</p>}
       </div>
     </Drawer>);
-}
-
-const STATE_LABEL: Record<string, string> = { confirmed: "Waiting", publishing: "Publishing", published: "Published", failed: "Failed" };
-
-/** Publish queue (6e): what the Claude session will work, is working, or has finished. Confirming a row is the approval; Cancel withdraws it. */
-function QueueList({ entries, busy, onAct }: { entries: PublishEntry[]; busy: boolean; onAct: (id: string, a: "cancel" | "retry" | "release") => void }) {
-  return (
-    <section aria-label="Publish queue" className="space-y-1 rounded-lg border border-line p-3">
-      <h3 className="font-medium">Vinted publish queue</h3>
-      {entries.slice(-12).reverse().map((q) => (
-        <div key={q.id} className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="w-20 text-muted">{STATE_LABEL[q.state] ?? q.state}</span>
-          <span className="min-w-0 flex-1 truncate">{q.payload.title} · {money(q.payload.price, q.payload.currency)}{q.mode === "update" ? " · update" : ""}</span>
-          {q.error && <span className="text-danger">{q.error}</span>}
-          {q.url && q.state === "published" && <a className="text-accent underline" href={q.url} target="_blank" rel="noreferrer">item</a>}
-          {q.state === "confirmed" && <Button size="sm" variant="secondary" disabled={busy} onClick={() => onAct(q.id, "cancel")}>Cancel</Button>}
-          {q.state === "publishing" && <Button size="sm" variant="secondary" disabled={busy} onClick={() => onAct(q.id, "release")}>Release</Button>}
-          {q.state === "failed" && <Button size="sm" variant="secondary" disabled={busy} onClick={() => onAct(q.id, "retry")}>Retry</Button>}
-        </div>))}
-    </section>);
 }

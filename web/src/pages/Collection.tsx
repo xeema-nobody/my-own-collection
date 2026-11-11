@@ -63,7 +63,7 @@ function CostSection({ i }: { i: any }) {
     </section>);
 }
 
-function Details({ i, onGone }: { i: any; onGone?: () => void }) {
+function Details({ i, onGone, onPublish }: { i: any; onGone?: () => void; onPublish?: (id: string) => void }) {
   const why = whyEstimated(i);
   const qc = useQueryClient();
   const fetchStack = useMutation({ mutationFn: () => api.fetchPrices({ mode: "stack", stack_id: i.id }),
@@ -89,7 +89,7 @@ function Details({ i, onGone }: { i: any; onGone?: () => void }) {
         </div>
       </div>
       <CostSection i={i} />
-      <SalePanel key={`${i.id}-${JSON.stringify(i.sale)}`} id={i.id} sale={i.sale} />
+      <SalePanel key={`${i.id}-${JSON.stringify(i.sale)}`} id={i.id} sale={i.sale} onPublish={onPublish} />
       <PhotosPanel key={`photos-${i.id}`} id={i.id} graded={!!i.grading} />
       <RemoveStack id={i.id} quantity={i.quantity} name={i.card?.name ?? "card"} cost={i.cost} onDone={onGone} />
       <SourceCompare row={i} />
@@ -125,6 +125,7 @@ export default function Collection() {
   const [removeOpen, setRemoveOpen] = useState(false);
   const [saleOpen, setSaleOpen] = useState(false);
   const [packOpen, setPackOpen] = useState(false);
+  const [packIds, setPackIds] = useState<string[]>([]);
   const [saleStatus, setSaleStatus] = useState<"none" | "ready" | "reserved" | "withdrawn">("ready");
   const saleBulk = useMutation({ mutationFn: () => api.bulkSale(pickedIds, saleStatus),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["collection"] }); qc.invalidateQueries({ queryKey: ["sales"] }); } });
@@ -194,7 +195,7 @@ export default function Collection() {
         <Button size="sm" onClick={() => { bulk.reset(); setBulkOpen(true); }}>Edit cost &amp; type</Button>
         <Button size="sm" variant="secondary" disabled={!!running || fetchPicked.isPending} onClick={() => fetchPicked.mutate()}>Fetch prices</Button>
         <Button size="sm" variant="secondary" onClick={() => { saleBulk.reset(); setSaleOpen(true); }}>Sale status</Button>
-        <Button size="sm" variant="secondary" onClick={() => setPackOpen(true)}>Listing pack</Button>
+        <Button size="sm" variant="secondary" onClick={() => { setPackIds(pickedIds); setPackOpen(true); }}>Listing pack</Button>
         <Button size="sm" variant="secondary" onClick={() => setRemoveOpen(true)}>Remove</Button>
         <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>Clear selection</Button>
         {fetchPicked.isSuccess && <span className="text-muted">Fetching {fetchPicked.data.cards} card{fetchPicked.data.cards === 1 ? "" : "s"}: progress shows at the top of the page.</span>}
@@ -233,11 +234,11 @@ export default function Collection() {
         <Pagination page={Number(f.page)} pageSize={Number(f.size)} total={list.data?.total ?? 0}
           onPage={(p) => set({ page: String(p) }, true)} onPageSize={(n) => set({ size: String(n) })} />
       </>}
-      <Drawer open={!!sel} onClose={() => setSel(null)} title={cur?.card?.name ?? "Details"}>{cur && <Details i={cur} onGone={() => setSel(null)} />}</Drawer>
+      <Drawer open={!!sel} onClose={() => setSel(null)} title={cur?.card?.name ?? "Details"}>{cur && <Details i={cur} onGone={() => setSel(null)} onPublish={(id) => { setSel(null); setPackIds([id]); setPackOpen(true); }} />}</Drawer>
       <BulkRemoveDrawer kind="stacks" ids={pickedIds} copies={pickedCopies} open={removeOpen} onClose={() => setRemoveOpen(false)}
         onDone={() => setPicked(new Set())}
         onChanged={() => { qc.invalidateQueries({ queryKey: ["collection"] }); qc.invalidateQueries({ queryKey: ["dashboard"] }); qc.invalidateQueries({ queryKey: ["exits"] }); }} />
-      <ListingPackDrawer ids={pickedIds} open={packOpen} onClose={() => setPackOpen(false)} />
+      <ListingPackDrawer ids={packIds} open={packOpen} onClose={() => setPackOpen(false)} />
       <Drawer open={saleOpen} onClose={() => { setSaleOpen(false); if (saleBulk.isSuccess) setPicked(new Set()); }} title={`Sale status · ${picked.size} stack${picked.size === 1 ? "" : "s"}`}>
         <div className="space-y-3 text-sm">
           <Select aria-label="New sale status" value={saleStatus} onChange={(v) => setSaleStatus(v as typeof saleStatus)}

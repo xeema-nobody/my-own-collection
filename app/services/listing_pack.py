@@ -81,6 +81,18 @@ async def _photo_ids(db, stack_id: str) -> list[str]:
     return [p["id"] for p in ps]
 
 
+async def _stored_vinted(db, stack_id: str, item: dict) -> dict | None:
+    """What the stack was last published with on Vinted: text + mapping from the newest published queue entry, price from
+    the stored Vinted listing (the user may have changed it since). None when never published or no Vinted listing."""
+    listing = next((l for l in (item.get("sale") or {}).get("listings") or [] if l.get("platform") == "vinted"), None)
+    last = await db.publish_queue.find_one({"item_id": stack_id, "state": "published"}, sort=[("updated_at", -1)])
+    if not listing or not last:
+        return None
+    p = last["payload"]
+    return {"title": p["title"], "description": p["description"], "condition": p["condition"], "parcel": p["parcel"],
+            "price": listing["asking_price"]}
+
+
 async def build_pack(db, ids: list[str], platform: str, strategy: str = "market", pct: int = 5) -> dict:
     if strategy not in STRATEGIES:
         raise ValueError(f"strategy must be one of {', '.join(STRATEGIES)}")
@@ -106,10 +118,15 @@ async def build_pack(db, ids: list[str], platform: str, strategy: str = "market"
             desc = _cut(desc, VINTED_DESC_MAX, "description", warnings)
         elif r["item"].get("grading"):
             warnings.append("slab: not a Cardmarket single, left out of the sheet")
+        stored = await _stored_vinted(db, sid, r["item"]) if platform == "vinted" else None
+        market = price
+        if stored:  # an earlier publish: its edited price / text win, the market price stays a suggestion only
+            title, desc, price = stored["title"], stored["description"], stored["price"]
+            warnings = [w for w in warnings if not w.startswith("needs price")]
         out.append({"item_id": sid, "card_id": r["item"]["card_id"], "title": title, "description": desc,
-                    "price": price, "currency": "EUR", "sale": r["item"].get("sale"), "quantity": r["item"]["quantity"], "photos": photos,
-                    "slab": bool(r["item"].get("grading")), "vinted_condition": VINTED_COND["slab" if r["item"].get("grading") else "raw"],
-                    "vinted_parcel": VINTED_PARCEL["slab" if r["item"].get("grading") else "raw"],
+                    "price": price, "market_price": market, "stored": stored, "currency": "EUR", "sale": r["item"].get("sale"), "quantity": r["item"]["quantity"], "photos": photos,
+                    "slab": bool(r["item"].get("grading")), "vinted_condition": (stored or {}).get("condition") or VINTED_COND["slab" if r["item"].get("grading") else "raw"],
+                    "vinted_parcel": (stored or {}).get("parcel") or VINTED_PARCEL["slab" if r["item"].get("grading") else "raw"],
                     "vinted_url": next((l.get("url") for l in (r["item"].get("sale") or {}).get("listings") or []
                                         if l.get("platform") == "vinted" and l.get("url")), None),
                     "warnings": warnings})

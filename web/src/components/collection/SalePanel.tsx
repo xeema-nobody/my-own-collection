@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, money, type Listing, type Platform, type SaleStatus, type StackSale } from "../../lib/api";
 import { Badge, Button, Field, Input, Select } from "../ui";
 
@@ -23,8 +23,29 @@ const toDraft = (l: Listing): Draft => ({ platform: l.platform, price: String(l.
   notes: l.notes ?? "", shipping: l.shipping == null ? "" : String(l.shipping / 100) });
 const cents = (v: string) => Math.round(+v.replace(",", ".") * 100);
 
+const VINTED_STATE: Record<string, string> = { confirmed: "Waiting for the Claude session", publishing: "Claude is publishing it now", published: "Published", failed: "Failed" };
+
+/** Vinted publish state of one stack + the button that opens the Publish table (the per-item confirm there is the only approval). */
+function VintedPublish({ id, link, onPublish }: { id: string; link: string | null; onPublish: (id: string) => void }) {
+  const q = useQuery({ queryKey: ["publish-queue", "stack", id], refetchInterval: 5000, queryFn: () => api.publishQueue(undefined, id) });
+  const last = [...(q.data ?? [])].filter((e) => e.state !== "cancelled").pop();
+  const busy = !!last && (last.state === "confirmed" || last.state === "publishing");
+  const url = last?.state === "published" ? last.url : link;
+  return (
+    <div className="space-y-1 border-t border-line pt-2" aria-label="Vinted publish">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div><span className="font-medium">Vinted</span> <span role="status" className="text-muted">{last ? VINTED_STATE[last.state] : link ? "Listed" : "Not published"}
+          {last?.mode === "update" && busy ? " (update)" : ""}</span>
+          {url && /^https?:/.test(url) && <> · <a className="text-accent hover:underline" href={url} target="_blank" rel="noreferrer">Vinted item</a></>}</div>
+        <Button size="sm" disabled={busy} onClick={() => onPublish(id)}>{link ? "Update on Vinted" : "Publish on Vinted"}</Button>
+      </div>
+      {last?.state === "failed" && last.error && <p className="text-xs text-danger">{last.error}</p>}
+      <p className="text-xs text-muted">Opens the Publish table: you confirm the title, price and photos there; nothing is sent before that.</p>
+    </div>);
+}
+
 /** Sale state of one stack: status + where it is listed (several platforms allowed). Listings apply to all copies in the stack. */
-export default function SalePanel({ id, sale }: { id: string; sale?: StackSale | null }) {
+export default function SalePanel({ id, sale, onPublish }: { id: string; sale?: StackSale | null; onPublish?: (id: string) => void }) {
   const qc = useQueryClient();
   const cur: StackSale = sale ?? { status: "none", listings: [] };
   const [edit, setEdit] = useState(false);
@@ -50,6 +71,7 @@ export default function SalePanel({ id, sale }: { id: string; sale?: StackSale |
         {cur.listings.map((l, i) => <div key={i} className="num">{PLATFORM_LABEL[l.platform]} · {money(l.asking_price, l.currency)}/ea
           {l.listed_at ? ` · since ${l.listed_at}` : ""}{l.url && /^https?:/.test(l.url) ? <> · <a className="text-accent hover:underline" href={l.url} target="_blank" rel="noreferrer">link</a></> : null}</div>)}
       </div>}
+      {!edit && onPublish && <VintedPublish id={id} link={cur.listings.find((l) => l.platform === "vinted" && l.url)?.url ?? null} onPublish={onPublish} />}
       {edit && <div className="space-y-3">
         <Select aria-label="Sale status" value={status} onChange={(v) => setStatus(v as SaleStatus)}
           options={(Object.keys(STATUS_LABEL) as SaleStatus[]).map((s) => ({ value: s, label: STATUS_LABEL[s] }))} />

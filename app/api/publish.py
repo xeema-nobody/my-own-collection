@@ -21,10 +21,10 @@ async def confirm(body: PublishConfirmIn):
 
 
 @router.get("/queue")
-async def queue(state: list[str] | None = Query(None)):
+async def queue(state: list[str] | None = Query(None), item_id: str | None = Query(None, max_length=40)):
     if state and any(s not in svc.STATES for s in state):
         raise HTTPException(422, f"state must be one of {', '.join(svc.STATES)}")
-    return await svc.list_queue(get_db(), state)
+    return await svc.list_queue(get_db(), state, item_id=item_id)
 
 
 @router.post("/queue/next")

@@ -88,8 +88,10 @@ async def confirm(db, body: PublishConfirmIn) -> dict:
     return {"queued": sum(r["ok"] for r in results), "failed": sum(not r["ok"] for r in results), "results": results}
 
 
-async def list_queue(db, states: list[str] | None = None, limit: int = 200) -> list[dict]:
-    q = {"state": {"$in": states}} if states else {}
+async def list_queue(db, states: list[str] | None = None, limit: int = 200, item_id: str | None = None) -> list[dict]:
+    q: dict = {"state": {"$in": states}} if states else {}
+    if item_id:
+        q["item_id"] = item_id
     return [_view(d) async for d in db.publish_queue.find(q).sort("created_at", 1).limit(limit)]
 
 

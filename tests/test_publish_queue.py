@@ -117,3 +117,24 @@ async def test_release_cancel_retry(db, client):
 def test_phone_gate_does_not_expose_publish():
     from app.security import PHONE_ALLOWED
     assert not any("publish" in path for _, path in PHONE_ALLOWED)
+
+
+async def test_queue_filter_by_item(db, client):
+    a, b = await stack(db, client, 1), await stack(db, client, 2)
+    await confirm(client, row(a), row(b))
+    rows = (await client.get("/api/publish/queue", params={"item_id": a})).json()
+    assert [r["item_id"] for r in rows] == [a]
+
+
+async def test_pack_prefills_from_published_listing_market_is_suggestion(db, client):
+    sid = await stack(db, client, 3)
+    await confirm(client, row(sid, title="My own title", description="My text", price=1234, condition="Good", parcel="medium"))
+    nxt = (await client.post("/api/publish/queue/next")).json()
+    r = await client.post(f"/api/publish/queue/{nxt['id']}/result", json={"state": "published", "url": "https://www.vinted.nl/items/99-x"})
+    assert r.status_code == 200
+    pack = (await client.post("/api/collection/listing-pack", json={"ids": [sid], "platform": "vinted"})).json()["items"][0]
+    assert pack["title"] == "My own title" and pack["description"] == "My text"
+    assert pack["price"] == 1234 and pack["vinted_condition"] == "Good" and pack["vinted_parcel"] == "medium"
+    assert pack["stored"]["price"] == 1234 and "market_price" in pack
+    cm = (await client.post("/api/collection/listing-pack", json={"ids": [sid], "platform": "cardmarket"})).json()["items"][0]
+    assert cm["stored"] is None and cm["title"] != "My own title"

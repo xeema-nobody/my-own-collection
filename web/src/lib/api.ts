@@ -9,7 +9,8 @@ export const safeUrl = (u: string | null | undefined): string | undefined =>
 export type PackStrategy = "market" | "under" | "floor";
 export type PackItem = { item_id: string; card_id: string; title: string; description: string; price: number | null; currency: string;
   quantity: number; photos: string[]; warnings: string[]; sale?: StackSale | null;
-  slab: boolean; vinted_condition: VintedCondition; vinted_parcel: VintedParcel; vinted_url: string | null };
+  slab: boolean; vinted_condition: VintedCondition; vinted_parcel: VintedParcel; vinted_url: string | null;
+  market_price?: number | null; stored?: { title: string; description: string; condition: VintedCondition; parcel: VintedParcel; price: number } | null };
 export type VintedCondition = "New with tags" | "New without tags" | "Very good" | "Good" | "Satisfactory";
 export type VintedParcel = "small" | "medium" | "large";
 export type PublishState = "confirmed" | "publishing" | "published" | "failed" | "cancelled";
@@ -187,7 +188,7 @@ export const api = {
   listingPackCsvUrl: (ids: string[], strategy: PackStrategy, pct: number) =>
     `${BASE}/api/collection/listing-pack.csv${qs({ ids: ids.join(","), strategy, pct })}`,
   publishConfirm: (items: PublishRow[]) => req<PublishConfirmResult>("/api/publish/confirm", post({ items })),
-  publishQueue: (states?: PublishState[]) => req<PublishEntry[]>(`/api/publish/queue${qs({ state: states })}`),
+  publishQueue: (states?: PublishState[], itemId?: string) => req<PublishEntry[]>(`/api/publish/queue${qs({ state: states, item_id: itemId })}`),
   publishAct: (id: string, act: "cancel" | "retry" | "release") => req<PublishEntry>(`/api/publish/queue/${id}/${act}`, { method: "POST" }),
   photosZipUrl: (id: string) => `${BASE}/api/collection/${id}/photos.zip`,
   salesReport: () => req<SalesReport>("/api/collection/sales/report"),

@@ -4,6 +4,7 @@ import { Download } from "lucide-react";
 import { api, money } from "../../lib/api";
 import { exitLabel } from "../../components/collection/RemoveStack";
 import { errorText } from "../../components/QueryState";
+import PublishQueueView from "../../components/collection/PublishQueue";
 import { Button, FileDrop, SegmentedControl, Section } from "../../components/ui";
 
 const MODE_HINT = { set: "Sets each stack's quantity to the file value. Re-importing the same file changes nothing.", add: "Adds the file quantity to what you already own." };
@@ -90,6 +91,7 @@ export default function DataTab() {
         {xfer.error && <p className="mt-3 text-sm text-danger">{errorText(xfer.error)}</p>}
       </Section>
       <div className="lg:col-span-2"><PhotosSection /></div>
+      <div className="lg:col-span-2"><Section title="Vinted publish queue"><PublishQueueView /></Section></div>
       <div className="lg:col-span-2"><SalesSection /></div>
       <div className="lg:col-span-2"><ExitsSection /></div>
     </div>);
