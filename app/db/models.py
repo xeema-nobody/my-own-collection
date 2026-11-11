@@ -160,6 +160,31 @@ class ListingPackIn(BaseModel):
     pct: int = Field(default=5, ge=0, le=90, description="percent under market, strategy 'under' only")
 
 
+VINTED_CONDITIONS = ("New with tags", "New without tags", "Very good", "Good", "Satisfactory")
+
+
+class PublishItemIn(BaseModel):
+    """One user-confirmed Vinted item (roadmap 6e). The confirmation in the app is the approval to publish it."""
+    item_id: str = Field(max_length=40)
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=1, max_length=5000)
+    price: int = Field(gt=0, description="cents per copy")
+    currency: str = "EUR"
+    condition: Literal["New with tags", "New without tags", "Very good", "Good", "Satisfactory"]
+    parcel: Literal["small", "medium", "large"]
+
+
+class PublishConfirmIn(BaseModel):
+    items: list[PublishItemIn] = Field(min_length=1, max_length=50)
+
+
+class PublishResultIn(BaseModel):
+    """Reported by the Claude session after working one queue item."""
+    state: Literal["published", "failed"]
+    url: str | None = Field(default=None, max_length=300, pattern=r"^https?://")
+    error: str | None = Field(default=None, max_length=500)
+
+
 class PresetIn(BaseModel):
     """Saved filter set for a list page. `query` = the page's URL params (strings), checked against a whitelist."""
     name: str = Field(min_length=1, max_length=60)

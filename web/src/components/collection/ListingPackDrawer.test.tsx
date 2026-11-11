@@ -8,12 +8,12 @@ afterEach(() => vi.restoreAllMocks());
 const wrap = (ui: React.ReactElement) => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
 
 const PACK = { platform: "vinted", strategy: "market", pct: 5, missing: [], items: [
-  { item_id: "s1", card_id: "pokemon:a-1", title: "Charizard - Base 4 - Near Mint", description: "Charizard\nCondition: Near Mint", price: 1250, currency: "EUR", quantity: 1, photos: ["p1"], warnings: [],
+  { item_id: "s1", card_id: "pokemon:a-1", title: "Charizard - Base 4 - Near Mint", description: "Charizard\nCondition: Near Mint", price: 1250, currency: "EUR", quantity: 1, photos: ["p1"], warnings: [], slab: false, vinted_condition: "Very good", vinted_parcel: "small", vinted_url: null,
     sale: { status: "listed", listings: [{ platform: "ebay", asking_price: 2000, currency: "EUR" }] } },
-  { item_id: "s2", card_id: "pokemon:a-2", title: "Mew", description: "Mew", price: null, currency: "EUR", quantity: 1, photos: [], warnings: ["needs price: no market price for this stack", "no photos"] }] };
+  { item_id: "s2", card_id: "pokemon:a-2", title: "Mew", description: "Mew", price: null, currency: "EUR", quantity: 1, photos: [], warnings: ["needs price: no market price for this stack", "no photos"], slab: true, vinted_condition: "New without tags", vinted_parcel: "medium", vinted_url: null }] };
 
 function stub() {
-  const f = vi.fn(async (url: string, init?: RequestInit) => ({ ok: true, status: 200, json: async () => (String(url).includes("listing-pack") ? PACK : { id: "s1", sale: {} }), text: async () => "{}" }));
+  const f = vi.fn(async (url: string, init?: RequestInit) => ({ ok: true, status: 200, json: async () => (String(url).includes("listing-pack") ? PACK : String(url).includes("/api/publish/queue") ? [] : String(url).includes("/api/publish/confirm") ? { queued: 1, failed: 0, results: [{ item_id: "s1", ok: true }] } : { id: "s1", sale: {} }), text: async () => "{}" }));
   vi.stubGlobal("fetch", f);
   return f;
 }
@@ -41,4 +41,20 @@ it("Mark as Listed sends the edited price in cents, keeps other platforms, skips
   const body = JSON.parse(String(puts[0][1]!.body));
   expect(body.status).toBe("listed");
   expect(body.listings).toMatchObject([{ platform: "ebay", asking_price: 2000 }, { platform: "vinted", asking_price: 1190 }]);
+});
+
+it("Confirm publish sends the edited row (price cents, condition, parcel) and only for a priced stack with photos", async () => {
+  const f = stub();
+  wrap(<ListingPackDrawer ids={["s1", "s2"]} open onClose={() => {}} />);
+  await screen.findByLabelText("Price 1");
+  const buttons = screen.getAllByRole("button", { name: /Confirm publish on Vinted/ });
+  expect((buttons[1] as HTMLButtonElement).disabled).toBe(true);  // s2: no price, no photos
+  expect((screen.getByLabelText("Condition 2") as HTMLElement).textContent).toContain("New without tags");
+  const price = screen.getByLabelText("Price 1");
+  await userEvent.clear(price);
+  await userEvent.type(price, "9.5");
+  await userEvent.click(buttons[0]);
+  await waitFor(() => expect(f.mock.calls.some(([u]) => String(u).includes("/api/publish/confirm"))).toBe(true));
+  const call = f.mock.calls.find(([u]) => String(u).includes("/api/publish/confirm"))!;
+  expect(JSON.parse(String(call[1]!.body)).items).toMatchObject([{ item_id: "s1", price: 950, condition: "Very good", parcel: "small" }]);
 });

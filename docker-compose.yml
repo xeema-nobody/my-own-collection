@@ -34,6 +34,7 @@ services:
       - "127.0.0.1:8100:8000"
     volumes:
       - ./app:/code/app
+      - ./publish_tmp:/code/publish_tmp   # photos for the assisted Vinted publish (Chrome uploads from here)
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
       interval: 10s

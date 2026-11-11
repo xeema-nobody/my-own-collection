@@ -8,7 +8,15 @@ export const safeUrl = (u: string | null | undefined): string | undefined =>
 
 export type PackStrategy = "market" | "under" | "floor";
 export type PackItem = { item_id: string; card_id: string; title: string; description: string; price: number | null; currency: string;
-  quantity: number; photos: string[]; warnings: string[]; sale?: StackSale | null };
+  quantity: number; photos: string[]; warnings: string[]; sale?: StackSale | null;
+  slab: boolean; vinted_condition: VintedCondition; vinted_parcel: VintedParcel; vinted_url: string | null };
+export type VintedCondition = "New with tags" | "New without tags" | "Very good" | "Good" | "Satisfactory";
+export type VintedParcel = "small" | "medium" | "large";
+export type PublishState = "confirmed" | "publishing" | "published" | "failed" | "cancelled";
+export type PublishRow = { item_id: string; title: string; description: string; price: number; currency: string; condition: VintedCondition; parcel: VintedParcel };
+export type PublishEntry = { id: string; item_id: string; state: PublishState; mode: "create" | "update"; url: string | null; error: string | null;
+  photos: number; payload: PublishRow; updated_at: string };
+export type PublishConfirmResult = { queued: number; failed: number; results: { item_id: string; ok: boolean; id?: string; error?: string }[] };
 export type ListingPack = { platform: string; strategy: PackStrategy; pct: number; items: PackItem[]; missing: string[] };
 
 export class ApiError extends Error {
@@ -178,6 +186,9 @@ export const api = {
     req<ListingPack>("/api/collection/listing-pack", post(b)),
   listingPackCsvUrl: (ids: string[], strategy: PackStrategy, pct: number) =>
     `${BASE}/api/collection/listing-pack.csv${qs({ ids: ids.join(","), strategy, pct })}`,
+  publishConfirm: (items: PublishRow[]) => req<PublishConfirmResult>("/api/publish/confirm", post({ items })),
+  publishQueue: (states?: PublishState[]) => req<PublishEntry[]>(`/api/publish/queue${qs({ state: states })}`),
+  publishAct: (id: string, act: "cancel" | "retry" | "release") => req<PublishEntry>(`/api/publish/queue/${id}/${act}`, { method: "POST" }),
   photosZipUrl: (id: string) => `${BASE}/api/collection/${id}/photos.zip`,
   salesReport: () => req<SalesReport>("/api/collection/sales/report"),
   collectionExits: () => req<CollectionExit[]>("/api/collection/exits"),

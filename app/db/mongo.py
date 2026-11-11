@@ -49,6 +49,7 @@ async def init_indexes() -> None:
         [("stack_key", ASCENDING)], unique=True
     )
     await db.collection_items.create_index([("card_id", ASCENDING)])
+    await db.publish_queue.create_index([("state", ASCENDING), ("created_at", ASCENDING)])
     await db.photos.create_index([("stack_id", ASCENDING), ("order", ASCENDING)])
     await db.collection_edits.create_index([("item_id", ASCENDING), ("at", DESCENDING)])
     await db.list_presets.create_index([("scope", ASCENDING), ("name", ASCENDING)], unique=True)

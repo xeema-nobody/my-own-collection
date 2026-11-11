@@ -16,6 +16,9 @@ LANG = {"en": "English", "ja": "Japanese", "es": "Spanish", "it": "Italian", "fr
 COND = {"NM": "Near Mint", "LP": "Lightly Played", "MP": "Moderately Played", "HP": "Heavily Played", "DMG": "Damaged"}
 # Cardmarket grades: MT NM EX GD LP PL PO. Assumed mapping from our five levels (see decisions.md).
 CM_COND = {"NM": "NM", "LP": "EX", "MP": "GD", "HP": "LP", "DMG": "PL"}
+# Vinted mapping decided with the user 2026-11-11 (docs/vinted-sell-flow.md); editable per row in the Publish table.
+VINTED_COND = {"raw": "Very good", "slab": "New without tags"}
+VINTED_PARCEL = {"raw": "small", "slab": "medium"}
 CM_COLUMNS = ["name", "set", "number", "language", "condition", "quantity", "price", "comment"]
 
 
@@ -105,6 +108,10 @@ async def build_pack(db, ids: list[str], platform: str, strategy: str = "market"
             warnings.append("slab: not a Cardmarket single, left out of the sheet")
         out.append({"item_id": sid, "card_id": r["item"]["card_id"], "title": title, "description": desc,
                     "price": price, "currency": "EUR", "sale": r["item"].get("sale"), "quantity": r["item"]["quantity"], "photos": photos,
+                    "slab": bool(r["item"].get("grading")), "vinted_condition": VINTED_COND["slab" if r["item"].get("grading") else "raw"],
+                    "vinted_parcel": VINTED_PARCEL["slab" if r["item"].get("grading") else "raw"],
+                    "vinted_url": next((l.get("url") for l in (r["item"].get("sale") or {}).get("listings") or []
+                                        if l.get("platform") == "vinted" and l.get("url")), None),
                     "warnings": warnings})
     return {"platform": platform, "strategy": strategy, "pct": pct, "items": out, "missing": missing}
 

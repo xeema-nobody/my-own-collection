@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, money, type PackItem, type PackStrategy } from "../../lib/api";
+import { api, money, type PackItem, type PackStrategy, type PublishEntry, type VintedCondition, type VintedParcel } from "../../lib/api";
 import { Button, Drawer, Field, Input, Select, Skeleton } from "../ui";
 
-type Edit = { title?: string; description?: string; price?: string };
+type Edit = { title?: string; description?: string; price?: string; condition?: VintedCondition; parcel?: VintedParcel };
+const CONDITIONS = (["New with tags", "New without tags", "Very good", "Good", "Satisfactory"] as const).map((c) => ({ value: c, label: c }));
+const PARCELS = [{ value: "small", label: "Small (envelope)" }, { value: "medium", label: "Medium (shoebox)" }, { value: "large", label: "Large" }];
+const ACTIVE = ["confirmed", "publishing"];
 const STRATEGIES = [{ value: "market", label: "Match market" }, { value: "under", label: "Slightly under market" }, { value: "floor", label: "Floor (lowest source)" }];
 const PLATFORMS = [{ value: "vinted", label: "Vinted" }, { value: "cardmarket", label: "Cardmarket" }];
 
@@ -25,6 +28,21 @@ export default function ListingPackDrawer({ ids, open, onClose }: { ids: string[
   useEffect(() => setEdits({}), [pack.data]);
   const set = (id: string, e: Edit) => setEdits((x) => ({ ...x, [id]: { ...x[id], ...e } }));
   const priceOf = (p: PackItem) => { const e = edits[p.item_id]?.price; return e !== undefined ? cents(e) : p.price; };
+
+  const queue = useQuery({ queryKey: ["publish-queue"], enabled: open && platform === "vinted", refetchInterval: open ? 5000 : false,
+    queryFn: () => api.publishQueue(["confirmed", "publishing", "failed", "published"]) });
+  const entryOf = (id: string) => queue.data?.filter((q) => q.item_id === id && ACTIVE.includes(q.state))[0];
+  const confirm = useMutation({
+    mutationFn: (p: PackItem) => {
+      const e = edits[p.item_id] ?? {};
+      return api.publishConfirm([{ item_id: p.item_id, title: e.title ?? p.title, description: e.description ?? p.description, price: priceOf(p)!, currency: p.currency,
+        condition: e.condition ?? p.vinted_condition, parcel: e.parcel ?? p.vinted_parcel }]);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["publish-queue"] }),
+  });
+  const act = useMutation({ mutationFn: ({ id, a }: { id: string; a: "cancel" | "retry" | "release" }) => api.publishAct(id, a),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["publish-queue"] }) });
+  const refused = confirm.data?.results.find((r) => !r.ok)?.error;
 
   const listed = useMutation({
     mutationFn: async () => {
@@ -65,6 +83,11 @@ export default function ListingPackDrawer({ ids, open, onClose }: { ids: string[
               <Field label={`Asking price (${p.currency}) per copy`}>
                 <Input aria-label={`Price ${n + 1}`} inputMode="decimal" value={e.price ?? euros(p.price)} placeholder="no price" onChange={(ev) => set(p.item_id, { price: ev.target.value })} />
               </Field>
+              {platform === "vinted" && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Select aria-label={`Condition ${n + 1}`} value={e.condition ?? p.vinted_condition} onChange={(v) => set(p.item_id, { condition: v as VintedCondition })} options={CONDITIONS} />
+                  <Select aria-label={`Parcel ${n + 1}`} value={e.parcel ?? p.vinted_parcel} onChange={(v) => set(p.item_id, { parcel: v as VintedParcel })} options={PARCELS} />
+                </div>)}
               {p.warnings.map((w) => <p key={w} className="text-xs text-warn">{w}</p>)}
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" onClick={() => copy(title)}>Copy title</Button>
@@ -72,8 +95,19 @@ export default function ListingPackDrawer({ ids, open, onClose }: { ids: string[
                 <Button size="sm" variant="secondary" onClick={() => { const c = priceOf(p); if (c !== null) copy(euros(c)); }}>Copy price {priceOf(p) !== null ? money(priceOf(p)!, p.currency) : ""}</Button>
                 {p.photos.length > 0 && <a className="inline-flex items-center rounded border border-line px-2 py-1 text-xs hover:bg-surface-2" href={api.photosZipUrl(p.item_id)}>Photos ({p.photos.length}) .zip</a>}
               </div>
+              {platform === "vinted" && (
+                <div className="flex flex-wrap items-center gap-3 border-t border-line pt-2">
+                  {entryOf(p.item_id)
+                    ? <span role="status" className="text-xs text-accent">{entryOf(p.item_id)!.state === "publishing" ? "Claude is publishing this now" : "Confirmed: waiting for the Claude session"}</span>
+                    : <Button size="sm" disabled={confirm.isPending || priceOf(p) === null || p.photos.length === 0 || !title.trim() || !desc.trim()}
+                        onClick={() => confirm.mutate(p)}>{p.vinted_url ? "Confirm update on Vinted" : "Confirm publish on Vinted"}</Button>}
+                  <span className="text-xs text-muted">{p.vinted_url ? "Has a Vinted link: updates that item's price and text." : "New Vinted item."}</span>
+                </div>)}
             </section>);
         })}
+        {refused && <p role="alert" className="text-danger">{refused}</p>}
+        {confirm.error && <p role="alert" className="text-danger">{String((confirm.error as Error).message)}</p>}
+        {platform === "vinted" && queue.data && queue.data.length > 0 && <QueueList entries={queue.data} busy={act.isPending} onAct={(id, a) => act.mutate({ id, a })} />}
         {pack.data && pack.data.items.length > 0 && (
           <div className="flex flex-wrap items-center gap-3">
             {platform === "cardmarket" && <a className="inline-flex items-center rounded border border-line px-3 py-1.5 hover:bg-surface-2" href={api.listingPackCsvUrl(ids, strategy, pctN)}>Download CSV sheet</a>}
@@ -84,4 +118,24 @@ export default function ListingPackDrawer({ ids, open, onClose }: { ids: string[
         {listed.isSuccess && <p role="status" className="text-ok">Marked {listed.data} stack{listed.data === 1 ? "" : "s"} as Listed.</p>}
       </div>
     </Drawer>);
+}
+
+const STATE_LABEL: Record<string, string> = { confirmed: "Waiting", publishing: "Publishing", published: "Published", failed: "Failed" };
+
+/** Publish queue (6e): what the Claude session will work, is working, or has finished. Confirming a row is the approval; Cancel withdraws it. */
+function QueueList({ entries, busy, onAct }: { entries: PublishEntry[]; busy: boolean; onAct: (id: string, a: "cancel" | "retry" | "release") => void }) {
+  return (
+    <section aria-label="Publish queue" className="space-y-1 rounded-lg border border-line p-3">
+      <h3 className="font-medium">Vinted publish queue</h3>
+      {entries.slice(-12).reverse().map((q) => (
+        <div key={q.id} className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="w-20 text-muted">{STATE_LABEL[q.state] ?? q.state}</span>
+          <span className="min-w-0 flex-1 truncate">{q.payload.title} · {money(q.payload.price, q.payload.currency)}{q.mode === "update" ? " · update" : ""}</span>
+          {q.error && <span className="text-danger">{q.error}</span>}
+          {q.url && q.state === "published" && <a className="text-accent underline" href={q.url} target="_blank" rel="noreferrer">item</a>}
+          {q.state === "confirmed" && <Button size="sm" variant="secondary" disabled={busy} onClick={() => onAct(q.id, "cancel")}>Cancel</Button>}
+          {q.state === "publishing" && <Button size="sm" variant="secondary" disabled={busy} onClick={() => onAct(q.id, "release")}>Release</Button>}
+          {q.state === "failed" && <Button size="sm" variant="secondary" disabled={busy} onClick={() => onAct(q.id, "retry")}>Retry</Button>}
+        </div>))}
+    </section>);
 }

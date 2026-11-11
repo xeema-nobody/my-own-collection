@@ -39,3 +39,21 @@ Stable `data-testid`s: `add-photos-input` (hidden `input[type=file]`, accepts jp
 - Title / description character limits (check by typing past the limit).
 - Vinted may change labels or pickers; the fill recipe should address fields by visible label, not position.
 - Other Vinted domains (.fr, .de) have other UI languages.
+
+## Fill / upload recipe (Claude session with Chrome; slice 3, dry run first)
+
+Queue API (backend, `http://localhost:8100`, no auth): `POST /api/publish/queue/next` claims the oldest confirmed item (state `publishing`, returns `payload`, `mode`, `open_url`, `files` = photo paths relative to the repo root, cover first) or `null`. Report with `POST /api/publish/queue/{id}/result` `{"state":"published","url":...}` or `{"state":"failed","error":...}`; `POST .../release` gives the item back untouched (use it when stopping). A published result saves the stack's Vinted listing (Listed + link) itself; no separate `PUT /sale` is needed. One item at a time: `next` refuses (409) while one is still `publishing`.
+
+Per item, in the user's logged-in Chrome, one tab:
+
+1. Claim: `next`. Empty = stop. Use `payload` exactly as confirmed; never edit text or price.
+2. Open `open_url` (`/items/new`, or the edit page when `mode` is `update`; the edit-page path `/items/{id}/edit` is derived from the stored link and is unverified: if it 404s, release the item and tell the user).
+3. Stop and tell the user on any login prompt, CAPTCHA, verification or unexpected dialog. Never solve or dismiss them blindly. Release the item.
+4. Photos (create only; on update leave existing photos unless the user asks): the file tool must be given absolute paths (`<repo root>/` + `files[i]`), set on `[data-testid=add-photos-input]` in one call, cover first, max 20. Wait until all thumbnails show.
+5. Fill by `data-testid` (re-check on the page; fall back to the visible label if one changed): `title--input`, `description--input` (type, do not paste via script), then category: `catalog-select-dropdown-input` -> search "trading card" -> Hobbies & collectables > Trading cards > Single trading cards; then brand `brand-select-dropdown-input` -> Pokémon; condition `category-condition-single-list-input` -> `payload.condition`; `price-input--input` -> price in euros with a comma or dot (`1500` cents = `15.00`); parcel `1|2|3-package-size--cell` = small|medium|large per `payload.parcel`.
+6. Read every field back from the page and compare with the payload. Any mismatch: fix, or fail the item.
+7. **Dry run**: stop here and show the user (screenshot). Do not click Upload / Save. Release the item (`release`) so it stays confirmed.
+8. **Real run** (only after the user's OK for the first Upload): click `upload-form-save-button` (update: the save button of the edit form), wait for the redirect to the item page, read the item URL from the page address, report `published` with that url. If the click leads anywhere unexpected (error banner, bot check), report `failed` with the text and stop.
+9. Do not navigate away mid-fill (Vinted raises a "Leave site?" dialog). Next item only after the previous one is reported.
+
+Limits to verify on the form during the dry run (type past the limit, read the counter / error): title (user thinks ~200; app payload accepts up to 200, listing pack still cuts at 100), description (pack cuts at 2000).

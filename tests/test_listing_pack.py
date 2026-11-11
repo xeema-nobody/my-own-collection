@@ -117,3 +117,11 @@ async def test_mark_listed_uses_existing_sale_endpoint(db, client):
     r = await client.put(f"/api/collection/{sid}/sale", json={"status": "listed", "listings": [
         {"platform": "vinted", "asking_price": price, "listed_at": "2026-11-11"}]})
     assert r.json()["sale"]["status"] == "listed"
+
+
+async def test_vinted_mapping_defaults_raw_vs_slab(db, client):
+    raw = await stack(db, "5")
+    slab = await stack(db, "6", grading={"company": "PSA", "grade": 9}, key="slab6")
+    items = {i["item_id"]: i for i in (await pack(client, [raw, slab]))["items"]}
+    assert (items[raw]["vinted_condition"], items[raw]["vinted_parcel"], items[raw]["slab"]) == ("Very good", "small", False)
+    assert (items[slab]["vinted_condition"], items[slab]["vinted_parcel"], items[slab]["slab"]) == ("New without tags", "medium", True)

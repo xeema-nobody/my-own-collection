@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     scan_event_keep_days: int = 7
     # photos kept on a stack (docs/decisions.md "Photos on stacks"): stored JPEG long side / quality, thumb size
     photo_max_per_stack: int = 12
+    publish_dir: str = "/code/publish_tmp"  # temp photo folders for the Vinted publish queue (host: ./publish_tmp)
     photo_max_side: int = 1600
     photo_quality: int = 80
     photo_thumb_side: int = 320
