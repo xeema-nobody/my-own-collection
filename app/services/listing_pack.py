@@ -50,13 +50,24 @@ def price_for(row: dict, strategy: str, pct: int) -> int | None:
     return max(1, round(base / qty))
 
 
+# Sub-sets that print their own number prefix: the prefix already says it, so the set name drops the suffix.
+GALLERY = {"TG": " Trainer Gallery", "GG": " Galarian Gallery"}
+
+
+def _set_label(c: dict) -> str:
+    """Set name for titles, e.g. 'Lost Origin Trainer Gallery' + TG09 -> 'Lost Origin' (the TG prefix says it)."""
+    name, num = (c.get("set") or {}).get("name", ""), str(c.get("number", ""))
+    suffix = GALLERY.get(num[:2].upper()) if num[2:3].isdigit() else None
+    return name[:-len(suffix)] if suffix and name.endswith(suffix) else name
+
+
 def _text(row: dict) -> tuple[str, str]:
     it, c = row["item"], row["card"] or {}
     g = it.get("grading")
-    lines = [f"{c.get('name', 'Card')} - {(c.get('set') or {}).get('name', '')} #{c.get('number', '')}".replace(" - #", " #")]
-    if c.get("rarity"):
-        lines.append(f"Rarity: {c['rarity']}")
-    if it.get("variant"):
+    name, label, num = c.get("name", "Card"), _set_label(c), c.get("number", "")
+    where = f"{label} {num}".strip()
+    lines = [f"✨ {name} - {where}"]
+    if it.get("variant") and len(c.get("variants") or []) > 1:  # only worth saying when the card has several versions
         lines.append(f"Variant: {it['variant']}")
     lines.append(f"Language: {LANG.get(it.get('language', 'en'), it.get('language'))}")
     if g:
@@ -67,9 +78,9 @@ def _text(row: dict) -> tuple[str, str]:
         lines.append(f"Condition: {COND.get(it.get('condition'), it.get('condition'))}")
     if it["quantity"] > 1 and not g:
         lines.append(f"Quantity available: {it['quantity']}")
-    lines.append("Sent in a sleeve and toploader. Photos show the actual card.")
-    title_bits = [c.get("name", "Card"), f"{(c.get('set') or {}).get('name', '')} {c.get('number', '')}".strip(),
-                  _grade_text(g) if g else COND.get(it.get("condition"), "")]
+    lines.append("📦 Packed carefully and shipped with care.")
+    lines.append("💬 Questions, or want to combine several cards? Send me a message!")
+    title_bits = [name, where, _grade_text(g) if g else COND.get(it.get("condition"), "")]
     if it.get("language", "en") != "en":
         title_bits.append(LANG.get(it["language"], it["language"]))
     return " - ".join(b for b in title_bits if b), "\n".join(lines)

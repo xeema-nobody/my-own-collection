@@ -57,3 +57,13 @@ Per item, in the user's logged-in Chrome, one tab:
 9. Do not navigate away mid-fill (Vinted raises a "Leave site?" dialog). Next item only after the previous one is reported.
 
 Limits to verify on the form during the dry run (type past the limit, read the counter / error): title (user thinks ~200; app payload accepts up to 200, listing pack still cuts at 100), description (pack cuts at 2000).
+
+## Verified in the first real runs (2026-11-11, 3 cards published)
+
+- The file tool accepts the absolute `publish_tmp/<id>/NN.jpg` paths; `add-photos-input` takes both photos in one call, first = Main.
+- Vinted fills **category (Single trading cards) and brand (Pokémon) itself** from the title; only check them. Condition and price stay to do. Category path on the item page: Hobbies & collectables > Trading cards > Single trading cards.
+- Choosing **New without tags** opens a dialog "Item must be unused" offering "Very good": raw cards use Very good (the app default), so no dialog. Never click through it blindly.
+- Click the fields by `find` ref, not by pixel coordinates (the layout shifts after the photos upload; one description typed into nothing). Typing works with emojis and newlines; read every field back by `data-testid` after typing. Vinted formats the price to "€7.00" on blur.
+- **After Upload Vinted redirects to the member profile (`/member/<id>?promo_shown=true`) with an "Item listed" popup, not to the item page.** Find the new item there: the newest link `a[href*="/items/"]` whose title starts with the card title; open it and take the canonical URL (`/items/<id>-<slug>`). That is the url reported to the queue.
+- **Title and description limits are not verifiable on the form**: no `maxlength`, no counter, no error on input or blur up to 300 / 5000 characters. They only show on submit. Payload caps stay 200 / 5000; the pack cuts at 100 / 2000.
+- Edit page `/items/{id}/edit` still unverified: test on the first update.

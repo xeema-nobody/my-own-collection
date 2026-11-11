@@ -125,3 +125,28 @@ async def test_vinted_mapping_defaults_raw_vs_slab(db, client):
     items = {i["item_id"]: i for i in (await pack(client, [raw, slab]))["items"]}
     assert (items[raw]["vinted_condition"], items[raw]["vinted_parcel"], items[raw]["slab"]) == ("Very good", "small", False)
     assert (items[slab]["vinted_condition"], items[slab]["vinted_parcel"], items[slab]["slab"]) == ("New without tags", "medium", True)
+
+
+def _row(card, **item):
+    base = {"quantity": 1, "language": "en", "condition": "NM", "grading": None, "variant": "holofoil"}
+    return {"item": {**base, **item}, "card": card}
+
+
+def test_text_trainer_gallery_dropped_when_number_says_it():
+    from app.services.listing_pack import _text
+    card = {"name": "Spiritomb", "number": "TG09", "rarity": "Trainer Gallery Rare Holo", "variants": ["holofoil"],
+            "set": {"name": "Lost Origin Trainer Gallery"}}
+    title, desc = _text(_row(card))
+    assert title == "Spiritomb - Lost Origin TG09 - Near Mint"
+    assert "Trainer Gallery" not in desc and "Rarity" not in desc and "Variant" not in desc
+    assert desc.startswith("✨ Spiritomb - Lost Origin TG09") and "Condition: Near Mint" in desc
+    assert "sleeve" not in desc and "toploader" not in desc and "📦" in desc and "💬" in desc
+
+
+def test_text_variant_only_when_card_has_several_and_never_rarity():
+    from app.services.listing_pack import _text
+    card = {"name": "Alcremie VMAX", "number": "23", "rarity": "Rare Holo VMAX", "variants": ["normal", "holofoil"],
+            "set": {"name": "Champion's Path"}}
+    title, desc = _text(_row(card))
+    assert title == "Alcremie VMAX - Champion's Path 23 - Near Mint"
+    assert "Rarity" not in desc and "Variant: holofoil" in desc
