@@ -20,6 +20,7 @@ import { BUILTIN_PRESETS, COLLECTION_DEFAULTS, DEFAULT_DESC, PRESET_KEYS, active
 import ValueChart from "../components/ValueChart";
 import { usePriceFetchJob } from "../lib/fetchJob";
 import BulkRemoveDrawer from "../components/BulkRemoveDrawer";
+import ListingPackDrawer from "../components/collection/ListingPackDrawer";
 import RemoveStack from "../components/collection/RemoveStack";
 import SalePanel, { SaleBadge } from "../components/collection/SalePanel";
 import PhotosPanel from "../components/collection/PhotosPanel";
@@ -123,6 +124,7 @@ export default function Collection() {
   const pickedCopies = pickedIds.reduce((n, id) => n + (info.current.get(id)?.quantity ?? 0), 0);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [saleOpen, setSaleOpen] = useState(false);
+  const [packOpen, setPackOpen] = useState(false);
   const [saleStatus, setSaleStatus] = useState<"none" | "ready" | "reserved" | "withdrawn">("ready");
   const saleBulk = useMutation({ mutationFn: () => api.bulkSale(pickedIds, saleStatus),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["collection"] }); qc.invalidateQueries({ queryKey: ["sales"] }); } });
@@ -192,6 +194,7 @@ export default function Collection() {
         <Button size="sm" onClick={() => { bulk.reset(); setBulkOpen(true); }}>Edit cost &amp; type</Button>
         <Button size="sm" variant="secondary" disabled={!!running || fetchPicked.isPending} onClick={() => fetchPicked.mutate()}>Fetch prices</Button>
         <Button size="sm" variant="secondary" onClick={() => { saleBulk.reset(); setSaleOpen(true); }}>Sale status</Button>
+        <Button size="sm" variant="secondary" onClick={() => setPackOpen(true)}>Listing pack</Button>
         <Button size="sm" variant="secondary" onClick={() => setRemoveOpen(true)}>Remove</Button>
         <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>Clear selection</Button>
         {fetchPicked.isSuccess && <span className="text-muted">Fetching {fetchPicked.data.cards} card{fetchPicked.data.cards === 1 ? "" : "s"}: progress shows at the top of the page.</span>}
@@ -234,6 +237,7 @@ export default function Collection() {
       <BulkRemoveDrawer kind="stacks" ids={pickedIds} copies={pickedCopies} open={removeOpen} onClose={() => setRemoveOpen(false)}
         onDone={() => setPicked(new Set())}
         onChanged={() => { qc.invalidateQueries({ queryKey: ["collection"] }); qc.invalidateQueries({ queryKey: ["dashboard"] }); qc.invalidateQueries({ queryKey: ["exits"] }); }} />
+      <ListingPackDrawer ids={pickedIds} open={packOpen} onClose={() => setPackOpen(false)} />
       <Drawer open={saleOpen} onClose={() => { setSaleOpen(false); if (saleBulk.isSuccess) setPicked(new Set()); }} title={`Sale status · ${picked.size} stack${picked.size === 1 ? "" : "s"}`}>
         <div className="space-y-3 text-sm">
           <Select aria-label="New sale status" value={saleStatus} onChange={(v) => setSaleStatus(v as typeof saleStatus)}

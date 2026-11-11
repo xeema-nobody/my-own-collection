@@ -352,3 +352,10 @@ User: store and fetch prices only for cards the user selects into the collection
 - **Vinted (user, amends D3)**: no seller API, so publishing is assisted: Claude in Chrome fills the form in the user's logged-in browser, the user presses Publish; no credentials stored by the app; no unattended posting (ban / terms risk).
 - **Backup**: daily full dumps x14 multiply photo size; `backup.sh --no-photos` and a size readout exist for that.
 
+## Listing pack (2026-11-11, roadmap Step 6c)
+- **Read-only generator**: `POST /api/collection/listing-pack` builds title / description / price per stack and saves nothing. The only write is the user's "Mark as Listed", which calls the existing `PUT /{id}/sale` per stack, keeps listings on other platforms and replaces the one for this platform. 6e (assisted Vinted publish) reuses the same pack.
+- **Price**: headline value / quantity (per copy, base currency cents). Strategies: `market` (headline), `under` (headline minus N %, default 5), `floor` (lowest like-for-like source from `spread.min`). No value = `None` + warning "needs price", never 0; a slab with no graded price is never priced from the raw card (valuation rule unchanged). The markup (+10 %) of D3 belongs to 6d, not here.
+- **Texts**: plain English; title = name - set number - condition or grader grade (+ language if not English); description has rarity, variant, language, condition or grade + cert + report link, a quantity line and a fixed shipping sentence. Vinted limits (title 100, description 2000) are constants; a cut text carries a warning. Unverified against Vinted's live form: checked in the 6e research.
+- **Cardmarket**: only a reference stock sheet (name, set, number, language, condition, qty, price, comment). Condition mapping NM->NM, LP->EX, MP->GD, HP->LP, DMG->PL is an assumption. The real bulk upload keys on Cardmarket's own product id, which the catalog does not have, so slabs are skipped and the sheet is for pasting, not a direct upload.
+- **Photos**: ids cover first; `photos.zip` per stack (stored, not recompressed) for upload dialogs.
+

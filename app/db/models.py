@@ -153,6 +153,13 @@ class BulkSaleIn(BaseModel):
     status: Literal["none", "ready", "reserved", "withdrawn"]
 
 
+class ListingPackIn(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=200)
+    platform: Literal["vinted", "cardmarket"] = "vinted"
+    strategy: Literal["market", "under", "floor"] = "market"
+    pct: int = Field(default=5, ge=0, le=90, description="percent under market, strategy 'under' only")
+
+
 class PresetIn(BaseModel):
     """Saved filter set for a list page. `query` = the page's URL params (strings), checked against a whitelist."""
     name: str = Field(min_length=1, max_length=60)

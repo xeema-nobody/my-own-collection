@@ -6,11 +6,11 @@ from fastapi.responses import Response
 from app.services import valuation_cache
 from app.api.deps import get_db, spawn
 from app.config import settings
-from app.db.models import (BulkAcquiredIn, BulkRemoveIn, BulkSaleIn, CollectionIn, CollectionPatch, PresetIn, RemoveIn,
-                           StackSaleIn)
+from app.db.models import (BulkAcquiredIn, BulkRemoveIn, BulkSaleIn, CollectionIn, CollectionPatch, ListingPackIn, PresetIn,
+                           RemoveIn, StackSaleIn)
 from app.services import acquisition
 from app.services import collection_query as cq
-from app.services import photos as photos_svc, presets, sale
+from app.services import listing_pack as listing_svc, photos as photos_svc, presets, sale
 from app.services import collection as svc
 from app.services import portability
 from app.services.price_fetch import price_freshness
@@ -100,6 +100,32 @@ async def exits(limit: int = Query(100, ge=1, le=500)):
 async def sales_report():
     """Ready / listed (by platform) now plus sold totals (revenue, fees, realised profit, days to sell)."""
     return await sale.report(get_db())
+
+
+@router.post("/listing-pack")
+async def listing_pack(body: ListingPackIn):
+    """Title / description / suggested price / photo ids per stack for one platform (nothing is saved)."""
+    return await listing_svc.build_pack(get_db(), body.ids, body.platform, body.strategy, body.pct)
+
+
+@router.get("/listing-pack.csv")
+async def listing_pack_csv(ids: str = Query(min_length=1), strategy: str = Query("market", pattern="^(market|under|floor)$"),
+                           pct: int = Query(5, ge=0, le=90)):
+    """Cardmarket stock sheet of the raw stacks in `ids` (comma separated)."""
+    id_list = [i for i in ids.split(",") if i][:200]
+    body = await listing_svc.cardmarket_sheet(get_db(), id_list, strategy, pct)
+    day = datetime.now(timezone.utc).strftime("%Y%m%d")
+    return Response(body, media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="cardmarket-{day}.csv"'})
+
+
+@router.get("/{item_id}/photos.zip")
+async def photos_zip(item_id: str):
+    svc.oid(item_id)
+    data = await listing_svc.photos_zip(get_db(), item_id)
+    if data is None:
+        raise HTTPException(404, "no photos")
+    return Response(data, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="photos-{item_id}.zip"'})
 
 
 @router.post("/bulk-sale")

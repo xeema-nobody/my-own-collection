@@ -215,7 +215,11 @@ The catalog import writes price rows for every card of every imported set (the p
 - Views: "Ready to list", "Listed (by platform)", "Sold" with totals — € listed, € sold, realised profit, average days to sell.
 - Dashboard shows listed value separately from unlisted.
 
-### 6c. Export for listing `[ ]` (HIGH PRIO, after 6a)
+### 6c. Export for listing `[x]` built 2026-11-11, awaiting the user's check (decisions.md 'Listing pack')
+
+- **Built:** Collection selection bar > "Listing pack" drawer: platform (Vinted / Cardmarket), price strategy (match market / under by N % / floor), editable title, description and price per stack, copy buttons, photos .zip (cover first), Cardmarket CSV sheet, "Mark as Listed" (saves listings via the sale endpoint, other platforms' listings kept). Not built: Vinted category / condition / brand mapping and the real Cardmarket upload format (idProduct), both belong to the 6e research; slabs are left out of the Cardmarket sheet.
+
+Original brief:
 
 - Select copies → export a **listing pack**: title, description text (card, set, number, language, condition, edition, cert for slabs), suggested price, photos, in a ready-to-paste form per platform. Platform formats differ (Vinted title/limits, Cardmarket bulk-upload sheet) — start with the 2 the founder uses most.
 - Suggested price from market data with a choice of strategy (match market / slightly under / floor price), always editable.
@@ -343,4 +347,5 @@ _Future — start only after the collection is large and scanning (step 5) works
 | 2026-11-10 | D6   | Image re-point built: `services/catalog_images.py`, admin routes `catalog/images/{status,repoint,restore}`, Settings > Catalog "Card images". Reversible (`images_legacy`), idempotent, one request per set. Real run waits for the user's OK (backup first). |
 | 2026-11-10 | 6b   | Sale status built: `sale` on a stack (ready / listed with listings per platform / reserved / withdrawn), sold = exit with platform, fees, shipping, realised profit, days listed and delist hint; filters, presets, bulk status, Dashboard listed value, Settings > Data > Sales. Whole-stack granularity. |
 | 2026-11-11 | 6a   | Photos built: `photos` collection (Pillow-compressed JPEG + thumb), API + phone `POST /api/scan/photo` (only for a just-scanned stack), save toggle + extra shots on the phone, `PhotosPanel` in the drawer, `has_photos` filter, Settings > Data > Photos, `backup.sh --no-photos`. Tests: test_photos.py, Scan.photo / PhotosPanel vitest. |
+| 2026-11-11 | 6c   | Listing pack built: `services/listing_pack.py`, `POST /api/collection/listing-pack`, `listing-pack.csv`, `photos.zip`, `ListingPackDrawer` on the Collection selection bar. Tests: test_listing_pack.py (8), ListingPackDrawer vitest (2). |
 | 2026-11-11 | 6    | Re-prioritised after the user's request: photos saved at scan + added later (6a, building), listing pack (6c), assisted Vinted publish (new 6e), daily reprice + sold-comps alerts (6d) all high priority, in that order. D3 amended. |

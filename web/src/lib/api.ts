@@ -6,6 +6,11 @@ const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://loc
 export const safeUrl = (u: string | null | undefined): string | undefined =>
   u && /^https?:\/\//i.test(u) ? u : undefined;
 
+export type PackStrategy = "market" | "under" | "floor";
+export type PackItem = { item_id: string; card_id: string; title: string; description: string; price: number | null; currency: string;
+  quantity: number; photos: string[]; warnings: string[]; sale?: StackSale | null };
+export type ListingPack = { platform: string; strategy: PackStrategy; pct: number; items: PackItem[]; missing: string[] };
+
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
@@ -169,6 +174,11 @@ export const api = {
   setSale: (id: string, b: StackSale) => req<{ id: string; sale: StackSale }>(`/api/collection/${id}/sale`, { method: "PUT", body: JSON.stringify(b) }),
   bulkSale: (ids: string[], status: Exclude<SaleStatus, "listed">) =>
     req<{ updated: number; failed: number; results: { id: string; ok: boolean; dropped_listings?: number; error?: string }[] }>("/api/collection/bulk-sale", post({ ids, status })),
+  listingPack: (b: { ids: string[]; platform: "vinted" | "cardmarket"; strategy: PackStrategy; pct: number }) =>
+    req<ListingPack>("/api/collection/listing-pack", post(b)),
+  listingPackCsvUrl: (ids: string[], strategy: PackStrategy, pct: number) =>
+    `${BASE}/api/collection/listing-pack.csv${qs({ ids: ids.join(","), strategy, pct })}`,
+  photosZipUrl: (id: string) => `${BASE}/api/collection/${id}/photos.zip`,
   salesReport: () => req<SalesReport>("/api/collection/sales/report"),
   collectionExits: () => req<CollectionExit[]>("/api/collection/exits"),
   deleteItem: (id: string) => req<void>(`/api/collection/${id}`, { method: "DELETE" }),
