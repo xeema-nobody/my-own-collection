@@ -359,3 +359,11 @@ User: store and fetch prices only for cards the user selects into the collection
 - **Cardmarket**: only a reference stock sheet (name, set, number, language, condition, qty, price, comment). Condition mapping NM->NM, LP->EX, MP->GD, HP->LP, DMG->PL is an assumption. The real bulk upload keys on Cardmarket's own product id, which the catalog does not have, so slabs are skipped and the sheet is for pasting, not a direct upload.
 - **Photos**: ids cover first; `photos.zip` per stack (stored, not recompressed) for upload dialogs.
 
+
+## Assisted Vinted publish: confirm in app, Claude works the queue (2026-11-11, roadmap Step 6e)
+- **Amends** "Photos on stacks and assisted publish": the user no longer presses Vinted's Upload. The user's **per-item confirmation in the app's Publish table** is the approval; Claude (Chrome, user's logged-in browser) then uploads / saves. Still no stored credentials, no unattended batch: only rows the user confirmed are processed, one at a time.
+- **Why a queue**: the FastAPI backend cannot drive Chrome. Confirmed rows are written to `publish_queue` (state confirmed / publishing / published / failed, payload, link if known); a Claude session reads and updates it through the API.
+- **Create vs update**: no stored link -> `/items/new`; stored link -> that item's edit page (price / text update). After a successful upload Claude reads the item URL from the page and saves it via the existing `PUT /{id}/sale` (Listed, link).
+- **Mapping (user)**: Single trading cards, brand Pokemon, condition raw Very good / slab New without tags, parcel Small raw / Medium slab, all editable per row. Details and `data-testid`s: `docs/vinted-sell-flow.md`.
+- **Photos**: the app writes each queued item's photos (cover first, max 20) to a temp folder; Claude's file-upload tool feeds the hidden `add-photos-input`. To be proven early.
+- **Risk**: automated Upload may breach Vinted's terms / trigger bot checks; first run is a dry run stopping before Upload; stop and report on any CAPTCHA or unexpected dialog, never solve it.
