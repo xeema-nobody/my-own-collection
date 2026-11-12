@@ -70,7 +70,7 @@ Limits to verify on the form during the dry run (type past the limit, read the c
 
 ## Chrome extension (primary, built 2026-11-12)
 
-`extension/` runs the same recipe inside the user's own logged-in Vinted tab (see `extension/README.md`, decisions.md). `recipe.js` is the port of `recipe.py`: same data-testids, guards (login URL, CAPTCHA text, 404, open dialog, missing auto-fill, read-back mismatch) and update mode (title / description / price only). Photos come from the app as blobs and are set on `add-photos-input` via DataTransfer. Dry run = popup toggle (default on). Not yet proven live: condition picker, parcel cell, slab dialog.
+`extension/` runs the same recipe inside the user's own logged-in Vinted tab (see `extension/README.md`, decisions.md). `recipe.js` is the port of `recipe.py`: same data-testids, guards (login URL, CAPTCHA text, 404, open dialog, missing auto-fill, read-back mismatch) and update mode (title / description / price only). Photos come from the app as blobs and are set on `add-photos-input` via DataTransfer. Dry run = popup toggle (default on). Proven live 2026-11-12: update flow (dry run + real). Not yet proven live: create (photos, condition picker, parcel cell), slab dialog.
 
 ## Host publisher script (secondary, built 2026-11-12, no Claude)
 
