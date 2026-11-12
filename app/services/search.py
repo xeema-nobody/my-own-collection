@@ -52,6 +52,11 @@ def build_query(q: str | None, tcg=None, set_id=None, type_=None, rarity=None, s
     return {"$and": conds} if conds else {}
 
 
+def exclude_sealed(flt: dict) -> dict:
+    """Card search never lists sealed products (they have their own catalog, services/sealed.py)."""
+    return {"$and": [{"kind": {"$ne": "sealed"}}, *flt.get("$and", [])]}
+
+
 SORTS = {
     "name": [("name_norm", 1)], "number": [("set.release_date", -1), ("set.id", 1), ("number_sort", 1)],
     "release": [("set.release_date", -1), ("set.id", 1), ("number_sort", 1)],

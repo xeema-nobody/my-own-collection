@@ -30,7 +30,7 @@ async def refresh_prices(scope: str = "tracked", sets: list[str] | None = None, 
         if scope in ("tracked", "wishlist"):
             want |= set(await db.wishlist.distinct("card_id"))
         by_set: dict[tuple[str, str], set[str]] = {}   # (language, set id): ja set codes may repeat English ones
-        async for c in db.cards.find({"_id": {"$in": sorted(want)}}, {"set.id": 1, "language": 1}):
+        async for c in db.cards.find({"_id": {"$in": sorted(want)}, "kind": {"$ne": "sealed"}}, {"set.id": 1, "language": 1}):
             by_set.setdefault((c.get("language") or "en", c["set"]["id"]), set()).add(c["_id"])
         ja = None
         for key in sorted(k for k in by_set if not sets or k[1] in sets):
@@ -64,8 +64,8 @@ async def price_new_tracked(card_id: str) -> None:
         return
     try:
         db = get_db()
-        card = await db.cards.find_one({"_id": card_id}, {"latest_price": 1})
-        if card and not card.get("latest_price"):
+        card = await db.cards.find_one({"_id": card_id}, {"latest_price": 1, "kind": 1})
+        if card and not card.get("latest_price") and card.get("kind") != "sealed":
             await refresh_card_price(db, card_id)
     except Exception as e:  # noqa: BLE001
         log.warning("price on add failed for %s: %s", card_id, e)
@@ -75,9 +75,11 @@ async def refresh_card_price(db, card_id: str, provider=None) -> dict:
     """One-card catalog price fetch (a user action: card opened / just added). Stores that card's prices only.
 
     Not a job (small, synchronous). Returns {"found", "prices", "tracked"}; raises LookupError for an unknown card."""
-    card = await db.cards.find_one({"_id": card_id}, {"set.id": 1, "language": 1})
+    card = await db.cards.find_one({"_id": card_id}, {"set.id": 1, "language": 1, "kind": 1})
     if not card:
         raise LookupError(card_id)
+    if card.get("kind") == "sealed":   # no catalog API prices sealed products: scraped sources only
+        return {"found": False, "prices": 0, "tracked": card_id in await tracked_card_ids(db)}
     provider = provider or (await get_ja_catalog() if card.get("language") == "ja" else await get_catalog())
     rates = await get_rates(db)
     out = {"found": False, "prices": 0, "tracked": card_id in await tracked_card_ids(db)}

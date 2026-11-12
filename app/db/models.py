@@ -327,40 +327,15 @@ class ScanSessionIn(BaseModel):
     mode: Literal["raw", "slab"] = "raw"
 
 
-ProductType = Literal["booster_box", "booster_bundle", "etb", "booster_pack", "tin", "collection_box", "blister", "other"]
-ProductStatus = Literal["sealed", "opened", "sold_sealed"]
+SealedType = Literal["booster_box", "booster_bundle", "etb", "booster_pack", "tin", "collection_box", "blister", "other"]
 
 
-class ProductIn(BaseModel):
-    """A stack of identical sealed units. Money = cents per unit in the base currency; None = unknown."""
-    name: str = Field(min_length=1, max_length=120)
-    type: ProductType = "other"
-    tcg: str = Field(default="pokemon", max_length=20)
-    set_name: str | None = Field(default=None, max_length=80)
+class SealedIn(BaseModel):
+    """Own a sealed product: the catalog entry (set + type + language + edition) is created once, then a normal stack."""
+    set_id: str = Field(min_length=1, max_length=40, description="external id of a set in our sets list")
+    type: SealedType
     language: Language = "en"
+    edition: str | None = Field(default=None, max_length=60, description="'Pokémon Center', 'Costco'...")
     quantity: int = Field(default=1, ge=1, le=10000)
-    status: ProductStatus = "sealed"
-    purchase_price: int | None = Field(default=None, gt=0)
-    purchase_date: dt.date | None = None
-    purchased_from: str | None = Field(default=None, max_length=80)
-    market_value: int | None = Field(default=None, gt=0, description="manual market value per unit, cents")
-    sold_price: int | None = Field(default=None, gt=0)
-    sold_at: dt.date | None = None
-    note: str | None = Field(default=None, max_length=500)
-
-
-class ProductPatch(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=120)
-    type: ProductType | None = None
-    tcg: str | None = Field(default=None, max_length=20)
-    set_name: str | None = Field(default=None, max_length=80)
-    language: Language | None = None
-    quantity: int | None = Field(default=None, ge=1, le=10000)
-    status: ProductStatus | None = None
-    purchase_price: int | None = Field(default=None, gt=0)
-    purchase_date: dt.date | None = None
-    purchased_from: str | None = Field(default=None, max_length=80)
-    market_value: int | None = Field(default=None, gt=0)
-    sold_price: int | None = Field(default=None, gt=0)
-    sold_at: dt.date | None = None
-    note: str | None = Field(default=None, max_length=500)
+    acquired: Acquired | None = None
+    notes: str | None = None

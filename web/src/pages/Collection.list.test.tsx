@@ -92,3 +92,25 @@ describe("Collection list: filters, totals, views, presets", () => {
     expect(screen.getByRole("combobox", { name: "Set" })).toBeInTheDocument();
   });
 });
+
+describe("Collection: Cards | Sealed", () => {
+  const sealedRow = row("z1", { card: { _id: "sealed:pokemon:en:sv3:booster_box", kind: "sealed", name: "Obsidian Flames Booster Box", number: "", set: { name: "Obsidian Flames" }, images: {} } });
+  it("sealed view asks the API for kind=sealed, shows sealed totals and no card number", async () => {
+    const fn = setup({ "/api/collection/summary": { ...summary, sealed: { stacks: 1, units: 2, value: 29000, cost: 24000, unpriced: 0, cost_missing: 0 } },
+      "/api/collection": { items: [sealedRow], total: 1, totals } });
+    renderPage(<Collection />, "/?kind=sealed");
+    expect(await screen.findByText("Obsidian Flames Booster Box")).toBeInTheDocument();
+    expect(screen.getByText("Sealed value")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add sealed product" })).toBeInTheDocument();
+    expect(screen.queryByText(/#\s*$/)).not.toBeInTheDocument();
+    expect(screen.getByText(/EN · Sealed/)).toBeInTheDocument();
+    expect(new URL(calls(fn).find((u) => u.includes("/api/collection?"))!).searchParams.get("kind")).toBe("sealed");
+    expect(calls(fn).some((u) => u.includes("/api/collection/facets?kind=sealed"))).toBe(true);
+  });
+  it("cards view sends no kind", async () => {
+    const fn = setup();
+    renderPage(<Collection />);
+    await screen.findByText("Card s1");
+    expect(new URL(calls(fn).find((u) => u.includes("/api/collection?"))!).searchParams.has("kind")).toBe(false);
+  });
+});

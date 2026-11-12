@@ -24,7 +24,8 @@ import ListingPackDrawer from "../components/collection/ListingPackDrawer";
 import RemoveStack from "../components/collection/RemoveStack";
 import SalePanel, { SaleBadge } from "../components/collection/SalePanel";
 import PhotosPanel from "../components/collection/PhotosPanel";
-import { Badge, Button, Card, Checkbox, Drawer, EmptyState, Kpi, Pagination, Select, Skeleton, SortTh, Table, THead, Td, Th, Tr, ViewToggle, VIEWS } from "../components/ui";
+import AddSealed from "../components/collection/AddSealed";
+import { Badge, Button, Card, Checkbox, Drawer, EmptyState, Kpi, Pagination, SegmentedControl, Select, Skeleton, SortTh, Table, THead, Td, Th, Tr, ViewToggle, VIEWS } from "../components/ui";
 
 const COLS: { key: string; label: string; num?: boolean }[] = [
   { key: "name", label: "Card" }, { key: "set", label: "Set" }, { key: "", label: "Details" },
@@ -73,14 +74,14 @@ function Details({ i, onGone, onPublish }: { i: any; onGone?: () => void; onPubl
       <div className="flex gap-4">
         {i.card?.images?.small && <img src={i.card.images.small} alt="" className="h-36 rounded" />}
         <div className="space-y-1 text-sm">
-          <div className="text-muted">{i.card?.set?.name} #{i.card?.number} · {detail(i)} · ×{i.quantity}</div>
+          <div className="text-muted">{i.card?.set?.name}{i.card?.kind === "sealed" ? "" : ` #${i.card?.number}`} · {detail(i)} · ×{i.quantity}</div>
           <div className="num">Value <span className="text-lg font-semibold">{i.needs_price ? "not priced" : money(i.value)}</span>
             {i.source && <span className="text-muted"> · {i.source}{i.thin && i.sample_size ? ` · only ${i.sample_size} sold` : ""}</span>}</div>
           <div className="num text-muted">Cost {money(i.cost)}{i.pl != null && <> · P/L <span className={i.pl >= 0 ? "text-ok" : "text-danger"}>{money(i.pl)}</span></>}</div>
           {i.needs_price && i.ref_raw_value != null && <div className="text-muted">Raw copy ≈ {money(i.ref_raw_value)}, not counted.</div>}
           {why && <div className="flex items-start gap-1 text-warn"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{why}</div>}
           <div className="flex gap-2 pt-1">
-            <Link to={`/cards/${encodeURIComponent(i.card_id)}`}><Button variant="secondary" size="sm">Open card</Button></Link>
+            <Link to={`/cards/${encodeURIComponent(i.card_id)}`}><Button variant="secondary" size="sm">{i.card?.kind === "sealed" ? "Open product (prices, matches)" : "Open card"}</Button></Link>
             <Link to={`/alerts?stack=${i.id}`}><Button variant="secondary" size="sm"><Bell size={12} />Create alert</Button></Link>
             <Button variant="secondary" size="sm" disabled={fetchStack.isPending} onClick={() => fetchStack.mutate()}>Fetch prices for this stack</Button>
           </div>
@@ -101,13 +102,15 @@ export default function Collection() {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [phoneOpen, setPhoneOpen] = useState(false);
+  const [sealedOpen, setSealedOpen] = useState(false);
   const [view, setView] = useStoredState("collection.view", "table", VIEWS);
   const [f, set] = useUrlState(COLLECTION_DEFAULTS);
   const [sel, setSel] = useState<any>(null);
   // lists change little between visits: serve the cached page instantly and refresh quietly in the background
   const cached = { staleTime: 60_000, gcTime: 30 * 60_000 };
   const sum = useQuery({ queryKey: ["collection", "summary"], queryFn: api.collectionSummary, ...cached });
-  const facets = useQuery({ queryKey: ["collection", "facets"], queryFn: api.collectionFacets, ...cached });
+  const sealedView = f.kind === "sealed";
+  const facets = useQuery({ queryKey: ["collection", "facets", f.kind], queryFn: () => api.collectionFacets(f.kind), ...cached });
   const query = toApiQuery(f);
   const list = useQuery({ queryKey: ["collection", "list", query], queryFn: () => api.collection(query), placeholderData: keepPreviousData, ...cached });
   const s = sum.data;
@@ -146,12 +149,25 @@ export default function Collection() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">Collection</h1>
-        <Button variant="secondary" size="sm" onClick={() => setPhoneOpen(true)}><ScanLine size={14} />Add by scanning</Button>
+        <div className="flex items-center gap-3">
+          <SegmentedControl label="Collection kind" value={sealedView ? "sealed" : "cards"} onChange={(v) => { setPicked(new Set()); set({ kind: v === "sealed" ? "sealed" : "", page: "1" }); }}
+            options={[{ value: "cards", label: "Cards" }, { value: "sealed", label: "Sealed" }]} />
+          {sealedView
+            ? <Button size="sm" onClick={() => setSealedOpen(true)}>Add sealed product</Button>
+            : <Button variant="secondary" size="sm" onClick={() => setPhoneOpen(true)}><ScanLine size={14} />Add by scanning</Button>}
+        </div>
       </div>
+      <AddSealed open={sealedOpen} onClose={() => setSealedOpen(false)} />
       <Drawer open={phoneOpen} onClose={() => setPhoneOpen(false)} title="Add by scanning"><div className="space-y-5"><ScanSession /><PhoneLink /></div></Drawer>
       <QueryError q={sum} label="Summary" />
       {sum.isLoading && <div className="grid grid-cols-2 gap-3 md:grid-cols-5">{[0, 1, 2, 3, 4].map((n) => <Skeleton key={n} className="h-20" />)}</div>}
-      {s && <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+      {s && sealedView && <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Kpi label="Sealed value" value={money(s.sealed?.value)} hint={s.sealed?.unpriced > 0 ? `${s.sealed.unpriced} stack${s.sealed.unpriced === 1 ? "" : "s"} without a price` : "not part of the card Value"} />
+        <Kpi label="Sealed cost" value={money(s.sealed?.cost)} hint={s.sealed?.cost_missing > 0 ? `${s.sealed.cost_missing} stack${s.sealed.cost_missing === 1 ? "" : "s"} without cost` : undefined} />
+        <Kpi label="Units" value={s.sealed?.units ?? 0} />
+        <Kpi label="Stacks" value={s.sealed?.stacks ?? 0} />
+      </div>}
+      {s && !sealedView && <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
         <Kpi label="Cards" value={s.cards} hint={`${s.distinct} distinct`} />
         <Kpi label="Value" value={money(s.value)} />
         <Kpi label="Cost" value={money(s.cost)} hint={s.cost_missing > 0 ? `${s.cost_missing} stack${s.cost_missing === 1 ? "" : "s"} without cost` : undefined} />
@@ -161,9 +177,9 @@ export default function Collection() {
           hint={s.pl_ex_pulled != null && s.cost_basis_cost_ex_pulled ? `${s.pl_ex_pulled >= 0 ? "+" : ""}${((s.pl_ex_pulled / s.cost_basis_cost_ex_pulled) * 100).toFixed(1)}% of cost` : undefined} />
         <Kpi label="Needs price / estimated" value={`${s.needs_price} / ${s.estimated}`} />
       </div>}
-      {s?.cost_missing > 0 && <p className="text-xs text-muted">P/L counts only stacks with a cost.{" "}
+      {!sealedView && s?.cost_missing > 0 && <p className="text-xs text-muted">P/L counts only stacks with a cost.{" "}
         <button type="button" className="text-accent hover:underline" onClick={() => set({ cost_missing: "true" })}>Show the {s.cost_missing} without cost</button> to fix them in bulk.</p>}
-      {s?.needs_price > 0 && <Card className="border-l-2 border-warn text-sm">
+      {!sealedView && s?.needs_price > 0 && <Card className="border-l-2 border-warn text-sm">
         <p>{s.needs_price} graded stack{s.needs_price === 1 ? "" : "s"} without a graded price {s.needs_price === 1 ? "is" : "are"} not counted in Value or P/L
           (their raw copies would add about {money(s.ref_raw_value)}).</p>
         <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -173,7 +189,7 @@ export default function Collection() {
       </Card>}
       <Card><BulkFetch /></Card>
 
-      <ValueChart />
+      {!sealedView && <ValueChart />}
 
       <PresetBar scope="collection" state={f} defaults={COLLECTION_DEFAULTS} keys={PRESET_KEYS} builtins={BUILTIN_PRESETS} onApply={set} />
       <Filters f={f} set={set} facets={facets.data} dir={dir} onDir={(d) => set({ order: d })} />
@@ -189,7 +205,7 @@ export default function Collection() {
 
       <QueryError q={list} label="Collection" />
       {list.isLoading && <Skeleton className="h-64 w-full" />}
-      {list.data && items.length === 0 && <EmptyState title="Nothing here">{dirty ? "No stacks match these filters." : "Add cards from the Search page."}</EmptyState>}
+      {list.data && items.length === 0 && <EmptyState title="Nothing here">{dirty ? "No stacks match these filters." : sealedView ? "Add a sealed product with the button above." : "Add cards from the Search page."}</EmptyState>}
       {picked.size > 0 && <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface-2 px-3 py-2 text-sm" role="status">
         <span>{picked.size} stack{picked.size === 1 ? "" : "s"} selected</span>
         <Button size="sm" onClick={() => { bulk.reset(); setBulkOpen(true); }}>Edit cost &amp; type</Button>
@@ -217,7 +233,7 @@ export default function Collection() {
                 <Td><span onClick={(e) => e.stopPropagation()}><Checkbox aria-label={`Select ${i.card?.name} ${detail(i)}`} label="" checked={picked.has(i.id)} onChange={() => toggle(i.id)} /></span></Td>
                 <Td>{i.card?.images?.small && <img src={i.card.images.small} alt="" loading="lazy" className="h-12 rounded-sm" />}</Td>
                 <Td><Link className="font-medium hover:underline" to={`/cards/${encodeURIComponent(i.card_id)}`} onClick={(e) => e.stopPropagation()}>{i.card?.name}</Link></Td>
-                <Td className="text-muted">{i.card?.set?.name} #{i.card?.number}</Td>
+                <Td className="text-muted">{i.card?.set?.name}{i.card?.kind === "sealed" ? "" : ` #${i.card?.number}`}</Td>
                 <Td className="text-muted">{detail(i)} <SaleBadge sale={i.sale} /></Td>
                 <Td num>{i.quantity}</Td>
                 <Td num><Value i={i} /></Td>

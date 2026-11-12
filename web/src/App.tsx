@@ -13,7 +13,6 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./lib/api";
 import FetcherBadge from "./components/FetcherBadge";
-import Products from "./pages/Products";
 import Reprice from "./pages/Reprice";
 import ThemeToggle from "./components/ThemeToggle";
 
@@ -29,16 +28,18 @@ function AlertsLink() {
 export default function App() {
   // The phone page is its own shell: no laptop nav, and none of the laptop's background polling (the phone may
   // only reach /api/scan/*).
-  if (useLocation().pathname.startsWith("/scan")) return <ErrorBoundary><Scan /></ErrorBoundary>;
+  const loc = useLocation();
+  const sealedView = loc.pathname === "/collection" && new URLSearchParams(loc.search).get("kind") === "sealed";
+  if (loc.pathname.startsWith("/scan")) return <ErrorBoundary><Scan /></ErrorBoundary>;
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur">
         <nav className="mx-auto flex max-w-[1800px] items-center gap-1 px-6 py-2">
           <span className="mr-6 text-base font-semibold tracking-tight">My Collection</span>
           <NavLink to="/" end className={link}>Search</NavLink>
-          <NavLink to="/collection" className={link}>Collection</NavLink>
+          <NavLink to="/collection" className={({ isActive }) => link({ isActive: isActive && !sealedView })}>Collection</NavLink>
           <NavLink to="/wishlist" className={link}>Wishlist</NavLink>
-          <NavLink to="/products" className={link}>Products</NavLink>
+          <NavLink to="/collection?kind=sealed" className={() => link({ isActive: sealedView })}>Sealed</NavLink>
           <NavLink to="/dashboard" className={link}>Dashboard</NavLink>
           <NavLink to="/reprice" className={link}>Reprice</NavLink>
           <AlertsLink />
@@ -52,7 +53,6 @@ export default function App() {
         <Route path="/cards/:id" element={<CardDetail />} />
         <Route path="/collection" element={<Collection />} />
         <Route path="/wishlist" element={<Wishlist />} />
-        <Route path="/products" element={<Products />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/reprice" element={<Reprice />} />

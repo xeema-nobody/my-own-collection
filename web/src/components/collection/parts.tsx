@@ -22,4 +22,4 @@ export function Value({ i }: { i: any }) {
     <Badge tone={KIND_TONE[i.price_kind as keyof typeof KIND_TONE] ?? "neutral"}>{i.price_kind}</Badge></span>;
 }
 
-export const detail = (i: any) => `${i.variant ? `${i.variant} · ` : ""}${i.language.toUpperCase()} · ${i.grading ? `${i.grading.company} ${i.grading.grade}` : i.condition}`;
+export const detail = (i: any) => i.card?.kind === "sealed" ? `${i.language.toUpperCase()} · Sealed` : `${i.variant ? `${i.variant} · ` : ""}${i.language.toUpperCase()} · ${i.grading ? `${i.grading.company} ${i.grading.grade}` : i.condition}`;

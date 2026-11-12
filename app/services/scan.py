@@ -20,7 +20,7 @@ from app.services import artmatch
 from app.services import collection as collection_svc
 from app.services import slab as slab_svc
 from app.services import valuation_cache
-from app.services.search import build_query, find_page
+from app.services.search import build_query, exclude_sealed, find_page
 
 log = logging.getLogger(__name__)
 MAX_CARDS = 40
@@ -411,7 +411,7 @@ async def lookup(db, number: str, set_q: str | None = None) -> dict:
 
 
 async def search(db, q: str, page: int = 1, page_size: int = 24) -> dict:
-    flt = build_query(q, tcg="pokemon")
+    flt = exclude_sealed(build_query(q, tcg="pokemon"))
     total = await db.cards.count_documents(flt)
     found = await find_page(db, flt, "release", (page - 1) * page_size, page_size)
     return {"total": total, "page": page, "cards": await views(db, found)}

@@ -2,7 +2,7 @@
 export const COLLECTION_DEFAULTS = {
   q: "", set: "", rarity: "", type: "", language: "", condition: "", graded: "", grader: "", grade: "", acquisition: "",
   price_min: "", price_max: "", pl: "", sale: "", platform: "", has_photos: "", needs_price: "", stale: "", cost_missing: "",
-  sort: "added", order: "", page: "1", size: "50",
+  kind: "", sort: "added", order: "", page: "1", size: "50",
 };
 export type CollectionParams = typeof COLLECTION_DEFAULTS;
 export const FILTER_KEYS = ["q", "set", "rarity", "type", "language", "condition", "graded", "grader", "grade", "acquisition",

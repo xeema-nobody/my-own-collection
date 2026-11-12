@@ -3,7 +3,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 from app.config import settings
-from app.services import acquisition, alerts, products, reprice
+from app.services import acquisition, alerts, reprice, sealed
 from app.services.collection import source_ids, valuate
 
 log = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ async def take_snapshot(db) -> dict:
            "card_count": sum(v["item"]["quantity"] for v in vals), "unpriced_count": unpriced,
            "needs_price_count": sum(1 for v in vals if v["needs_price"]),
            "ref_raw_value": sum(v["ref_raw_value"] or 0 for v in vals), "valuation_version": VALUATION_VERSION,
-           "sealed_value": (await products.summary(db))["value"],
+           "sealed_value": (await sealed.summary(db))["value"],
            "breakdowns": {"by_set": dict(by_set), "by_rarity": dict(by_rarity), "by_tcg": dict(by_tcg)},
            "taken_at": datetime.now(timezone.utc)}
     await db.collection_snapshots.update_one({"date": date}, {"$set": doc}, upsert=True)

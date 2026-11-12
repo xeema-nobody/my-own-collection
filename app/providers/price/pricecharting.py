@@ -20,6 +20,8 @@ CHART_RE = re.compile(r"VGPC\.chart_data\s*=\s*(\{.*?\});", re.S)
 
 
 def search_url(card: dict) -> str:
+    if card.get("kind") == "sealed":   # 'pokemon obsidian flames booster box': title = type, console = 'Pokemon <set>'
+        return f"{BASE}/search-products?type=prices&q={quote_plus('pokemon ' + card['name'])}"
     q = f"{search_name(card['name'])} {card['number']} {(card.get('set') or {}).get('name') or ''}".strip()
     return f"{BASE}/search-products?type=prices&q={quote_plus(q)}"
 

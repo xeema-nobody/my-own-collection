@@ -59,8 +59,28 @@ def _core(name: str) -> tuple[str, bool]:
     return re.sub(r"\bgold star\b", " ", base).strip(), has_variant
 
 
+EXTRA_PENALTY = 0.2     # per product word the shop adds that our entry does not have ('Case', 'Half', 'Display')
+
+
+def score_sealed(card: dict, cand: Candidate) -> float:
+    """0..1 for a sealed product: every word of our entry (set + type) must be in the hit's title / set label;
+    words the hit adds on top ('Booster Box Case') cost a little, so a plain exact title wins and ties go to the user."""
+    if cand.language != (card.get("language") or "en"):
+        return 0.0
+    want = _tokens(card["name"])
+    have = _tokens(f"{cand.title} {cand.set_name}")
+    if not want:
+        return 0.0
+    hit = len(want & have) / len(want)
+    if hit < 1.0:
+        return 0.0
+    return round(max(1.0 - EXTRA_PENALTY * len(have - want), 0.0), 3)
+
+
 def score(card: dict, cand: Candidate) -> float:
     """0..1. Number, base name and language must match, else 0; set overlap decides the rest."""
+    if card.get("kind") == "sealed":
+        return score_sealed(card, cand)
     if norm_number(cand.number) != norm_number(card.get("number")):
         return 0.0
     if cand.language != (card.get("language") or "en"):

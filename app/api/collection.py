@@ -14,6 +14,7 @@ from app.services import listing_pack as listing_svc, photos as photos_svc, pres
 from app.services import collection as svc
 from app.services import portability
 from app.services.price_fetch import price_freshness
+from app.services.sealed import summary as sealed_summary
 from app.services.refresh import price_new_tracked
 
 router = APIRouter(prefix="/api/collection", tags=["collection"])
@@ -70,6 +71,7 @@ async def list_items(q: str | None = None, tcg: str | None = None, set: str | No
                      sale_status: str | None = Query(None, alias="sale", pattern="^(none|ready|listed|reserved|withdrawn|active)$"),
                      platform: str | None = Query(None, pattern="^(vinted|cardmarket|ebay|marktplaats|other)$"),
                      has_photos: bool | None = None,
+                     kind: str = Query("cards", pattern="^(cards|sealed)$"),
                      sort: str = Query("added", pattern=f"^({'|'.join(cq.SORTS)})$"),
                      order: str | None = Query(None, pattern="^(asc|desc)$"),
                      page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200)):
@@ -82,7 +84,7 @@ async def list_items(q: str | None = None, tcg: str | None = None, set: str | No
     db = get_db()
     if has_photos is not None:
         query.extra["photo_ids"] = {x for x in await db.photos.distinct("stack_id")}  # `set` is a query param here
-    out = cq.query(await svc.valuate(db), query)
+    out = cq.query(await svc.valuate(db, kind=kind), query)
     pc = await photos_svc.counts(db, [i["id"] for i in out["items"]])  # one aggregate for this page only
     for i in out["items"]:
         i["photo_count"] = (pc.get(i["id"]) or {}).get("count", 0)
@@ -139,9 +141,9 @@ async def put_sale(item_id: str, body: StackSaleIn):
 
 
 @router.get("/facets")
-async def facets():
+async def facets(kind: str = Query("cards", pattern="^(cards|sealed)$")):
     """Distinct sets / rarities / types / languages / conditions / graders / grades with stack counts."""
-    return cq.facets(await svc.valuate(get_db()))
+    return cq.facets(await svc.valuate(get_db(), kind=kind))
 
 
 @router.get("/presets")
@@ -187,7 +189,8 @@ async def summary():
             "no_data": sum(1 for r in rows if r["value"] is None and not r["needs_price"]),
             "ref_raw_value": sum(r["ref_raw_value"] or 0 for r in rows),
             "estimated": sum(1 for r in rows if r["estimated"]),
-            "prices": await price_freshness(get_db())}
+            "prices": await price_freshness(get_db()),
+            "sealed": await sealed_summary(get_db())}
 
 
 @router.post("/bulk-acquired")

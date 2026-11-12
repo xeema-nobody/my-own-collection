@@ -124,14 +124,27 @@ async def compare_card(db, card_id: str, grading: dict | None = None, variant: s
             "spread": spread(_comparable(best, sources))}
 
 
-async def valuate(db, filt: dict | None = None, as_of: datetime | None = None) -> list[dict]:
+def is_sealed(row: dict) -> bool:
+    return (row.get("card") or {}).get("kind") == "sealed"
+
+
+def by_kind(rows: list[dict], kind: str) -> list[dict]:
+    """`cards` (default everywhere: Value, P/L, snapshots, movers), `sealed` (sealed products) or `all`."""
+    if kind == "all":
+        return rows
+    out = [r for r in rows if is_sealed(r) == (kind == "sealed")]
+    return rows if len(out) == len(rows) else out   # same list when nothing is dropped (cache identity)
+
+
+async def valuate(db, filt: dict | None = None, as_of: datetime | None = None, kind: str = "cards") -> list[dict]:
     """Items joined with card + best price (see services/valuation.py). Base-currency cents for the
     whole stack; None = unpriced. `values[source]` = value when only that source is used.
     `as_of` revalues the same items at a past date from the observation log + sales (see services/movers.py).
+    `kind` keeps sealed products out of every card total unless asked (`sealed` / `all`).
     The unfiltered, current valuation is cached (services/valuation_cache.py): treat its rows as read-only."""
     if not filt and as_of is None:
-        return await valuation_cache.get_rows(db, _valuate_all)
-    return await valuate_items(db, await db.collection_items.find(filt or {}).to_list(None), as_of)
+        return by_kind(await valuation_cache.get_rows(db, _valuate_all), kind)
+    return by_kind(await valuate_items(db, await db.collection_items.find(filt or {}).to_list(None), as_of), kind)
 
 
 async def _valuate_all(db) -> list[dict]:
@@ -179,7 +192,7 @@ def present(v: dict) -> dict:
     c = v["card"] or {}
     pl = None if v["value"] is None or v["cost"] is None else v["value"] - v["cost"]
     return {**_out(v["item"]), "cost": v["cost"], "pl": pl, "card": {k: c.get(k) for k in (
-        "_id", "name", "number", "rarity", "set", "images")} if c else None,
+        "_id", "name", "number", "rarity", "set", "images", "kind", "sealed_type", "edition")} if c else None,
         **{k: v[k] for k in ("value", "values", "sources", "estimated", "price_kind", "source", "match",
                              "grade_key_used", "thin", "sample_size", "as_of", "observed_on", "stale",
                              "headline_rule", "spread", "needs_price", "ref_raw_value", "ref_raw_source")}}

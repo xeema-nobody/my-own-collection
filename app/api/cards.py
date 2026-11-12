@@ -14,7 +14,7 @@ from app.services.price_fetch import fetch_prices, fetch_status
 from app.services.refresh import refresh_card_price
 from app.services.fx import convert, rates_to_base
 from app.services.price_matrix import build_matrix, value_of
-from app.services.search import build_query, find_page
+from app.services.search import build_query, exclude_sealed, find_page
 from app.services.sets import language_filter, sets_with_stats
 
 router = APIRouter(prefix="/api", tags=["cards"])
@@ -28,7 +28,7 @@ async def search_cards(q: str | None = None, tcg: str | None = None, set: str | 
                        page: int = Query(1, ge=1), page_size: int = Query(40, ge=1, le=100)):
     db = get_db()
     owned_ids = await db.collection_items.distinct("card_id") if owned else None
-    flt = build_query(q, tcg, set, type, rarity, supertype, price_min, price_max, has_price, owned_ids, language)
+    flt = exclude_sealed(build_query(q, tcg, set, type, rarity, supertype, price_min, price_max, has_price, owned_ids, language))
     total = await db.cards.count_documents(flt)
     cards = [clean(c) for c in await find_page(db, flt, sort, (page - 1) * page_size, page_size)]
     qty = {r["_id"]: r["n"] async for r in db.collection_items.aggregate([

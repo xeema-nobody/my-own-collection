@@ -79,8 +79,9 @@ async def confirm(db, body: PublishConfirmIn) -> dict:
             results.append({"item_id": it.item_id, "ok": False, "error": "no photos: add at least one"})
             continue
         link = vinted_link(stack)
+        sealed = ((await db.cards.find_one({"_id": stack["card_id"]}, {"kind": 1})) or {}).get("kind") == "sealed"
         doc = {"item_id": it.item_id, "card_id": stack["card_id"], "state": "confirmed", "mode": "update" if link else "create",
-               "url": link, "payload": {**it.model_dump(), "category": "Single trading cards", "brand": "Pokémon"},
+               "url": link, "payload": {**it.model_dump(), "category": "Sealed trading card products" if sealed else "Single trading cards", "brand": "Pokémon"},
                "photos": min(n_photos, VINTED_MAX_PHOTOS), "error": None,
                "created_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)}
         r = await db.publish_queue.insert_one(doc)

@@ -5,7 +5,7 @@ from pymongo import ASCENDING, DESCENDING
 from pymongo.errors import OperationFailure
 
 from app.config import settings
-from app.db import migrate_prices_v2
+from app.db import migrate_prices_v2, migrate_sealed_v1
 from app.services import jobs
 
 _client: AsyncIOMotorClient | None = None
@@ -50,7 +50,7 @@ async def init_indexes() -> None:
     )
     await db.collection_items.create_index([("card_id", ASCENDING)])
     await db.publish_queue.create_index([("state", ASCENDING), ("created_at", ASCENDING)])
-    await db.products.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
+    await db.cards.create_index([("kind", ASCENDING)], sparse=True)
     await db.photos.create_index([("stack_id", ASCENDING), ("order", ASCENDING)])
     await db.collection_edits.create_index([("item_id", ASCENDING), ("at", DESCENDING)])
     await db.list_presets.create_index([("scope", ASCENDING), ("name", ASCENDING)], unique=True)
@@ -58,6 +58,7 @@ async def init_indexes() -> None:
     await db.wishlist.create_index([("card_id", ASCENDING)])
     # Rows must carry observed_on (and old index gone) before the v2 unique key can build.
     await migrate_prices_v2.migrate(db)
+    await migrate_sealed_v1.migrate(db)
     await db.prices.create_index(
         [("card_id", 1), ("variant", 1), ("source", 1), ("kind", 1), ("grade_key", 1), ("observed_on", 1)],
         unique=True, name="prices_observation_key",

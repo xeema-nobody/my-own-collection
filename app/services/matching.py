@@ -14,7 +14,7 @@ from app.providers.price.base import AdapterResult
 # source -> (hosts, product path marker). Same hosts as the fetcher whitelist (fetcher/sites.py).
 MATCHABLE: dict[str, tuple[tuple[str, ...], str]] = {
     "pricecharting": (("pricecharting.com",), "/game/"),
-    "cardmarket_web": (("cardmarket.com",), "/Products/Singles/"),
+    "cardmarket_web": (("cardmarket.com",), "/Products/"),      # singles and sealed categories alike
 }
 
 
@@ -30,7 +30,7 @@ def validate_url(source: str, url: str) -> str:
     host = (u.hostname or "").lower()
     if u.scheme != "https" or not any(host == h or host.endswith("." + h) for h in hosts):
         raise InvalidMatch(f"url must be https on {hosts[0]}")
-    if marker not in u.path:
+    if marker not in u.path or "/Products/Search" in u.path:
         raise InvalidMatch(f"not a {source} product url (expected '{marker}' in path)")
     return url.strip()
 

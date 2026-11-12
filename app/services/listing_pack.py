@@ -17,8 +17,8 @@ COND = {"NM": "Near Mint", "LP": "Lightly Played", "MP": "Moderately Played", "H
 # Cardmarket grades: MT NM EX GD LP PL PO. Assumed mapping from our five levels (see decisions.md).
 CM_COND = {"NM": "NM", "LP": "EX", "MP": "GD", "HP": "LP", "DMG": "PL"}
 # Vinted mapping decided with the user 2026-11-11 (docs/vinted-sell-flow.md); editable per row in the Publish table.
-VINTED_COND = {"raw": "Very good", "slab": "New without tags"}
-VINTED_PARCEL = {"raw": "small", "slab": "medium"}
+VINTED_COND = {"raw": "Very good", "slab": "New without tags", "sealed": "New with tags"}
+VINTED_PARCEL = {"raw": "small", "slab": "medium", "sealed": "medium"}
 CM_COLUMNS = ["name", "set", "number", "language", "condition", "quantity", "price", "comment"]
 
 
@@ -61,7 +61,29 @@ def _set_label(c: dict) -> str:
     return name[:-len(suffix)] if suffix and name.endswith(suffix) else name
 
 
+def is_sealed(row: dict) -> bool:
+    return (row.get("card") or {}).get("kind") == "sealed"
+
+
+def _kind(row: dict) -> str:
+    return "sealed" if is_sealed(row) else "slab" if row["item"].get("grading") else "raw"
+
+
+def _sealed_text(row: dict) -> tuple[str, str]:
+    it, c = row["item"], row["card"]
+    name = c["name"]
+    lines = [f"✨ {name} - sealed", f"Language: {LANG.get(it.get('language', 'en'), it.get('language'))}",
+             "Condition: brand new, factory sealed"]
+    if it["quantity"] > 1:
+        lines.append(f"Quantity available: {it['quantity']}")
+    lines += ["📦 Packed carefully and shipped with care.", "💬 Questions? Send me a message!"]
+    title = f"{name} - sealed" + (f" - {LANG.get(it['language'], it['language'])}" if it.get("language", "en") != "en" else "")
+    return title, "\n".join(lines)
+
+
 def _text(row: dict) -> tuple[str, str]:
+    if is_sealed(row):
+        return _sealed_text(row)
     it, c = row["item"], row["card"] or {}
     g = it.get("grading")
     name, label, num = c.get("name", "Card"), _set_label(c), c.get("number", "")
@@ -139,6 +161,8 @@ async def build_pack(db, ids: list[str], platform: str, strategy: str = "market"
             desc = _cut(desc, VINTED_DESC_MAX, "description", warnings)
         elif r["item"].get("grading"):
             warnings.append("slab: not a Cardmarket single, left out of the sheet")
+        elif is_sealed(r):
+            warnings.append("slab: sealed product, not a Cardmarket single, left out of the sheet")   # `slab` prefix = UI skips it
         stored = await _stored_vinted(db, sid, r["item"]) if platform == "vinted" else None
         market = price
         queued = await _queued_vinted(db, sid) if platform == "vinted" else None
@@ -151,8 +175,8 @@ async def build_pack(db, ids: list[str], platform: str, strategy: str = "market"
             warnings = [w for w in warnings if not w.startswith("needs price")]
         out.append({"item_id": sid, "card_id": r["item"]["card_id"], "title": title, "description": desc,
                     "price": price, "market_price": market, "stored": stored, "queued": bool(queued), "currency": "EUR", "sale": r["item"].get("sale"), "quantity": r["item"]["quantity"], "photos": photos,
-                    "slab": bool(r["item"].get("grading")), "vinted_condition": (stored or {}).get("condition") or VINTED_COND["slab" if r["item"].get("grading") else "raw"],
-                    "vinted_parcel": (stored or {}).get("parcel") or VINTED_PARCEL["slab" if r["item"].get("grading") else "raw"],
+                    "slab": bool(r["item"].get("grading")), "sealed": is_sealed(r), "vinted_condition": (stored or {}).get("condition") or VINTED_COND[_kind(r)],
+                    "vinted_parcel": (stored or {}).get("parcel") or VINTED_PARCEL[_kind(r)],
                     "vinted_url": next((l.get("url") for l in (r["item"].get("sale") or {}).get("listings") or []
                                         if l.get("platform") == "vinted" and l.get("url")), None),
                     "warnings": warnings})
@@ -167,7 +191,7 @@ def cardmarket_csv(pack: dict, rows_by_id: dict[str, dict]) -> str:
     for p in pack["items"]:
         r = rows_by_id[p["item_id"]]
         it, c = r["item"], r["card"] or {}
-        if it.get("grading"):
+        if it.get("grading") or is_sealed(r):
             continue
         w.writerow({"name": c.get("name"), "set": (c.get("set") or {}).get("name"), "number": c.get("number"),
                     "language": LANG.get(it.get("language", "en")), "condition": CM_COND.get(it.get("condition")),

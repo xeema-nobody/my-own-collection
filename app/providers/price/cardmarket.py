@@ -21,6 +21,8 @@ LABELS = {"From": "from", "Price Trend": "trend", "30-days average price": "avg3
 
 
 def search_url(card: dict) -> str:
+    if card.get("kind") == "sealed":
+        return f"{BASE}/en/Pokemon/Products/Search?searchString={quote_plus(card['name'])}"
     return f"{BASE}/en/Pokemon/Products/Search?searchString={quote_plus(search_name(card['name']) + ' ' + card['number'])}"
 
 
@@ -66,6 +68,10 @@ class CardmarketProvider:
 
     async def fetch(self, card: dict, client: FetcherClient, known_url: str | None = None,
                     today: date | None = None) -> AdapterResult:
+        if card.get("kind") == "sealed" and not known_url:
+            # Sealed search pages are not captured yet (Cloudflare challenged the capture): the user pastes the
+            # product page url once (card page > match), then the normal product parser reads its price block.
+            return AdapterResult("needs_match", url=search_url(card), detail="sealed product: paste its Cardmarket page url")
         url, fail = await find_product(card, client, self.site, search_url(card), parse_search, known_url,
                                        product_marker="/Products/Singles/")
         if fail:

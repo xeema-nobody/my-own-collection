@@ -46,7 +46,6 @@ export default function Dashboard() {
   const sum = useQuery({ queryKey: ["collection", "summary"], queryFn: api.collectionSummary });
   const hist30 = useQuery({ queryKey: ["history", "change30"], queryFn: () => api.history(30) });
   const brk = useQuery({ queryKey: ["breakdown", by], queryFn: () => api.breakdown(by) });
-  const sealed = useQuery({ queryKey: ["products", "summary"], queryFn: api.productsSummary });
   const mov = useQuery({ queryKey: ["movers"], queryFn: () => api.movers(7) });
   const top = useQuery({ queryKey: ["collection", "top"], queryFn: () => api.collection({ sort: "value", order: "desc", page_size: 8 }) });
   const jobs = useQuery({ queryKey: ["jobs"], queryFn: api.jobs, refetchInterval: 5000 });
@@ -89,8 +88,8 @@ export default function Dashboard() {
           <Kpi label="P/L excl. pulled" value={s?.pl_ex_pulled == null ? "—" : money(s.pl_ex_pulled)} tone={s?.pl_ex_pulled == null ? undefined : s.pl_ex_pulled >= 0 ? "ok" : "danger"}
             hint={plxPct == null ? undefined : `${plxPct >= 0 ? "+" : ""}${plxPct.toFixed(1)}% vs cost`} />
           {(s?.listed_stacks ?? 0) > 0 && <Kpi label="Listed for sale" value={money(s.listed_value)} hint={`${s.listed_stacks} stack${s.listed_stacks === 1 ? "" : "s"}, part of Value`} />}
-          {(sealed.data?.stacks ?? 0) > 0 && <Kpi label="Sealed value" value={money(sealed.data!.value)}
-            hint={`${sealed.data!.units} sealed unit${sealed.data!.units === 1 ? "" : "s"}, not in Value${sealed.data!.unpriced > 0 ? `, ${sealed.data!.unpriced} without value` : ""}`} />}
+          {(s?.sealed?.stacks ?? 0) > 0 && <Kpi label="Sealed value" value={money(s.sealed.value)}
+            hint={`${s.sealed.units} sealed unit${s.sealed.units === 1 ? "" : "s"}, not in Value${s.sealed.unpriced > 0 ? `, ${s.sealed.unpriced} without a price` : ""}`} />}
           <Kpi label="Cost" value={money(s?.cost)} hint={s?.cost_missing > 0 ? `${s.cost_missing} stack${s.cost_missing === 1 ? "" : "s"} without cost` : undefined} />
         </div>)}
 
