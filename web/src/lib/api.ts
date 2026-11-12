@@ -53,7 +53,11 @@ const qs = (p: Record<string, unknown>) => {
 };
 const post = (b: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(b) });
 
-export type ExitReason = "sold" | "gifted" | "removed";
+export type ExitReason = "sold" | "gifted" | "removed" | "opened";
+export type PullIn = { card_id: string; condition?: string; language?: string; variant?: string | null; quantity: number };
+export type PullOut = PullIn & { stack_id: string; type_conflict?: boolean };
+export type OpenProductIn = { quantity: number; date?: string | null; note?: string | null; extras?: string | null; pulled?: PullIn[] };
+export type OpenResult = { opening_id: string; opened: number; left: number; stack_deleted: boolean; pulled: PullOut[] };
 export type Platform = "vinted" | "cardmarket" | "ebay" | "marktplaats" | "other";
 export type SaleStatus = "none" | "ready" | "listed" | "reserved" | "withdrawn";
 export type Listing = { platform: Platform; asking_price: number; currency: string; listed_at?: string | null; url?: string | null; notes?: string | null; shipping?: number | null; asking_base?: number | null; needs_platform_update?: boolean };
@@ -64,7 +68,7 @@ export type SalesReport = { by_status: Record<string, { stacks: number; cards: n
   platforms: Record<string, { stacks: number; cards: number; value: number }>;
   sold: { sales: number; cards: number; revenue: number; fees: number; shipping: number; realised: number | null; realised_known: number; avg_days_to_sell: number | null } };
 export type BulkRemoveResult = { removed: number; copies?: number; failed: number; results: { id: string; ok: boolean; removed?: number; error?: string }[] };
-export type CollectionExit = { id: string; card_id: string; quantity: number; reason: ExitReason; price: number | null; currency: string; date: string; note: string | null; created_at: string; platform?: Platform | null; fees?: number | null; shipping_paid?: number | null; realised?: number | null; listed_days?: number | null; delist?: string[]; card: { name: string; number: string; set: string; image: string | null } | null };
+export type CollectionExit = { id: string; card_id: string; quantity: number; reason: ExitReason; price: number | null; currency: string; date: string; note: string | null; created_at: string; platform?: Platform | null; fees?: number | null; shipping_paid?: number | null; realised?: number | null; listed_days?: number | null; delist?: string[]; opening_id?: string | null; card: { name: string; number: string; set: string; image: string | null } | null };
 
 export type SealedType = "booster_box" | "booster_bundle" | "etb" | "booster_pack" | "tin" | "collection_box" | "blister" | "other";
 export type SealedIn = { set_id: string; type: SealedType; language: string; edition?: string | null; quantity: number; acquired?: AcquiredPatch | null; notes?: string | null };
@@ -189,6 +193,8 @@ export const api = {
   addToCollection: (b: unknown) => req<any>("/api/collection", post(b)),
   removeFromCollection: (id: string, quantity = 1, extra: RemoveExtra = {}) =>
     req<{ deleted: boolean; quantity: number; removed: number; realised?: number | null; delist?: string[] }>(`/api/collection/${id}/remove`, post({ quantity, ...extra })),
+  openProduct: (id: string, b: OpenProductIn) => req<OpenResult>(`/api/collection/${id}/open`, post(b)),
+  addOpeningPulls: (openingId: string, pulled: PullIn[]) => req<{ opening_id: string; pulled: PullOut[] }>(`/api/openings/${openingId}/pulls`, post({ pulled })),
   bulkRemoveStacks: (ids: string[], reason: ExitReason, note?: string | null) =>
     req<BulkRemoveResult>("/api/collection/bulk-remove", post({ ids, reason, note: note || null })),
   setSale: (id: string, b: StackSale) => req<{ id: string; sale: StackSale }>(`/api/collection/${id}/sale`, { method: "PUT", body: JSON.stringify(b) }),

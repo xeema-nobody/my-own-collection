@@ -22,6 +22,7 @@ import { usePriceFetchJob } from "../lib/fetchJob";
 import BulkRemoveDrawer from "../components/BulkRemoveDrawer";
 import ListingPackDrawer from "../components/collection/ListingPackDrawer";
 import RemoveStack from "../components/collection/RemoveStack";
+import OpenProduct from "../components/collection/OpenProduct";
 import SalePanel, { SaleBadge } from "../components/collection/SalePanel";
 import PhotosPanel from "../components/collection/PhotosPanel";
 import AddSealed from "../components/collection/AddSealed";
@@ -92,6 +93,7 @@ function Details({ i, onGone, onPublish }: { i: any; onGone?: () => void; onPubl
       <CostSection i={i} />
       <SalePanel key={`${i.id}-${JSON.stringify(i.sale)}`} id={i.id} sale={i.sale} onPublish={onPublish} />
       <PhotosPanel key={`photos-${i.id}`} id={i.id} graded={!!i.grading} />
+      {i.card?.kind === "sealed" && <OpenProduct id={i.id} quantity={i.quantity} name={i.card?.name ?? "product"} onDone={onGone} />}
       <RemoveStack id={i.id} quantity={i.quantity} name={i.card?.name ?? "card"} cost={i.cost} onDone={onGone} />
       <SourceCompare row={i} />
     </div>);

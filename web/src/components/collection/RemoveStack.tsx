@@ -6,7 +6,7 @@ import { Button, Field, Input, SegmentedControl, Select } from "../ui";
 
 const REASONS: { value: ExitReason; label: string }[] = [
   { value: "sold", label: "Sold" }, { value: "gifted", label: "Gifted" }, { value: "removed", label: "Just remove" }];
-const HINT: Record<ExitReason, string> = {
+const HINT: Partial<Record<ExitReason, string>> = {
   sold: "Keeps a record with the sale price.", gifted: "Keeps a record, no money.", removed: "Keeps a record (mistake, lost, other)." };
 
 /** Take copies of a stack out of the collection. Always leaves a history row, so nothing disappears silently. */
@@ -70,5 +70,5 @@ export default function RemoveStack({ id, quantity, name, cost, onDone }: { id: 
     </form>);
 }
 
-export const exitLabel = (r: ExitReason) => REASONS.find((x) => x.value === r)?.label ?? r;
+export const exitLabel = (r: ExitReason) => r === "opened" ? "Opened" : REASONS.find((x) => x.value === r)?.label ?? r;
 

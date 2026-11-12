@@ -6,12 +6,13 @@ from fastapi.responses import Response
 from app.services import valuation_cache
 from app.api.deps import get_db, spawn
 from app.config import settings
-from app.db.models import (BulkAcquiredIn, BulkRemoveIn, BulkSaleIn, CollectionIn, CollectionPatch, ListingPackIn, PresetIn,
+from app.db.models import (BulkAcquiredIn, BulkRemoveIn, BulkSaleIn, CollectionIn, CollectionPatch, ListingPackIn, OpenIn, PresetIn,
                            RemoveIn, StackSaleIn)
 from app.services import acquisition
 from app.services import collection_query as cq
 from app.services import listing_pack as listing_svc, photos as photos_svc, presets, sale
 from app.services import collection as svc
+from app.services import openings as openings_svc
 from app.services import portability
 from app.services.price_fetch import price_freshness
 from app.services.sealed import summary as sealed_summary
@@ -247,6 +248,15 @@ async def bulk_remove(body: BulkRemoveIn):
 @router.post("/{item_id}/remove")
 async def remove(item_id: str, body: RemoveIn):
     return await svc.remove(get_db(), item_id, **body.model_dump())
+
+
+@router.post("/{item_id}/open", status_code=201)
+async def open_product(item_id: str, body: OpenIn):
+    """Open units of a sealed stack; optional pulled cards are added as 'pulled' and linked to the opening."""
+    out = await openings_svc.open_product(get_db(), item_id, body)
+    for cid in {p["card_id"] for p in out["pulled"]}:
+        spawn(price_new_tracked(cid))
+    return out
 
 
 @router.delete("/{item_id}", status_code=204)

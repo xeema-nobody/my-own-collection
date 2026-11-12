@@ -84,6 +84,7 @@ async def init_indexes() -> None:
                                partialFilterExpression={"status": "running"})
     await db.scan_sessions.create_index([("created_at", ASCENDING)], expireAfterSeconds=86400, name="scan_sessions_ttl")
     await db.collection_exits.create_index([("created_at", DESCENDING)])
+    await db.openings.create_index([("created_at", DESCENDING)])
     # Phone-scan "added" log the laptop polls; old rows expire on their own.
     await db.scan_events.create_index([("at", DESCENDING)])
     await db.scan_events.create_index([("at", ASCENDING)], expireAfterSeconds=settings.scan_event_keep_days * 86400,

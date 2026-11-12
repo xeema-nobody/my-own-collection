@@ -113,7 +113,7 @@ class RemoveIn(BaseModel):
     """Take copies out of a stack. Sold may carry the sale price per copy (cents), the platform and the
     fees / shipping paid for the whole sale (cents); gifted / removed need none."""
     quantity: int = Field(default=1, ge=1)
-    reason: Literal["sold", "gifted", "removed"] = "removed"
+    reason: Literal["sold", "gifted", "removed", "opened"] = "removed"
     price: int | None = Field(default=None, ge=0, description="cents per copy, sold only")
     currency: str = "EUR"
     date: dt.date | None = None
@@ -121,6 +121,28 @@ class RemoveIn(BaseModel):
     platform: Platform | None = None
     fees: int | None = Field(default=None, ge=0, description="cents, whole sale, sold only")
     shipping_paid: int | None = Field(default=None, ge=0, description="cents, whole sale, sold only")
+
+
+class PullIn(BaseModel):
+    """One card pulled from an opened product (always added as acquisition 'pulled', no cost)."""
+    card_id: str
+    variant: str | None = None
+    language: Language = "en"
+    condition: Condition = "NM"
+    quantity: int = Field(default=1, ge=1, le=99)
+
+
+class PullsIn(BaseModel):
+    pulled: list[PullIn] = Field(min_length=1, max_length=200)
+
+
+class OpenIn(BaseModel):
+    """'I opened this': take `quantity` units of a sealed stack out, optionally register what came out."""
+    quantity: int = Field(default=1, ge=1)
+    date: dt.date | None = None
+    note: str | None = Field(default=None, max_length=300)
+    extras: str | None = Field(default=None, max_length=1000, description="non-card extras (code card, coin, sleeves...)")
+    pulled: list[PullIn] = Field(default=[], max_length=200)
 
 
 class Listing(BaseModel):

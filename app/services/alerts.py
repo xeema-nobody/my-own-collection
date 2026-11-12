@@ -15,7 +15,7 @@ from pymongo.errors import DuplicateKeyError
 
 from app.config import settings
 from app.db.models import AlertIn, AlertPatch
-from app.services.collection import oid, valuate, valuate_wishlist
+from app.services.collection import is_sealed, oid, valuate, valuate_wishlist
 from app.services.movers import comparable
 
 log = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ def _select(vals: list[dict], rule: dict) -> list[dict]:
         return [v for v in vals if str(v["item"]["_id"]) == rule["wish_id"]]
     if rule["scope"] == "card":
         return [v for v in vals if v["item"]["card_id"] == rule["card_id"]]
-    return vals
+    return [v for v in vals if not is_sealed(v)]   # total = cards only (sealed is reported apart)
 
 
 def measure(rule: dict, vals: list[dict], past: dict | None) -> dict | None:
@@ -106,6 +106,8 @@ async def evaluate(db, vals: list[dict] | None = None) -> int:
         return 0
     now = datetime.now(timezone.utc)
     vals = await valuate(db) if vals is None else vals
+    if any(r["scope"] in ("stack", "card") for r in rules):   # sealed stacks can carry stack / card rules
+        vals = [*vals, *await valuate(db, kind="sealed")]
     wish_vals = await valuate_wishlist(db) if any(r["scope"] == "wish" for r in rules) else []
     pasts: dict[tuple[bool, int], dict] = {}
     fired = 0
@@ -116,7 +118,8 @@ async def evaluate(db, vals: list[dict] | None = None) -> int:
             if rule["op"] in ("up_pct", "down_pct"):
                 d = rule["days"]
                 if (wish, d) not in pasts:
-                    old = await (valuate_wishlist if wish else valuate)(db, as_of=now - timedelta(days=d))
+                    old = await (valuate_wishlist(db, as_of=now - timedelta(days=d)) if wish
+                           else valuate(db, as_of=now - timedelta(days=d), kind="all"))
                     pasts[(wish, d)] = {v["item"]["_id"]: v for v in old}
                 past = pasts[(wish, d)]
             m = measure(rule, wish_vals if wish else vals, past)
@@ -177,7 +180,7 @@ async def _label(db, body: AlertIn) -> tuple[str | None, str | None]:
         if not await db.collection_items.find_one({"card_id": card_id}):
             raise HTTPException(404, "card is not in the collection")
     card = await db.cards.find_one({"_id": card_id}, {"name": 1, "number": 1})
-    name = f"{card['name']} #{card['number']}" if card else card_id
+    name = (card["name"] + (f" #{card['number']}" if card.get("number") else "")) if card else card_id
     g = (it if body.scope == "stack" else w if body.scope == "wish" else {}).get("grading")
     if g:
         name += f" {g['company']} {g['grade']:g}"

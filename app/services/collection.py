@@ -215,7 +215,7 @@ def realised(acquired: dict | None, qty: int, price: int | None, currency: str,
 
 async def remove(db, item_id: str, quantity: int = 1, reason: str = "removed", price: int | None = None,
                   currency: str = "EUR", date=None, note: str | None = None, platform: str | None = None,
-                  fees: int | None = None, shipping_paid: int | None = None) -> dict:
+                  fees: int | None = None, shipping_paid: int | None = None, opening_id: str | None = None) -> dict:
     """Take copies out of a stack (sold / gifted / removed). Always logs a `collection_exits` row with the
     stack snapshot (cost basis included) so nothing leaves silently; asking for more than owned removes all."""
     it = await db.collection_items.find_one({"_id": oid(item_id)})
@@ -241,7 +241,7 @@ async def remove(db, item_id: str, quantity: int = 1, reason: str = "removed", p
         "platform": platform if sold else None, "fees": fees if sold else None,
         "shipping_paid": shipping_paid if sold else None,
         "realised": realised(it.get("acquired"), qty, price, currency, fees, shipping_paid) if sold else None,
-        "listed_days": listed_days,
+        "listed_days": listed_days, "opening_id": opening_id,
         # other platforms still listing a stack that is now gone: the user must delist there
         "delist": sorted({l["platform"] for l in listings if l["platform"] != platform}) if sold and left <= 0 else []})
     try:
@@ -284,7 +284,7 @@ async def exits(db, limit: int = 100) -> list[dict]:
         c = cards.get(r["card_id"]) or {}
         out.append({"id": str(r.pop("_id")), **{k: r.get(k) for k in (
             "card_id", "quantity", "reason", "price", "currency", "date", "note", "condition", "grading", "acquired",
-            "platform", "fees", "shipping_paid", "realised", "listed_days", "delist")},
+            "platform", "fees", "shipping_paid", "realised", "listed_days", "delist", "opening_id")},
             "created_at": r["created_at"].isoformat(),
             "card": {"name": c.get("name"), "number": c.get("number"), "set": (c.get("set") or {}).get("name"),
                      "image": (c.get("images") or {}).get("small")} if c else None})
