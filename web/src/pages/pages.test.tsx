@@ -50,6 +50,23 @@ describe("Dashboard", () => {
     expect(screen.getByText("+10.0% vs cost")).toBeInTheDocument();
     expect(screen.getByText("2 stacks without cost")).toBeInTheDocument();
   });
+  it("shows opening ROI only when something was opened", async () => {
+    const rep = { hit_threshold: 500, products: [{ card_id: "sealed:x", name: "Box", opened: { units: 1, cost: 5000, cost_unknown: 0, pulls_value: 18000, net: 13000 },
+      kept: { units: 1, value: 9000, cost: 5000 }, sold: { units: 0, proceeds: 0, realised: 0 } }],
+      openings: [{ id: "o1", card_id: "sealed:x", name: "Box", date: "2026-11-12", units: 1, cost: 5000, pulls_value: 18000, net: 13000, roi: 2.6, kept_value: 9000, vs_kept: 9000,
+        pulled_copies: 2, priced_copies: 2, unpriced: 0, hits: 2, hit_rate: 1, best_hit: { card_id: "c1", name: "Zard", value: 9000 } }],
+      totals: { openings: 1, units: 1, cost: 5000, pulls_value: 18000, net: 13000, roi: 2.6, hit_rate: 1, vs_kept: 9000, excluded_unknown_cost: 0 } };
+    mockApi({ ...ok, "/api/openings/report": rep });
+    renderPage(<Dashboard />);
+    expect(await screen.findByText("Opening ROI")).toBeInTheDocument();
+    expect(screen.getByText("Zard · €90.00")).toBeInTheDocument();
+  });
+  it("hides opening ROI when nothing was opened", async () => {
+    mockApi({ ...ok, "/api/openings/report": { openings: [], products: [], hit_threshold: 500, totals: {} } });
+    renderPage(<Dashboard />);
+    expect(await screen.findByText("Where the value is")).toBeInTheDocument();
+    expect(screen.queryByText("Opening ROI")).not.toBeInTheDocument();
+  });
   it("empty states", async () => {
     mockApi({ ...ok, "/api/dashboard/breakdown": [], "/api/dashboard/movers": { up: [], down: [] }, "/api/collection": { items: [], total: 0 },
       "/api/collection/summary": summary });

@@ -18,14 +18,13 @@ Work top to bottom. Items marked **you** need the user's hands or OK; the rest a
 | 1 | Housekeeping: set GitHub default branch to main, then `git push origin --delete feat/phase8-reviews` + `git fetch -p`; push main (OK needed) | git | you | 5 min, unblocks clean remote |
 | 2 | Check what is built but unchecked: Open product set scoping + variant field, Japanese sets import, `/reprice`, price of `pokemon:dp3-10` | 5, 6, 7 | you | cheap, may surface bugs before more is built on top |
 | 3 | Vinted dry runs in the extension: CREATE (raw card), slab, sealed. First real create only with the user's explicit OK; re-tick Dry run after any real run | 6e | you (+ fixes) | unlocks real selling, the highest-priority chain |
-| 4 | Opening result report + ROI (cost vs value of pulls, best hit, hit rate; opened vs kept vs sold sealed; Dashboard ROI) | 7 slice 3 | build | answers "is opening worth it?", no blockers |
-| 5 | Vinted sealed category in the extension recipe (after the sealed dry run) | 7 slice 6 | build | depends on 3 |
-| 6 | Real Cardmarket upload format (current CSV is a guess) | 6c | you + build | needs a real sample from the user |
-| 7 | Sealed alert kinds; scanner hand-off for pulled cards | 7 slice 5 | build | nice to have, search covers hand-off today |
-| 8 | Scan accuracy leftovers: ACE dark label + 5 slab grade misses, IMG_3037/3039 cel25c, `test_scan_accuracy` OCR timeout | 5 | build | parked, only if asked |
-| 9 | Cardmarket sealed search parser | 7 slice 4 | blocked | Cloudflare blocks the search page; paste product urls meanwhile |
-| 10 | Slowking (absent upstream) and Mew metal card (in no catalog) | 5 | blocked | upstream data gaps |
-| 11 | Deck builder 8a, 8b, 8c | 8 | build | future; start when the collection is large and scanning is solid |
+| 4 | Vinted sealed category in the extension recipe (after the sealed dry run) | 7 slice 6 | build | depends on 3 |
+| 5 | Real Cardmarket upload format (current CSV is a guess) | 6c | you + build | needs a real sample from the user |
+| 6 | Sealed alert kinds; scanner hand-off for pulled cards | 7 slice 5 | build | nice to have, search covers hand-off today |
+| 7 | Scan accuracy leftovers: ACE dark label + 5 slab grade misses, IMG_3037/3039 cel25c, `test_scan_accuracy` OCR timeout | 5 | build | parked, only if asked |
+| 8 | Cardmarket sealed search parser | 7 slice 4 | blocked | Cloudflare blocks the search page; paste product urls meanwhile |
+| 9 | Slowking (absent upstream) and Mew metal card (in no catalog) | 5 | blocked | upstream data gaps |
+| 10 | Deck builder 8a, 8b, 8c | 8 | build | future; start when the collection is large and scanning is solid |
 
 ---
 
@@ -270,7 +269,8 @@ Original brief:
 **Built (slice 1, reworked after the user's feedback):** a sealed product is a **catalog entry** (`cards` doc with `kind: "sealed"`, set picked from our sets, type, language, optional edition) and is owned as a **normal collection stack**, so scraped prices (PriceCharting found automatically; Cardmarket needs the product page url once), photos, sale status, listing pack / Vinted publish queue, reprice and alerts all work. UI: Collection has a **Cards | Sealed** switch + "Add sealed product" drawer (nav "Sealed" opens it). Sealed stacks are kept out of every card total; Collection sealed KPIs, Dashboard "Sealed value" and `sealed_value` on snapshots report them apart. Slice-1 `products` data migrates on boot (`migrate_sealed_v1`, old collection kept as `products_slice1_backup`). **Unproven:** the Vinted category / condition for sealed (needs a user dry run), Cardmarket sealed search (Cloudflare blocked the page capture; paste the product url instead), alt.xyz for sealed (not tried).
 **Slice 2 built 2026-11-12 (awaiting the user's check):** Open product on a sealed stack (units, date, extras, note, pulled cards via search, more pulls later), history reason *Opened*, `openings` collection, pulls = acquisition Pulled (D8); stack / card alerts work on sealed stacks (decisions.md 'Opening a sealed product'). Scanner linking not built.
 **Slice 2 follow-up 2026-11-12:** pull search defaults to the product's set (more sets addable, "Search all sets" opt-in); the Edition field is now "Variant / contents" (free text, part of the entry id, name and price match).
-**Remaining slices:** (3) opening result report + ROI (sealed vs opened vs sold sealed), Dashboard ROI; (4) Cardmarket sealed search parser once a page is captured; (5) sealed-specific alert kinds; (6) Vinted sealed category once proven.
+**Slice 3 built 2026-11-13 (awaiting the user's check):** `GET /api/openings/report` + Dashboard "Opening ROI" (cost vs pulls value, best hit, hit rate, opened vs kept vs sold sealed; decisions.md 'Opening result report + ROI').
+**Remaining slices:** (4) Cardmarket sealed search parser once a page is captured; (5) sealed-specific alert kinds; (6) Vinted sealed category once proven.
 
 **Wanted:**
 

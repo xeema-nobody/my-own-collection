@@ -13,6 +13,11 @@ async def list_openings(limit: int = Query(100, ge=1, le=300)):
     return await svc.list_openings(get_db(), limit)
 
 
+@router.get("/report")
+async def report():
+    return await svc.report(get_db())
+
+
 @router.get("/{opening_id}")
 async def get_opening(opening_id: str):
     return await svc.get(get_db(), opening_id)

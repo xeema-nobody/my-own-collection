@@ -58,6 +58,15 @@ export type PullIn = { card_id: string; condition?: string; language?: string; v
 export type PullOut = PullIn & { stack_id: string; type_conflict?: boolean };
 export type OpenProductIn = { quantity: number; date?: string | null; note?: string | null; extras?: string | null; pulled?: PullIn[] };
 export type OpenResult = { opening_id: string; opened: number; left: number; stack_deleted: boolean; pulled: PullOut[] };
+export type OpeningRow = { id: string; card_id: string; name: string; date: string; units: number; cost: number | null; pulls_value: number | null;
+  net: number | null; roi: number | null; kept_value: number | null; vs_kept: number | null; pulled_copies: number; priced_copies: number;
+  unpriced: number; hits: number; hit_rate: number | null; best_hit: { card_id: string; name: string | null; value: number } | null };
+export type OpeningProduct = { card_id: string; name: string | null;
+  opened: { units: number; cost: number; cost_unknown: number; pulls_value: number; net: number | null };
+  kept: { units: number; value: number; cost: number }; sold: { units: number; proceeds: number; realised: number } };
+export type OpeningReport = { openings: OpeningRow[]; products: OpeningProduct[]; hit_threshold: number;
+  totals: { openings: number; units: number; cost: number | null; pulls_value: number | null; net: number | null; roi: number | null;
+    hit_rate: number | null; vs_kept: number | null; excluded_unknown_cost: number } };
 export type Platform = "vinted" | "cardmarket" | "ebay" | "marktplaats" | "other";
 export type SaleStatus = "none" | "ready" | "listed" | "reserved" | "withdrawn";
 export type Listing = { platform: Platform; asking_price: number; currency: string; listed_at?: string | null; url?: string | null; notes?: string | null; shipping?: number | null; asking_base?: number | null; needs_platform_update?: boolean };
@@ -194,6 +203,7 @@ export const api = {
   removeFromCollection: (id: string, quantity = 1, extra: RemoveExtra = {}) =>
     req<{ deleted: boolean; quantity: number; removed: number; realised?: number | null; delist?: string[] }>(`/api/collection/${id}/remove`, post({ quantity, ...extra })),
   openProduct: (id: string, b: OpenProductIn) => req<OpenResult>(`/api/collection/${id}/open`, post(b)),
+  openingsReport: () => req<OpeningReport>("/api/openings/report"),
   addOpeningPulls: (openingId: string, pulled: PullIn[]) => req<{ opening_id: string; pulled: PullOut[] }>(`/api/openings/${openingId}/pulls`, post({ pulled })),
   bulkRemoveStacks: (ids: string[], reason: ExitReason, note?: string | null) =>
     req<BulkRemoveResult>("/api/collection/bulk-remove", post({ ids, reason, note: note || null })),

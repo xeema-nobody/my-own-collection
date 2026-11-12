@@ -422,3 +422,11 @@ User: store and fetch prices only for cards the user selects into the collection
 - Pull search scope (2026-11-12): defaults to the product's set (`set.ref_id`) and language; extra sets addable (collection boxes), "Search all sets" opt-in. `GET /api/cards?set=` accepts comma-separated set ids (`$in`).
 - Scanner hand-off (pulled cards from a scan linked to an opening) not built: search covers it; add only if wanted.
 - Fix 2026-11-12: sealed entries are created with `price_schema: 2`. Without it the boot-time v2 price migration (`migrate_prices_v2`) saw them as old-shape cards and re-nested their scraped prices on the next app restart (summary 500 `KeyError: 'currency'`). Two damaged entries were rebuilt from the observation log (`latest_as_of`).
+
+## Opening result report + ROI (2026-11-13, roadmap Step 7 slice 3)
+- `GET /api/openings/report` is read-only and computed on request (nothing stored): per opening, per product (opened / kept sealed / sold sealed) and totals. Shown on the Dashboard as "Opening ROI" (hidden until something was opened).
+- Cost = `acquired.price x units` in base currency; a blank or 0 cost is unknown (None), never 0, and that opening is left out of the totals (reported as `excluded_unknown_cost`).
+- Pulls value = today's market value of the pulled copies, whether or not they are still owned (a pulled card sold later still counts as a pull). Unpriced pulls are counted (`unpriced`), never valued 0.
+- Net = pulls value - cost; ROI = net / cost. "Opened vs kept sealed" = pulls value - today's sealed value of the same units (positive = opening beat keeping the box sealed). Sold sealed = `collection_exits` sold rows of sealed products (proceeds after fees / shipping, realised profit where the cost was known).
+- Hit = a pulled copy worth >= `opening_hit_threshold_cents` (setting, default 500 = 5.00 in base currency); hit rate = hit copies / priced pulled copies. Best hit = highest per-copy value.
+- Known limit: values are today's, so an old opening's ROI moves with prices; no frozen "value at opening" snapshot.

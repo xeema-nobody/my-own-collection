@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     sold_min_sales: int = 3
     sold_window_days: int = 90
     sold_sample: int = 10
+    # opening report: a pulled copy worth at least this (base-currency cents) counts as a hit
+    opening_hit_threshold_cents: int = 500
     # order of trust for aggregate (market) prices; Cardmarket catalog figure can be months stale
     preferred_sources: str = "pricecharting,tcgplayer,cardmarket_web,cardmarket,altxyz"
     # market points older than this are only used when no fresher source has the grade

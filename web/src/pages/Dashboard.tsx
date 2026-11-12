@@ -6,6 +6,7 @@ import { api, money } from "../lib/api";
 import { QueryError } from "../components/QueryState";
 import BulkFetch from "../components/BulkFetch";
 import FetcherBadge from "../components/FetcherBadge";
+import OpeningRoi from "../components/OpeningRoi";
 import ValueChart from "../components/ValueChart";
 import { usePriceFetchJob } from "../lib/fetchJob";
 import { SOURCE_COLOR } from "../lib/colors";
@@ -168,6 +169,8 @@ export default function Dashboard() {
             </div>)}
         </Section>
       </div>
+
+      <OpeningRoi />
 
       <Section title="Source comparison" collapsible id="dashboard-sources" defaultOpen={false}>
         <Table>
