@@ -66,6 +66,15 @@ export type SalesReport = { by_status: Record<string, { stacks: number; cards: n
 export type BulkRemoveResult = { removed: number; copies?: number; failed: number; results: { id: string; ok: boolean; removed?: number; error?: string }[] };
 export type CollectionExit = { id: string; card_id: string; quantity: number; reason: ExitReason; price: number | null; currency: string; date: string; note: string | null; created_at: string; platform?: Platform | null; fees?: number | null; shipping_paid?: number | null; realised?: number | null; listed_days?: number | null; delist?: string[]; card: { name: string; number: string; set: string; image: string | null } | null };
 
+export type ProductType = "booster_box" | "booster_bundle" | "etb" | "booster_pack" | "tin" | "collection_box" | "blister" | "other";
+export type ProductStatus = "sealed" | "opened" | "sold_sealed";
+/** A stack of identical sealed units. Money = cents per unit; null = unknown. */
+export type Product = { id: string; name: string; type: ProductType; tcg: string; set_name: string | null; language: string; quantity: number;
+  status: ProductStatus; purchase_price: number | null; purchase_date: string | null; purchased_from: string | null;
+  market_value: number | null; market_value_at: string | null; sold_price: number | null; sold_at: string | null; note: string | null };
+export type ProductIn = Partial<Omit<Product, "id" | "market_value_at">> & { name: string };
+export type ProductsSummary = { value: number; cost: number; stacks: number; units: number; unpriced: number; cost_missing: number };
+
 /** One card version offered by the phone scanner (`/api/scan/*`). Money = cents in the base currency. */
 export type ScanCard = {
   id: string; name: string; number: string | null; printed_total: number | null; set: { id: string; name: string };
@@ -231,6 +240,11 @@ export const api = {
   patchWish: (id: string, b: { target_price?: number | null; note?: string | null; alert?: boolean }) =>
     req<WishEntry>(`/api/wishlist/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
   bulkRemoveWishes: (ids: string[]) => req<BulkRemoveResult>("/api/wishlist/bulk-remove", post({ ids })),
+  products: (status?: string) => req<Product[]>("/api/products" + qs({ status })),
+  productsSummary: () => req<ProductsSummary>("/api/products/summary"),
+  addProduct: (b: ProductIn) => req<Product>("/api/products", post(b)),
+  patchProduct: (id: string, b: Partial<ProductIn>) => req<Product>(`/api/products/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+  removeProduct: (id: string) => req<void>(`/api/products/${id}`, { method: "DELETE" }),
   removeWish: (id: string) => req<void>(`/api/wishlist/${id}`, { method: "DELETE" }),
   reprice: () => req<RepriceTable>("/api/reprice"),
   repriceConfirm: (b: { item_id: string; platform: Platform; asking_price: number }) => req<{ id: string }>("/api/reprice/confirm", post(b)),

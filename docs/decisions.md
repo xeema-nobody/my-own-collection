@@ -403,3 +403,9 @@ User: store and fetch prices only for cards the user selects into the collection
 
 ## Host Playwright publisher instead of Claude + Chrome (2026-11-12, roadmap Step 6e; now secondary)
 - Pro API is closed to private sellers, so the fixed recipe moved from a Claude session to a host script in the fetcher package (real Chrome over CDP, own profile, manual login once). Same queue, same per-row confirm in the app (the only approval), same result endpoints; no app change. On demand, small caps, stop-and-release on anything unexpected, never solves a CAPTCHA / login. Terms and ban risk equal to the Claude + Chrome flow. Slabs ('New without tags' dialog) release until that dialog is researched. First real Upload only with the user's OK in chat.
+
+## Sealed products model (2026-11-12, roadmap Step 7 slice 1)
+- Own `products` collection, not `cards`: sealed items have no catalog entry or price history yet. One doc = a stack of identical units with one status; partial open (splitting quantity) arrives with the openings slice.
+- Money per unit in cents, `null` = unknown, zero rejected (same rule as cards). Market value is manual and stamps `market_value_at`; a price source comes in a later slice.
+- Sealed value counts only `status=sealed` stacks and is shown beside, never inside, the card Value (`valuate()` and `total_value` untouched, so `VALUATION_VERSION` stays 2). Snapshots gain an additive `sealed_value`, so history of sealed value starts at the first snapshot after this change.
+- Free-text set name and a fixed type list keep slice 1 small; linking to catalog sets can come later if sealed pricing needs it.

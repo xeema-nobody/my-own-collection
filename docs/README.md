@@ -112,6 +112,9 @@ Collection > open a stack > **Sell / remove**: choose Sold (optional price per c
 
 **Marking cards for sale** (collection > open a stack > **Sale**): status Not for sale / Ready to list / Listed / Reserved / Withdrawn; Listed takes one or more listings (platform, asking price per copy, date, link, shipping, notes). Applies to the whole stack; to list 1 of 3 copies, sell/split is by quantity at sale time. Bulk: select stacks > **Sale status**. Filters "Sale status" and "Platform", built-in presets "Ready to list" and "Listed", Dashboard "Listed for sale" (part of Value, not subtracted). API: `PUT /api/collection/{id}/sale`, `POST /api/collection/bulk-sale`, `GET /api/collection/sales/report`. The card page +/- buttons and `DELETE /api/collection/{id}` also log a "removed" row, nothing leaves silently. API: `POST /api/collection/{id}/remove {quantity, reason, price, note}`, `GET /api/collection/exits`.
 
+## Sealed products
+Nav **Products**: add boxes, ETBs, bundles, packs, tins, blisters (name, type, set as free text, language, quantity, price paid per unit, date, where bought, note). Market value per unit is typed by hand (no price source yet); empty = unknown, shown as a dash and never counted as 0. Status per stack: Sealed / Opened / Sold sealed (the dropdown in the row; Sold sealed also takes a sold price). Only Sealed stacks count in the **Sealed value** KPI (Products and Dashboard); it is separate from the card Value. Opening a box and attaching pulls is a later slice.
+
 ## Look and theme
 Dark by default. Header toggle: light / system / dark (remembered in the browser). UI building blocks live in `web/src/components/ui`.
 

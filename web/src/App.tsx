@@ -13,6 +13,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./lib/api";
 import FetcherBadge from "./components/FetcherBadge";
+import Products from "./pages/Products";
 import Reprice from "./pages/Reprice";
 import ThemeToggle from "./components/ThemeToggle";
 
@@ -37,6 +38,7 @@ export default function App() {
           <NavLink to="/" end className={link}>Search</NavLink>
           <NavLink to="/collection" className={link}>Collection</NavLink>
           <NavLink to="/wishlist" className={link}>Wishlist</NavLink>
+          <NavLink to="/products" className={link}>Products</NavLink>
           <NavLink to="/dashboard" className={link}>Dashboard</NavLink>
           <NavLink to="/reprice" className={link}>Reprice</NavLink>
           <AlertsLink />
@@ -50,6 +52,7 @@ export default function App() {
         <Route path="/cards/:id" element={<CardDetail />} />
         <Route path="/collection" element={<Collection />} />
         <Route path="/wishlist" element={<Wishlist />} />
+        <Route path="/products" element={<Products />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/reprice" element={<Reprice />} />

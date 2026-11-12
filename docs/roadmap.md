@@ -245,7 +245,9 @@ Original brief:
 
 # Phase 4 — Sealed products
 
-## Step 7 — Sealed products and openings `[ ]`
+## Step 7 — Sealed products and openings `[~]` slice 1 built 2026-11-12 (awaiting the user's check; decisions.md 'Sealed products model')
+
+**Slice 1 built:** `products` collection, `/api/products` CRUD + `/summary`, Products page (nav "Products"), status Sealed / Opened / Sold sealed per stack, manual market value per unit, Dashboard "Sealed value" KPI kept out of the card Value, `sealed_value` on the daily snapshot. **Remaining slices:** (2) "Open a product" flow with partial open (split quantity) + pulled cards linked to the product, extras as notes; (3) opening result report + ROI sealed vs opened vs sold sealed, Dashboard ROI; (4) sealed market-price fetching where a source exists; (5) photos on products; (6) listed / sold sealed in the selling workflow (6b).
 
 **Wanted:**
 
@@ -352,3 +354,4 @@ _Future — start only after the collection is large and scanning (step 5) works
 | 2026-11-11 | 6c   | Listing pack built: `services/listing_pack.py`, `POST /api/collection/listing-pack`, `listing-pack.csv`, `photos.zip`, `ListingPackDrawer` on the Collection selection bar. Tests: test_listing_pack.py (8), ListingPackDrawer vitest (2). |
 | 2026-11-11 | 6e   | Vinted sell flow researched read-only in Chrome (`docs/vinted-sell-flow.md`); mapping and flow decided with the user: Publish table with per-item confirm in the app, `publish_queue`, Claude works it one by one (create or update via stored link), reads the item URL back. Build not started. |
 | 2026-11-11 | 6    | Re-prioritised after the user's request: photos saved at scan + added later (6a, building), listing pack (6c), assisted Vinted publish (new 6e), daily reprice + sold-comps alerts (6d) all high priority, in that order. D3 amended. |
+| 2026-11-12 | 7 | Slice 1 built: `products` collection, `services/products.py`, `/api/products`, Products page, Dashboard Sealed value KPI, `sealed_value` on snapshots. Tests: `tests/test_products.py` (8), `Products.test.tsx` (6). Openings, ROI, price fetch, photos, selling: later slices. |
