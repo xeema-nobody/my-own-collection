@@ -146,5 +146,8 @@ Local single-user, no auth. API bound to 127.0.0.1 (phone access only through th
 `components/AcquiredForm.tsx`: shared cost + acquisition form (edit = every field sent, bulk = blank keeps; per-copy or total entry) used by the Collection details drawer (with edit history + restore), the bulk drawer (row checkboxes) and the card page.
 `components/CardCollection.tsx` (card page): Owned stack rows (badge, value or "needs price", acquisition badge + paid, edit-cost pencil, qty `Stepper`, delete-confirm `Drawer`) and the Add form (Raw|Graded, estimate from `/compare`); both share the auto-fetch status message.
 
-## Vinted publisher (host)
+## Vinted publisher (Chrome extension, primary)
+`extension/` (MV3, no build): `recipe.js` (form steps + guards, UMD, tested with vitest/jsdom via `cd extension && npm test`), `content.js` (state machine claim -> fill -> read back -> dry-run release or Upload -> profile -> item URL -> result), `background.js` (service worker: only caller of `http://localhost:8100`, run state in `chrome.storage.session`, daily count in `storage.local`), `popup.*` (dry-run toggle, Stop). Started by the app opening `https://www.vinted.nl/items/new#moc-publish`. Backend: `EXTENSION_ORIGINS` is added to the allowed origins (CORS + origin guard); photos via `GET /api/publish/queue/{id}/photo/{n}`. Install and test: `extension/README.md`.
+
+## Vinted publisher (host script, secondary)
 `fetcher/fetcher/publisher/` works `publish_queue` through `/api/publish/queue/*` on 127.0.0.1:8100 and drives real Chrome over CDP (`ChromeCdpDriver`). CLI via `scripts/publish.sh`, on demand. See `docs/vinted-sell-flow.md` 'Host publisher script'.

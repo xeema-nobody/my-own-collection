@@ -20,3 +20,21 @@ it("lists every state with Cancel / Release / Retry and posts the action", async
   expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Release" })).toBeTruthy();
 });
+
+function renderQueue(rows: unknown[]) {
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => rows, text: async () => "{}" })));
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><PublishQueueView /></QueryClientProvider>);
+}
+
+it("Publish waiting opens the Vinted create page with the extension hash", async () => {
+  const open = vi.fn();
+  vi.stubGlobal("open", open);
+  renderQueue([e("1", "confirmed"), e("2", "confirmed"), e("3", "published")]);
+  await userEvent.click(await screen.findByRole("button", { name: "Publish waiting (2)" }));
+  expect(open).toHaveBeenCalledWith("https://www.vinted.nl/items/new#moc-publish", "_blank");
+});
+
+it("Publish waiting is disabled when nothing is waiting", async () => {
+  renderQueue([e("1", "publishing"), e("2", "published")]);
+  expect(((await screen.findByRole("button", { name: "Publish waiting" })) as HTMLButtonElement).disabled).toBe(true);
+});

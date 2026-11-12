@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 
 from app.api.deps import get_db
 from app.db.models import PublishConfirmIn, PublishResultIn
@@ -31,6 +32,12 @@ async def queue(state: list[str] | None = Query(None), item_id: str | None = Que
 async def next_item():
     """Claim the oldest confirmed item (-> publishing) and write its photos to publish_tmp/<id>/. Null when empty."""
     return await _run(svc.claim_next(get_db()))
+
+
+@router.get("/queue/{qid}/photo/{n}")
+async def photo(qid: str, n: int):
+    """A claimed item's photo (01.jpg ...), fetched by the browser extension; 404 once released / reported."""
+    return FileResponse(await _run(svc.photo_path(get_db(), qid, n)), media_type="image/jpeg")
 
 
 @router.post("/queue/{qid}/result")

@@ -395,5 +395,11 @@ User: store and fetch prices only for cards the user selects into the collection
 - **Trigger**: end of `take_snapshot` (daily snapshot job and after a fetch that changed an owned card), never raises; also "Check now". No new scheduler task.
 
 
-## Host Playwright publisher instead of Claude + Chrome (2026-11-12, roadmap Step 6e)
+## Chrome extension in the user's own tab as the primary publisher (2026-11-12, roadmap Step 6e)
+- The Playwright script needs a separate Chrome profile and a fresh Vinted login, which the user rejects. A small MV3 extension (`extension/`, content script on vinted.nl only, loaded unpacked) reuses the already logged-in tab. The app never drives the browser: "Publish waiting" only opens a tab with `#moc-publish`. Same queue, same per-row confirm, same guards as the script; recipe ported to `extension/recipe.js` (jsdom-tested).
+- Dry run is an extension toggle (default on), not part of the URL, so a real Upload needs a deliberate switch in the popup plus the user's OK in chat for the first one. Daily cap 10 and 90-135 s gaps live in the extension.
+- Only the service worker calls the app (avoids page-origin CORS / Private Network Access); the backend allows exactly one pinned origin `chrome-extension://<id>` (manifest `key`, setting `EXTENSION_ORIGINS`), other extension origins stay blocked by the CSRF origin guard. Queue photos are served by `GET /api/publish/queue/{id}/photo/{n}` only while the item is `publishing`. No credentials are stored anywhere.
+- The Playwright publisher stays as a secondary fallback (login opens the Vinted home page, no `/member/login`).
+
+## Host Playwright publisher instead of Claude + Chrome (2026-11-12, roadmap Step 6e; now secondary)
 - Pro API is closed to private sellers, so the fixed recipe moved from a Claude session to a host script in the fetcher package (real Chrome over CDP, own profile, manual login once). Same queue, same per-row confirm in the app (the only approval), same result endpoints; no app change. On demand, small caps, stop-and-release on anything unexpected, never solves a CAPTCHA / login. Terms and ban risk equal to the Claude + Chrome flow. Slabs ('New without tags' dialog) release until that dialog is researched. First real Upload only with the user's OK in chat.

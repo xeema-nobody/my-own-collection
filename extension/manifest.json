@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "my-own-collection Vinted publisher",
+  "version": "0.1.0",
+  "description": "Works the my-own-collection publish queue in your own logged-in Vinted tab. Dry-run by default.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsTCzTSO7p9SVarwJTP17NEA+ScBP8n9H2Z/g7ZIOujemo6lg7ozbjS4dv9uCE2K5zaW6wjtjJOnITl/34SQf/zKnIHgQENwP4Qnwtu+CZh4x4Nj9/7HeRW83ar3Gntv4USV8VkkbMxCh9RX5bNO60P1Ct+EQIsf1vLe18ZLPnIk64p7JF75XjVsi6aSI7KES4pXuMdDyyeZzJ9MU+7AvX0iQPNcTN0xirS6OChM3w6JUE+KveizTmye4Z8frD+8xVFX6fEK2Aq2rNZj4LBZtN1i7L6RuSnbCUNBRI/zJXgRIC4NkaNmspFaOfjsayMSQqlZV5oV4ba6LccMdDUT5XwIDAQAB",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost:8100/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.vinted.nl/*"
+      ],
+      "js": [
+        "recipe.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Vinted publisher",
+    "default_popup": "popup.html"
+  }
+}

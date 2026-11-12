@@ -23,6 +23,9 @@ export function QueueList({ entries, busy, onAct, title = "Vinted publish queue"
     </section>);
 }
 
+/** Opens Vinted's create page in a new tab of this browser; the Vinted publisher extension sees the hash and works the queue there. */
+export const VINTED_PUBLISH_URL = "https://www.vinted.nl/items/new#moc-publish";
+
 /** Settings > Data: every queue entry (all states), with Cancel / Release / Retry. The Claude session works "Waiting" ones one at a time. */
 export default function PublishQueueView() {
   const qc = useQueryClient();
@@ -32,5 +35,13 @@ export default function PublishQueueView() {
   if (queue.isLoading) return <Skeleton className="h-16 w-full" />;
   if (queue.error) return <p role="alert" className="text-sm text-danger">{String((queue.error as Error).message)}</p>;
   if (!queue.data?.length) return <p className="text-sm text-muted">Nothing queued. Confirm a stack with "Publish on Vinted" in the collection drawer.</p>;
-  return <QueueList entries={queue.data} busy={act.isPending} onAct={(id, a) => act.mutate({ id, a })} title="Queue" />;
+  const waiting = queue.data.filter((q) => q.state === "confirmed").length;
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" disabled={!waiting} onClick={() => window.open(VINTED_PUBLISH_URL, "_blank")}>Publish waiting{waiting ? ` (${waiting})` : ""}</Button>
+        <span className="text-xs text-muted">Needs the Vinted publisher extension (extension/README.md). Its popup sets dry run.</span>
+      </div>
+      <QueueList entries={queue.data} busy={act.isPending} onAct={(id, a) => act.mutate({ id, a })} title="Queue" />
+    </div>);
 }

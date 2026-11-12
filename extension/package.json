@@ -1,0 +1,12 @@
+{
+  "name": "moc-vinted-extension",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "vitest": "^4.1.12"
+  }
+}

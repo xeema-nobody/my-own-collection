@@ -156,3 +156,17 @@ async def test_pack_shows_queued_payload_for_active_entry_not_market_price(db, c
     await client.post(f"/api/publish/queue/{qid}/cancel")
     p = (await client.post("/api/collection/listing-pack", json={"ids": [sid], "platform": "vinted"})).json()["items"][0]
     assert p["queued"] is False and p["title"] != "Queued title"
+
+
+async def test_photo_served_only_while_publishing(db, client):
+    sid = await stack(db, client)
+    await confirm(client, row(sid))
+    item = (await client.post("/api/publish/queue/next")).json()
+    assert item["photo_urls"] == [f"/api/publish/queue/{item['id']}/photo/1", f"/api/publish/queue/{item['id']}/photo/2"]
+    r = await client.get(item["photo_urls"][0])
+    assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg" and r.content[:2] == b"\xff\xd8"
+    assert (await client.get(f"/api/publish/queue/{item['id']}/photo/3")).status_code == 404
+    assert (await client.get(f"/api/publish/queue/{item['id']}/photo/0")).status_code == 404
+    assert (await client.get(f"/api/publish/queue/{item['id']}/photo/x")).status_code == 422
+    assert (await client.post(f"/api/publish/queue/{item['id']}/release")).status_code == 200
+    assert (await client.get(item["photo_urls"][0])).status_code == 404  # released: temp folder gone

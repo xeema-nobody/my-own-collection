@@ -25,7 +25,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="my-own-collection", lifespan=lifespan)
-allowed_origins = {o.strip() for o in settings.cors_origins.split(",") if o.strip()}
+allowed_origins = {o.strip() for o in f"{settings.cors_origins},{settings.extension_origins}".split(",") if o.strip()}
 app.add_middleware(CORSMiddleware, allow_origins=sorted(allowed_origins),
                    allow_methods=["*"], allow_headers=["*"])
 # DNS rebinding: a rebound hostname would make the API same-origin for an attacker page

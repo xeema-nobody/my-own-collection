@@ -1,5 +1,6 @@
 import httpx
 
+from app.config import settings
 from app.main import app
 
 
@@ -41,3 +42,10 @@ async def test_jobs_limit_bounded(db):
     async with client() as c:
         assert (await c.get("/api/admin/jobs?limit=-1")).status_code == 422
         assert (await c.get("/api/admin/jobs?limit=1000")).status_code == 422
+
+
+async def test_extension_origin_pinned(db):
+    async with client() as c:
+        ext = settings.extension_origins.split(",")[0]
+        assert (await c.post("/api/alerts/evaluate", headers={"origin": ext})).status_code == 200
+        assert (await c.post("/api/alerts/evaluate", headers={"origin": "chrome-extension://" + "a" * 32})).status_code == 403

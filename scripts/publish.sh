@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Work the Vinted publish queue on the host (real Chrome over CDP, no Claude). Run on demand only.
+# SECONDARY / fallback publisher (Playwright, separate Chrome profile). Primary path: the Chrome extension in extension/
+# (Settings > Data > "Publish waiting"). Run on demand only.
 # Usage: scripts/publish.sh [--dry-run] [--max N]
 #   --dry-run  fill + read back, never click Upload, release the item (screenshot in ~/.moc-fetcher/failures)
-# First time: log in to Vinted by hand in the fetcher Chrome profile (scripts/publish.sh --login).
+# First time: scripts/publish.sh --login opens https://www.vinted.nl/ in the fetcher profile; log in by hand.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PY="$ROOT/fetcher/.venv/bin/python"
@@ -10,6 +11,6 @@ PY="$ROOT/fetcher/.venv/bin/python"
 CHROME="${FETCHER_CHROME_PATH:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 if [ "${1:-}" = "--login" ]; then
   exec "$CHROME" --remote-debugging-port="${FETCHER_CDP_PORT:-9333}" --user-data-dir="$HOME/.moc-fetcher/profile" \
-    --no-first-run "https://www.vinted.nl/member/login"
+    --no-first-run "https://www.vinted.nl/"
 fi
 cd "$ROOT/fetcher" && exec "$PY" -m fetcher.publisher "$@"

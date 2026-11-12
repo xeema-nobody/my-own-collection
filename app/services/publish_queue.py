@@ -133,9 +133,18 @@ async def claim_next(db) -> dict | None:
     stack = await db.collection_items.find_one({"_id": ObjectId(d["item_id"])}, {"sale": 1})
     link = vinted_link(stack or {}) or d.get("url")
     out = _view(d)
-    out.update(files=files, url=link, mode="update" if link else "create",
+    out.update(files=files, photo_urls=[f"/api/publish/queue/{qid}/photo/{n}" for n in range(1, len(files) + 1)], url=link, mode="update" if link else "create",
                open_url=_edit_url(link) if link else f"{VINTED_BASE}/items/new")
     return out
+
+
+async def photo_path(db, qid: str, n: int) -> Path:
+    """Photo n (1-based) of the item being published, for the browser extension. Only while state=publishing."""
+    d = await db.publish_queue.find_one({"_id": _oid(qid), "state": "publishing"}, {"_id": 1})
+    p = _dir(qid) / f"{n:02d}.jpg"
+    if not d or not 1 <= n <= VINTED_MAX_PHOTOS or not p.is_file():
+        raise QueueError(404, "photo not found")
+    return p
 
 
 async def release(db, qid: str) -> dict:
