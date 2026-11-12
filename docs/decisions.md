@@ -419,3 +419,4 @@ User: store and fetch prices only for cards the user selects into the collection
 - Validation (unknown card 404, sealed entry as a pull 400, non-sealed stack 400) happens before any change, so a bad request never half-opens a box.
 - Alerts: stack / card rules now evaluate sealed rows (`valuate(kind="sealed")` added in `alerts.evaluate`); total rules drop sealed rows in `_select`, so totals are unchanged.
 - Scanner hand-off (pulled cards from a scan linked to an opening) not built: search covers it; add only if wanted.
+- Fix 2026-11-12: sealed entries are created with `price_schema: 2`. Without it the boot-time v2 price migration (`migrate_prices_v2`) saw them as old-shape cards and re-nested their scraped prices on the next app restart (summary 500 `KeyError: 'currency'`). Two damaged entries were rebuilt from the observation log (`latest_as_of`).

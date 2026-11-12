@@ -46,6 +46,16 @@ async def test_entry_is_created_once_and_linked_to_the_set(db):
     assert e["_id"].endswith(":booster_box:pokemon-center") and e["name"] == "Obsidian Flames Booster Box (Pokémon Center)"
 
 
+async def test_entry_is_price_schema_2_so_boot_migration_leaves_prices_alone(db):
+    from app.db import migrate_prices_v2
+    await seed_set(db)
+    e = await sealed.ensure_entry(db, SealedIn(**BOX))
+    await store_scraped_points(db, e["_id"], [pt(36893)], day())
+    before = (await db.cards.find_one({"_id": e["_id"]}))["latest_price"]
+    await migrate_prices_v2._migrate_cards(db)
+    assert (await db.cards.find_one({"_id": e["_id"]}))["latest_price"] == before
+
+
 async def test_set_must_exist(db):
     with pytest.raises(HTTPException) as e:
         await sealed.ensure_entry(db, SealedIn(set_id="nope", type="etb"))

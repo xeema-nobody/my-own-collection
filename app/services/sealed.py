@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from app.db.models import CollectionIn, SealedIn
 from app.providers.catalog.common import norm
 from app.services import collection as coll
+from app.services.pricing import PRICE_SCHEMA
 
 TYPES: dict[str, str] = {
     "booster_box": "Booster Box", "booster_bundle": "Booster Bundle", "etb": "Elite Trainer Box",
@@ -58,6 +59,8 @@ async def ensure_entry(db, body: SealedIn) -> dict:
                 "release_date": s.get("release_date"), "printed_total": None, "total": None,
                 "ptcgo_code": s.get("ptcgo_code"), "logo_url": logo, "symbol_url": s.get("symbol_url")},
         "images": {"small": logo, "large": logo} if logo else {}, "variants": [], "language": body.language,
+        "price_schema": PRICE_SCHEMA,   # without it the boot-time v2 price migration re-nests scraped prices
+
         "external_ids": {"tcgplayer_url": None, "cardmarket_url": None},
         "search_text": norm(" ".join(filter(None, [name, s["name"], TYPES[body.type], edition, "sealed"]))),
         "updated_at": datetime.now(timezone.utc)}
