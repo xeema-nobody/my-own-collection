@@ -31,7 +31,8 @@ def build_query(q: str | None, tcg=None, set_id=None, type_=None, rarity=None, s
     if language:
         conds.append({"language": language})
     if set_id:
-        conds.append({"set.id": set_id})
+        ids = [x for x in set_id.split(",") if x]   # several sets: 'sv1,svp' (pull search in a multi-set product)
+        conds.append({"set.id": ids[0] if len(ids) == 1 else {"$in": ids}} if ids else {"set.id": set_id})
     if type_:
         conds.append({"types": type_})
     if rarity:

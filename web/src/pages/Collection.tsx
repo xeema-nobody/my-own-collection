@@ -93,7 +93,8 @@ function Details({ i, onGone, onPublish }: { i: any; onGone?: () => void; onPubl
       <CostSection i={i} />
       <SalePanel key={`${i.id}-${JSON.stringify(i.sale)}`} id={i.id} sale={i.sale} onPublish={onPublish} />
       <PhotosPanel key={`photos-${i.id}`} id={i.id} graded={!!i.grading} />
-      {i.card?.kind === "sealed" && <OpenProduct id={i.id} quantity={i.quantity} name={i.card?.name ?? "product"} onDone={onGone} />}
+      {i.card?.kind === "sealed" && <OpenProduct id={i.id} quantity={i.quantity} name={i.card?.name ?? "product"}
+        setId={i.card?.set?.ref_id} setName={i.card?.set?.name} language={i.language ?? "en"} onDone={onGone} />}
       <RemoveStack id={i.id} quantity={i.quantity} name={i.card?.name ?? "card"} cost={i.cost} onDone={onGone} />
       <SourceCompare row={i} />
     </div>);

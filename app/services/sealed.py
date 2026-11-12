@@ -1,6 +1,9 @@
 """Sealed products (boxes, ETBs, packs...). No catalog API lists them, so the user defines one (set from our sets +
 type + language [+ edition]) and the app keeps it as a catalog entry in `cards` with `kind: "sealed"`.
 
+`edition` is the free-text variant / contents ('Eevee promo'): it is part of the id and name, so two blisters of one
+set with different promos are separate entries, stacks and price matches.
+
 Owning one is a normal collection stack on that entry, so prices (scraped sources), photos, sale status, the
 Vinted publish queue, reprice and alerts all work unchanged. What differs:
 - `set.id` is `sealed:<set id>`, so every per-set query over real cards (counts, imports, scans) skips them;

@@ -50,9 +50,10 @@ export default function AddSealed({ open, onClose, onAdded }: { open: boolean; o
             fetchPage={fetchSets} onChange={(v, l) => { setSetId(v); setSetLabel(l); }} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Edition (optional)"><Input aria-label="Edition" value={edition} onChange={(e) => setEdition(e.target.value)} placeholder="Pokémon Center, Costco…" /></Field>
+          <Field label="Variant / contents (optional)"><Input aria-label="Edition" maxLength={80} value={edition} onChange={(e) => setEdition(e.target.value)} placeholder="Eevee promo, random promo, Costco…" /></Field>
           <Field label="Quantity"><Input aria-label="Quantity" type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} /></Field>
         </div>
+        <p className="text-xs text-muted">Same type and set but different contents (promo card, retailer)? Give each its own variant: they become separate stacks with their own price.</p>
         <AcquiredForm hideSubmit initial={{ type: "purchased", price: null, currency: "EUR", date: null, source: null }} qty={parseInt(qty, 10) || 1} onChange={setAcq} />
         {err && <p role="alert" className="text-sm text-danger">{err}</p>}
         <div className="flex justify-end gap-2"><Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>

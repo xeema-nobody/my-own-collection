@@ -33,3 +33,8 @@ async def test_sets_with_stats(db):
     by = {s["external_id"]: s for s in await sets_with_stats(db)}
     assert (by["a"]["cards_total"], by["a"]["cards_priced"]) == (4, 2)
     assert (by["z"]["cards_total"], by["z"]["cards_priced"]) == (0, 0)
+
+
+def test_set_filter_accepts_several_ids():
+    assert {"set.id": "sv3"} in build_query(None, set_id="sv3")["$and"]
+    assert {"set.id": {"$in": ["sv3", "svp"]}} in build_query(None, set_id="sv3,svp")["$and"]

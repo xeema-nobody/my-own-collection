@@ -357,7 +357,7 @@ class SealedIn(BaseModel):
     set_id: str = Field(min_length=1, max_length=40, description="external id of a set in our sets list")
     type: SealedType
     language: Language = "en"
-    edition: str | None = Field(default=None, max_length=60, description="'Pokémon Center', 'Costco'...")
+    edition: str | None = Field(default=None, max_length=80, description="variant / contents that set two products of one set+type apart: 'Eevee promo', 'Costco'...")
     quantity: int = Field(default=1, ge=1, le=10000)
     acquired: Acquired | None = None
     notes: str | None = None

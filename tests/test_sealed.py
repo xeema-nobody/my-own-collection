@@ -202,3 +202,22 @@ async def test_migration_leaves_products_whose_set_is_unknown(db):
     await db.products.insert_one({"name": "Box", "type": "etb", "set_name": "Made Up Set", "language": "en", "quantity": 1, "status": "sealed"})
     assert await migrate_sealed_v1.migrate(db) == {"moved": 0, "left": 1}
     assert "products" in await db.list_collection_names() and await db.collection_items.count_documents({}) == 0
+
+
+async def test_variants_of_one_set_and_type_are_separate_products(db):
+    await seed_set(db)
+    a = await sealed.add(db, SealedIn(set_id="sv3", type="blister", edition="Eevee promo", quantity=2))
+    b = await sealed.add(db, SealedIn(set_id="sv3", type="blister", edition="Random promo"))
+    plain = await sealed.add(db, SealedIn(set_id="sv3", type="blister"))
+    assert len({a["entry"]["_id"], b["entry"]["_id"], plain["entry"]["_id"]}) == 3
+    assert a["entry"]["name"] == "Obsidian Flames Blister (Eevee promo)"
+    assert await db.collection_items.count_documents({}) == 3
+
+
+def test_variant_entry_matches_only_a_hit_that_names_the_promo():
+    from app.providers.price.base import Candidate
+    from app.providers.price.match import score_sealed
+    card = {"name": "Obsidian Flames Blister (Eevee promo)", "language": "en"}
+    named = Candidate("u/1", "Eevee Promo Blister", "Eevee Promo Blister", "Pokemon Obsidian Flames", "", "en")
+    other = Candidate("u/2", "Random Promo Blister", "Random Promo Blister", "Pokemon Obsidian Flames", "", "en")
+    assert score_sealed(card, named) > 0 and score_sealed(card, other) == 0

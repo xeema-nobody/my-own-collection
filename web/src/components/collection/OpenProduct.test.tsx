@@ -37,3 +37,13 @@ it("caps units at the stack and warns when it opens the whole stack", async () =
 it("history label for the opened reason", () => {
   expect(exitLabel("opened")).toBe("Opened");
 });
+
+it("limits the pull search to the product's set; sets can be removed or all sets searched", async () => {
+  wrap(<OpenProduct id="s1" quantity={1} name="Box" setId="sv3" setName="Obsidian Flames" />);
+  await userEvent.click(screen.getByRole("button", { name: "Open product" }));
+  expect(screen.getByText("Obsidian Flames")).toBeTruthy();
+  expect(screen.getByLabelText("Add set")).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Search all sets" }));
+  expect(screen.getByText("all sets")).toBeTruthy();
+  expect(screen.queryByLabelText("Add set")).toBeNull();
+});
