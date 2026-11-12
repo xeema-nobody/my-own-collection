@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     app_url: str = "http://127.0.0.1:8100"
     notify_poll_s: float = 60
     notify_state: Path = HOME / "notified.json"
+    publish_max_per_day: int = 10             # Vinted uploads per calendar day (real runs only)
+    publish_min_gap_s: float = 90             # pause between items in one run (+ up to 50 % random)
+    publish_action_delay_s: tuple[float, float] = (0.6, 1.8)
+    publish_state: Path = HOME / "publish_day.json"
     sites_file: Path = HOME / "sites.json"    # extra sites, re-read on every request
 
 

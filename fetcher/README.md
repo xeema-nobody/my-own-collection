@@ -42,3 +42,6 @@ Built-in: pricecharting, cardmarket, altxyz, psa, beckett (the last two read sla
 ```
 
 `GET /health` returns `{"ok": true, "sites": [...]}`. Unattended fetches (scans, scheduler) wait the 10 s Cloudflare challenge grace, then fail as `blocked`; they never wait for a login.
+
+## Vinted publisher
+`scripts/publish.sh [--dry-run] [--max N]` (see docs/vinted-sell-flow.md). Login once: `scripts/publish.sh --login`.
