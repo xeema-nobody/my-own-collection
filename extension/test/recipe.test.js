@@ -63,8 +63,10 @@ describe("guards", () => {
   it("open dialog, but not a hidden one", () => {
     document.body.insertAdjacentHTML("beforeend", `<div role="dialog" aria-hidden="true"></div>`);
     expect(() => R.checkPage(env())).not.toThrow();
-    document.body.insertAdjacentHTML("beforeend", `<div role="dialog">Item must be unused</div>`);
-    expect(() => R.checkPage(env())).toThrow(/dialog/);
+    document.body.insertAdjacentHTML("beforeend", `<div role="dialog" style="display:none">cookies</div><div style="visibility:hidden"><div role="dialog">x</div></div>`);
+    expect(() => R.checkPage(env())).not.toThrow();
+    document.body.insertAdjacentHTML("beforeend", `<div role="dialog" data-testid="unused-dlg">Item must be unused</div>`);
+    expect(() => R.checkPage(env())).toThrow(/unexpected dialog open: <div testid=unused-dlg> "Item must be unused"/);
   });
   it("clean page passes", () => expect(() => R.checkPage(env())).not.toThrow());
 });

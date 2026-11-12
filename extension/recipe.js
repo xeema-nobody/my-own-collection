@@ -41,7 +41,22 @@
     const low = bodyText(env.doc).toLowerCase();
     for (const w of BLOCK_TEXT) if (low.includes(w)) throw new Guard(`blocking page text: '${w}'`);
     for (const w of NOT_FOUND_TEXT) if (low.includes(w)) throw new Guard("page not found (404)");
-    if (env.doc.querySelector("[role=dialog]:not([aria-hidden=true]), dialog[open]")) throw new Guard("unexpected dialog open");
+    const dlg = [...env.doc.querySelectorAll("[role=dialog], [role=alertdialog], dialog[open]")].find((d) => isShown(d));
+    if (dlg) {
+      const txt = (dlg.innerText ?? dlg.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+      throw new Guard(`unexpected dialog open: <${dlg.tagName.toLowerCase()} testid=${dlg.getAttribute("data-testid") || "-"}> "${txt}"`);
+    }
+  }
+
+  /** Shown to the user: no hidden / aria-hidden / display:none / visibility:hidden / opacity 0 on it or an ancestor. */
+  function isShown(e) {
+    const w = e.ownerDocument.defaultView;
+    for (let n = e; n && n.nodeType === 1; n = n.parentElement) {
+      if (n.hidden || n.getAttribute("aria-hidden") === "true") return false;
+      const st = w.getComputedStyle(n);
+      if (st.display === "none" || st.visibility === "hidden" || st.opacity === "0") return false;
+    }
+    return true;
   }
 
   function readValue(doc, tid) {
