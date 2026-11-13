@@ -21,16 +21,6 @@ Work top to bottom. Items marked **you** need the user's hands or OK; the rest a
 
 **Parked by the user 2026-11-13 (do not start unless the user asks):** sealed alert kinds + scanner hand-off for pulled cards (7 slice 5); scan accuracy leftovers (ACE dark label + 5 slab grade misses, IMG_3037/3039 cel25c, `test_scan_accuracy` OCR timeout); Cardmarket sealed search parser (blocked by Cloudflare, paste product urls meanwhile); Slowking / Mew metal card (upstream data gaps, user reports if it bites); real Cardmarket upload format (needs a sample); Vinted sealed category in the extension recipe (user does not sell sealed on Vinted for now).
 
----- | ---- | --- | -------- |
-| 1 | Housekeeping: set GitHub default branch to main, then `git push origin --delete feat/phase8-reviews` + `git fetch -p`; push main (OK needed) | git | you | 5 min, unblocks clean remote |
-| 2 | Sealed alert kinds; scanner hand-off for pulled cards | 7 slice 5 | build | nice to have, search covers hand-off today |
-| 3 | Scan accuracy leftovers: ACE dark label + 5 slab grade misses, IMG_3037/3039 cel25c, `test_scan_accuracy` OCR timeout | 5 | build | parked, only if asked |
-| 4 | Cardmarket sealed search parser | 7 slice 4 | blocked | Cloudflare blocks the search page; paste product urls meanwhile |
-| 5 | Slowking (absent upstream) and Mew metal card (in no catalog) | 5 | blocked | upstream data gaps |
-| 6 | Deck builder 8a, 8b, 8c | 8 | build | future; start when the collection is large and scanning is solid |
-| 7 | Real Cardmarket upload format (current CSV is a guess) | 6c | you + build | **Low prio**: user decided 2026-11-13 to focus on Vinted only; needs a real sample from the user |
-| 8 | Vinted sealed category in the extension recipe (needs a sealed dry run to learn the real category). **Low prio**: user decided 2026-11-13 not to sell sealed on Vinted for now | 7 slice 6 | build | parked by the user |
-
 ---
 
 ## Why this order
