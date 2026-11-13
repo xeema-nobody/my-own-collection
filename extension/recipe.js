@@ -34,14 +34,16 @@
   const bodyText = (doc) => (doc.body && (doc.body.innerText ?? doc.body.textContent)) || "";
   const el = (doc, tid) => doc.querySelector(`[data-testid='${tid}']`);
 
-  /** Throw Guard on login, CAPTCHA / bot check, 404 or any open dialog. env = {doc, path()} */
+  /** Throw Guard on login, CAPTCHA / bot check, 404 or any open dialog. env = {doc, path(), allowDialog?: [lowercase text]} */
   function checkPage(env) {
     const path = env.path().toLowerCase();
     if (BLOCK_URL.some((b) => path.startsWith(b) || path.includes(b))) throw new Guard(`login or session page (${path})`);
     const low = bodyText(env.doc).toLowerCase();
     for (const w of BLOCK_TEXT) if (low.includes(w)) throw new Guard(`blocking page text: '${w}'`);
     for (const w of NOT_FOUND_TEXT) if (low.includes(w)) throw new Guard("page not found (404)");
-    const dlg = [...env.doc.querySelectorAll("[role=dialog], [role=alertdialog], dialog[open]")].find((d) => isShown(d));
+    const okText = env.allowDialog || [];                  // success dialogs expected at this step (never dismissed)
+    const dlg = [...env.doc.querySelectorAll("[role=dialog], [role=alertdialog], dialog[open]")].find((d) =>
+      isShown(d) && !okText.some((w) => (d.innerText ?? d.textContent ?? "").toLowerCase().includes(w)));
     if (dlg) {
       const txt = (dlg.innerText ?? dlg.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
       throw new Guard(`unexpected dialog open: <${dlg.tagName.toLowerCase()} testid=${dlg.getAttribute("data-testid") || "-"}> "${txt}"`);

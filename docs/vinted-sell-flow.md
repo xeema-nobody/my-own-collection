@@ -81,3 +81,6 @@ Sealed stacks go through the same queue. Pack defaults: title `<product> - seale
 
 ## Removing the app's Vinted record (2026-11-13)
 After withdrawing an item on Vinted, use "Remove Vinted record" in the collection drawer (Sale > Vinted). It only clears the app's side (queue history becomes `removed`, the Vinted listing leaves the sale); "Publish on Vinted" then creates a new listing.
+
+## First real extension create (2026-11-13)
+Proven live (Kleavor V). After Upload Vinted shows a success dialog ("Item listed ... uploading more items speeds up sales") over the profile page. The recipe's dialog guard treated it as unexpected and marked the item `failed` although the listing existed. Fix: in the `uploading` step `env.allowDialog = ["item listed"]` lets that one dialog pass (never dismissed); every other dialog still stops the run. The failed entry was repaired through `publish_queue.report` with the real item URL. If an item ever shows failed but is on Vinted: check the profile, then repair the same way (state publishing -> report).

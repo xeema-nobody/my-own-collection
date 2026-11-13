@@ -60,6 +60,7 @@
   async function step(run) {
     banner(`${run.dry ? "DRY RUN" : "publishing"}: ${run.step}${run.item ? " - " + run.item.payload.title : ""}`, "info", stopByUser);
     await bg({ t: "badge", text: run.dry ? "dry" : "on" });
+    env.allowDialog = run.step === "uploading" ? ["item listed"] : null;   // Vinted's success dialog after Upload
     R.checkPage(env);
 
     if (run.step === "claim") {

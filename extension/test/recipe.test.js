@@ -60,6 +60,14 @@ describe("guards", () => {
     document.body.textContent = "Pagina niet gevonden";
     expect(() => R.checkPage(env())).toThrow(/404/);
   });
+  it("expected success dialog is allowed only when named", () => {
+    document.body.insertAdjacentHTML("beforeend", `<div role="dialog">Pokémon Very good €1.50 Item listed Fact: uploading more items speeds up sales.</div>`);
+    expect(() => R.checkPage(env())).toThrow(/unexpected dialog/);
+    expect(() => R.checkPage({ ...env(), allowDialog: ["item listed"] })).not.toThrow();
+    document.body.insertAdjacentHTML("beforeend", `<div role="dialog">Item must be unused</div>`);
+    expect(() => R.checkPage({ ...env(), allowDialog: ["item listed"] })).toThrow(/Item must be unused/);
+  });
+
   it("open dialog, but not a hidden one", () => {
     document.body.insertAdjacentHTML("beforeend", `<div role="dialog" aria-hidden="true"></div>`);
     expect(() => R.checkPage(env())).not.toThrow();
