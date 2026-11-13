@@ -433,3 +433,12 @@ User: store and fetch prices only for cards the user selects into the collection
 
 ## Remove a stack's Vinted record (2026-11-13)
 - Withdrawing an item on Vinted left the app with a stale Vinted listing / "Published" queue entry, so the stack could not start a fresh create. `POST /api/publish/stack/{item_id}/remove` (drawer button "Remove Vinted record", inline confirm) marks the stack's published / failed queue entries `removed` (history kept, new queue state), drops its Vinted listings from the sale (other platforms stay; a `listed` stack left empty becomes `ready`) and refuses with 409 while an entry is waiting / publishing. Nothing is sent to Vinted. After it, "Publish on Vinted" queues a create.
+
+## Deck builder (2026-11-13, roadmap Step 8, decided with the user, nothing built yet)
+- **Separate inventory.** Deck-only cards (bulk, promos, anything not sold as a single) live in a "Deck cards" inventory with its own menu entry and scan mode, not as a flag on the collection. They never enter collection value, P/L, snapshots or single-card selling; a deck-pool value is shown on its own. A stack can move between Collection and Deck cards both ways (logged). Reason: promos and cheap cards would otherwise pollute valuation and the sell flows; the user wants to bulk-scan them with a copies count.
+- **Energy is virtual.** Basic energy is not inventoried; each deck declares counts per type (e.g. 12 Fire).
+- **Offline brain.** Rules validation and synergy / cohesion come from built-in rules and heuristics over catalog data (no Claude / external API). Decks are casual: legality by rotation is off unless asked. Rules to be written in `docs/pokemon-deck-rules.md` before 8b.
+- **Reserved, not moved.** Cards in a deck stay in the inventory but are locked to that deck; dissolve unlocks; a sold deck consumes them (exit history). Replaces the old 8c "move into a Deck product".
+- **Level and power** are user-set fields (beginner / intermediate / advanced; casual / mid / strong), the app may suggest values.
+- **Selling:** price suggestion = sum of card values x a user factor, with floor prices per level; bundles of 2-3 decks; random / mystery deck listings from decks marked random-eligible. Vinted category "Card decks" needs a dry run first (see docs/vinted-sell-flow.md).
+- **Order:** 8a inventory + scanning, 8b rules + editor, 8c virtual playtest (shuffle, opening hand, mulligan, prizes), 8d proposals, 8e sell. MTG (Step 9) comes after Step 8 and gets its own planning.

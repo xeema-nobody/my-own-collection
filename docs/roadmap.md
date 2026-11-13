@@ -9,12 +9,19 @@ Functional descriptions only — no technical design. The project agent decides 
 
 ---
 
-## Priority queue (single source for "what next"; reordered 2026-11-13, no new items)
+## Priority queue (single source for "what next"; reordered 2026-11-13, no new items without the user)
 
 Work top to bottom. Items marked **you** need the user's hands or OK; the rest are builds. Everything else in this file is background for these.
 
 | # | Item | Step | Who | Why here |
 | - | ---- | ---- | --- | -------- |
+| 1 | Pokémon deck builder: **8a deck-cards inventory + scanning first**, then 8b rules + editor, 8c try the deck, 8d auto-propose, 8e sell decks on Vinted | 8 | build | chosen by the user 2026-11-13 as the next step; definitions in decisions.md "Deck builder" |
+| 2 | Magic: The Gathering: cards, sealed, deck builder (plan with the user first; start only after #1 is done) | 9 | build | user request 2026-11-13, big |
+| 3 | Housekeeping: delete remote `feat/phase8-reviews` (default branch is main now), push when asked | git | you | trivial |
+
+**Parked by the user 2026-11-13 (do not start unless the user asks):** sealed alert kinds + scanner hand-off for pulled cards (7 slice 5); scan accuracy leftovers (ACE dark label + 5 slab grade misses, IMG_3037/3039 cel25c, `test_scan_accuracy` OCR timeout); Cardmarket sealed search parser (blocked by Cloudflare, paste product urls meanwhile); Slowking / Mew metal card (upstream data gaps, user reports if it bites); real Cardmarket upload format (needs a sample); Vinted sealed category in the extension recipe (user does not sell sealed on Vinted for now).
+
+---- | ---- | --- | -------- |
 | 1 | Housekeeping: set GitHub default branch to main, then `git push origin --delete feat/phase8-reviews` + `git fetch -p`; push main (OK needed) | git | you | 5 min, unblocks clean remote |
 | 2 | Sealed alert kinds; scanner hand-off for pulled cards | 7 slice 5 | build | nice to have, search covers hand-off today |
 | 3 | Scan accuracy leftovers: ACE dark label + 5 slab grade misses, IMG_3037/3039 cel25c, `test_scan_accuracy` OCR timeout | 5 | build | parked, only if asked |
@@ -32,7 +39,8 @@ Work top to bottom. Items marked **you** need the user's hands or OK; the rest a
 2. **Phase 2 (step 5)** is the big intake unlock — scanning. Collection will grow fast after it.
 3. **Phase 3 (step 6)** turns the collection into cash: photos + selling tracker.
 4. **Phase 4 (step 7)** sealed products — new asset type, and the source of pulls.
-5. **Phase 5 (step 8)** deck/bulk products — needs a large, well-identified collection, so last.
+5. **Phase 5 (step 8)** decks from deck-only cards — chosen as the next step by the user (2026-11-13).
+6. **Phase 6 (step 9)** Magic: The Gathering, after the Pokémon deck builder.
 
 ---
 
@@ -287,33 +295,48 @@ Original brief:
 
 ---
 
-# Phase 5 — Decks and bulk products
+# Phase 5 — Decks (Pokémon first)
 
-## Step 8 — Deck builder from selected collection cards `[ ]`
+## Step 8 — Deck builder from deck-only cards `[ ]` NEXT (user 2026-11-13; definitions in decisions.md "Deck builder")
 
-_Future — start only after the collection is large and scanning (step 5) works well. Each sub-step is shippable alone._
+_Goal: turn cheap / unsellable cards (bulk, promos) into playable, labelled, priced decks that can be tried virtually and sold on Vinted. Decks are casual, not tournament level; "as good as possible" is enough. Each sub-step ships alone, in this order._
 
-### 8a. Choose the pool `[ ]`
+### 8a. Deck-cards inventory + scanning `[ ]` (start here)
+- A **separate "Deck cards" inventory** with its own menu entry. Cards here are not part of the collection: no collection value, no P/L, no single-card selling; only a deck-pool value (shown so "I keep €37 of bulk for decks" is visible).
+- **Scan mode "Deck cards"** (same phone scanner and identification as normal scanning, never auto-add) with a **copies field** and a fast bulk flow: scan, pick the print, set copies (remembered), next. Typed number + set lookup works too.
+- Quantity per card (same print twice = one row, quantity 2). Move a stack between Collection and Deck cards both ways (e.g. a promo that turns out valuable goes back; a cheap card goes to decks), logged.
+- Energy cards are **not inventoried**: the user adds basic energy per deck when needed (e.g. 12 Fire, 14 Water), see 8b.
+- List with filters (set, type, rarity, supertype, owned copies, reserved / free) and the same price columns as the collection.
 
-- Only cards explicitly **marked "available for decks"** enter the pool; the rest of the collection is never touched.
-- Quick-mark rules: all cards cheaper than €1 / €2 / €5 (user-adjustable), by set, by type, by rarity; excludes graded, listed-for-sale and high-value cards by default.
-- Pool view with counts and total value, so "I'm giving up €37 of bulk" is visible before committing.
+### 8b. Rules + deck editor `[ ]`
+- `docs/pokemon-deck-rules.md`: the game rules the app enforces (written with the user before coding): 60 cards, max 4 copies by name (basic energy unlimited), at least one Basic Pokémon, evolution lines, Prize / hand basics (also used by 8c), casual by default (no rotation / regulation-mark check unless the user asks).
+- Deck = name, **level** (beginner / intermediate / advanced, user set, app can suggest) and **power** (casual / mid / strong, user set, app can suggest), theme, notes, card list from the deck-cards inventory + **virtual energy counts per type**.
+- **Reserved, not moved:** cards in a deck are locked to it (cannot sit in two decks) but stay in the inventory; dissolving a deck unlocks them.
+- Live **cohesion report** (offline heuristics, no external API): rule violations, Pokémon / Trainer / Energy balance, evolution lines complete (missing Stage 1), energy types vs attack costs, dead cards, a plain verdict ("Playable, beginner-friendly, 3 weak slots, missing a Stage 1"). Shows what is missing and the cheapest way to fill it (wishlist link).
+- Manual edit: add / swap cards, see the report update.
 
-### 8b. Build a deck `[ ]`
+### 8c. Try the deck `[ ]`
+- Virtual playtest: shuffle, draw an opening hand of 7, mulligan rule, set Prizes, draw turn by turn, see the board zones (hand, deck, discard, prizes); restart in one click.
+- Simple statistics over many simulated openings (chance of a Basic in the opening hand, of drawing an energy by turn 2 ...) feeding the cohesion verdict.
 
-- Choose the game/format (Pokémon first), target **difficulty** (beginner / intermediate / advanced) and **power level** (casual / mid / strong), and the theme (a type, an evolution line, a mechanic).
-- App proposes decks from the pool and shows **cohesion**: do the cards work together under the game's rules (legal count, enough Pokémon / energy / trainers, evolution lines complete, energy types matching, a clear strategy, no dead cards). Plain-language verdict: "Playable, beginner-friendly, 3 weak slots, missing a Stage 1".
-- Manual editing: swap cards in/out, see cohesion update live; "what's missing" list, possibly pointing to the wishlist or to cheap buys.
-- Several candidate decks can share the pool; the app warns when two decks want the same single copy.
+### 8d. Propose decks `[ ]`
+- From the free cards of the inventory the app proposes candidate decks around a theme (type, evolution line, mechanic) and the chosen level / power, with energy counts, using the same heuristics as 8b. Several candidates can share the pool; clashes over a single copy are shown. Never changes anything until the user accepts.
 
-### 8c. Turn a deck into a product `[ ]`
+### 8e. Sell decks on Vinted `[ ]`
+- When a deck is ready the user adds **photos** (same photo store as cards) and a **description** (characters, how it plays; app drafts it from the deck, user edits). Vinted category "Card decks" is unverified: needs a dry run in the extension, like the first single-card flow (docs/vinted-sell-flow.md).
+- **Price:** suggestion = sum of the cards' values x a factor the user sets, floor by deck level (user defines beginner / mid / strong prices), the higher is suggested, the user adjusts.
+- **Bundles of 2-3 decks** in one listing with a bundle discount, and **random / mystery deck** listings (generic listing fulfilled from decks the user marks as "random-eligible").
+- Sold deck: its reserved cards leave the inventory (exit history with realised result, like step 6b); the Vinted publish queue and extension handle create / update as for cards.
 
-- "Create deck" **groups the chosen cards into one new Product** (type: Deck) with name, difficulty, power level, photo, cost basis (sum of the cards' cost) and market value.
-- Those cards are **moved out of the collection** into the deck product (still traceable; "dissolve deck" returns them).
-- Deck products flow into the selling workflow (step 6): list, price, sold, realised profit — including "this bulk made €X as a deck vs. as loose bulk".
-- Dashboard reflects the move: collection value drops by what moved, deck inventory value appears separately.
+**Done when:** a pile of scanned bulk becomes a validated, playtested, priced deck listed on Vinted, and the inventory reflects it.
 
-**Done when:** €1-and-under bulk can be turned into a playable, labelled, priced deck product and sold, with the collection updated.
+---
+
+# Phase 6 — Magic: The Gathering
+
+## Step 9 — MTG: cards, sealed products, deck builder `[ ]` after step 8 (user 2026-11-13)
+
+_Big. The schema is generic (cards have `tcg`), but catalog source, scanning, prices, sealed and deck rules are all game-specific. Plan with the user first (own definition questions, `/feature` plan) once the Pokémon deck builder is done. Starting points to settle then: catalog provider (Scryfall-like bulk data), price sources, scanner identification (name + set + collector number, foils, languages), sealed products and openings reuse, formats (Commander 100-card singleton, 60-card constructed, limited), colour / mana-cost cohesion, and which deck-builder pieces from step 8 are shared._
 
 ---
 
@@ -376,3 +399,4 @@ _Future — start only after the collection is large and scanning (step 5) works
 | 2026-11-11 | 6e   | Vinted sell flow researched read-only in Chrome (`docs/vinted-sell-flow.md`); mapping and flow decided with the user: Publish table with per-item confirm in the app, `publish_queue`, Claude works it one by one (create or update via stored link), reads the item URL back. Build not started. |
 | 2026-11-11 | 6    | Re-prioritised after the user's request: photos saved at scan + added later (6a, building), listing pack (6c), assisted Vinted publish (new 6e), daily reprice + sold-comps alerts (6d) all high priority, in that order. D3 amended. |
 | 2026-11-12 | 7 | Slice 1 built, then reworked on the user's feedback: sealed product = catalog entry (`cards.kind=sealed`, set from our sets) + normal stack; Cards / Sealed switch on Collection, Add sealed drawer, PriceCharting sealed matching from a real page, Cardmarket via pasted product url, sealed listing text + Vinted defaults, sealed kept out of card totals (`valuate(kind=)`), migration of the first version. Tests: `tests/test_sealed.py` (14), `AddSealed.test.tsx`, Collection kind tests. |
+| 2026-11-13 | 8, 9 | Re-planned with the user: first real Vinted create through the extension proven live (Kleavor V). Queue now: Pokémon deck builder (step 8 rewritten: 8a deck-cards inventory + scanning, 8b rules + editor, 8c try the deck, 8d propose, 8e sell on Vinted), then MTG (new step 9). Sealed alerts, scan accuracy and Cardmarket items parked. No code yet. |
