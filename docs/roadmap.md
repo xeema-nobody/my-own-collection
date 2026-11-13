@@ -9,7 +9,7 @@ Functional descriptions only — no technical design. The project agent decides 
 
 ---
 
-## Priority queue (single source for "what next"; reordered 2026-11-12, no new items)
+## Priority queue (single source for "what next"; reordered 2026-11-13, no new items)
 
 Work top to bottom. Items marked **you** need the user's hands or OK; the rest are builds. Everything else in this file is background for these.
 
@@ -18,13 +18,13 @@ Work top to bottom. Items marked **you** need the user's hands or OK; the rest a
 | 1 | Housekeeping: set GitHub default branch to main, then `git push origin --delete feat/phase8-reviews` + `git fetch -p`; push main (OK needed) | git | you | 5 min, unblocks clean remote |
 | 2 | Check what is built but unchecked: Open product set scoping + variant field, Japanese sets import, `/reprice`, price of `pokemon:dp3-10` | 5, 6, 7 | you | cheap, may surface bugs before more is built on top |
 | 3 | Vinted dry runs in the extension: CREATE (raw card), slab, sealed. First real create only with the user's explicit OK; re-tick Dry run after any real run | 6e | you (+ fixes) | unlocks real selling, the highest-priority chain |
-| 4 | Vinted sealed category in the extension recipe (after the sealed dry run) | 7 slice 6 | build | depends on 3 |
-| 5 | Real Cardmarket upload format (current CSV is a guess) | 6c | you + build | needs a real sample from the user |
-| 6 | Sealed alert kinds; scanner hand-off for pulled cards | 7 slice 5 | build | nice to have, search covers hand-off today |
-| 7 | Scan accuracy leftovers: ACE dark label + 5 slab grade misses, IMG_3037/3039 cel25c, `test_scan_accuracy` OCR timeout | 5 | build | parked, only if asked |
-| 8 | Cardmarket sealed search parser | 7 slice 4 | blocked | Cloudflare blocks the search page; paste product urls meanwhile |
-| 9 | Slowking (absent upstream) and Mew metal card (in no catalog) | 5 | blocked | upstream data gaps |
-| 10 | Deck builder 8a, 8b, 8c | 8 | build | future; start when the collection is large and scanning is solid |
+| 4 | Sealed alert kinds; scanner hand-off for pulled cards | 7 slice 5 | build | nice to have, search covers hand-off today |
+| 5 | Scan accuracy leftovers: ACE dark label + 5 slab grade misses, IMG_3037/3039 cel25c, `test_scan_accuracy` OCR timeout | 5 | build | parked, only if asked |
+| 6 | Cardmarket sealed search parser | 7 slice 4 | blocked | Cloudflare blocks the search page; paste product urls meanwhile |
+| 7 | Slowking (absent upstream) and Mew metal card (in no catalog) | 5 | blocked | upstream data gaps |
+| 8 | Deck builder 8a, 8b, 8c | 8 | build | future; start when the collection is large and scanning is solid |
+| 9 | Real Cardmarket upload format (current CSV is a guess) | 6c | you + build | **Low prio**: user decided 2026-11-13 to focus on Vinted only; needs a real sample from the user |
+| 10 | Vinted sealed category in the extension recipe (needs a sealed dry run to learn the real category). **Low prio**: user decided 2026-11-13 not to sell sealed on Vinted for now | 7 slice 6 | build | parked by the user |
 
 ---
 
