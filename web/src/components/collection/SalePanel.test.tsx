@@ -65,3 +65,15 @@ it("Vinted block: waiting item disables the button, listed stack offers Update w
   expect((screen.getByRole("button", { name: "Update on Vinted" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.getByRole("link", { name: "Vinted item" }).getAttribute("href")).toBe("https://www.vinted.nl/items/9-x");
 });
+
+it("remove Vinted record asks first, then posts", async () => {
+  const f = vi.fn().mockImplementation((url: string, init?: RequestInit) => Promise.resolve({ ok: true, status: 200, text: async () => "{}",
+    json: async () => String(url).includes("/api/publish/queue") ? [{ id: "q1", item_id: "s1", state: "published", mode: "update", url: "https://www.vinted.nl/items/1-x", error: null, photos: 2, payload: {}, updated_at: "" }]
+      : init?.method === "POST" ? { item_id: "s1", removed_entries: 1, dropped_listings: 0 } : {} }));
+  vi.stubGlobal("fetch", f);
+  wrap(<SalePanel id="s1" sale={{ status: "withdrawn", listings: [] }} onPublish={() => {}} />);
+  await userEvent.click(await screen.findByRole("button", { name: "Remove Vinted record" }));
+  expect(f.mock.calls.some(([u]) => String(u).includes("/remove"))).toBe(false);
+  await userEvent.click(screen.getByRole("button", { name: "Yes, remove" }));
+  await waitFor(() => expect(f.mock.calls.some(([u, i]) => String(u).includes("/api/publish/stack/s1/remove") && i?.method === "POST")).toBe(true));
+});

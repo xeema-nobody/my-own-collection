@@ -34,6 +34,12 @@ async def next_item():
     return await _run(svc.claim_next(get_db()))
 
 
+@router.post("/stack/{item_id}/remove")
+async def remove_vinted(item_id: str):
+    """Forget the stack's Vinted publication in the app (after withdrawing it on Vinted); the next publish creates anew."""
+    return await _run(svc.remove_vinted(get_db(), item_id))
+
+
 @router.get("/queue/{qid}/photo/{n}")
 async def photo(qid: str, n: int):
     """A claimed item's photo (01.jpg ...), fetched by the browser extension; 404 once released / reported."""

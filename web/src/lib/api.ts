@@ -13,7 +13,7 @@ export type PackItem = { item_id: string; card_id: string; title: string; descri
   market_price?: number | null; queued?: boolean; stored?: { title: string; description: string; condition: VintedCondition; parcel: VintedParcel; price: number } | null };
 export type VintedCondition = "New with tags" | "New without tags" | "Very good" | "Good" | "Satisfactory";
 export type VintedParcel = "small" | "medium" | "large";
-export type PublishState = "confirmed" | "publishing" | "published" | "failed" | "cancelled";
+export type PublishState = "confirmed" | "publishing" | "published" | "failed" | "cancelled" | "removed";
 export type PublishRow = { item_id: string; title: string; description: string; price: number; currency: string; condition: VintedCondition; parcel: VintedParcel };
 export type PublishEntry = { id: string; item_id: string; state: PublishState; mode: "create" | "update"; url: string | null; error: string | null;
   photos: number; payload: PublishRow; updated_at: string };
@@ -216,6 +216,7 @@ export const api = {
     `${BASE}/api/collection/listing-pack.csv${qs({ ids: ids.join(","), strategy, pct })}`,
   publishConfirm: (items: PublishRow[]) => req<PublishConfirmResult>("/api/publish/confirm", post({ items })),
   publishQueue: (states?: PublishState[], itemId?: string) => req<PublishEntry[]>(`/api/publish/queue${qs({ state: states, item_id: itemId })}`),
+  publishRemoveVinted: (itemId: string) => req<{ item_id: string; removed_entries: number; dropped_listings: number }>(`/api/publish/stack/${itemId}/remove`, { method: "POST" }),
   publishAct: (id: string, act: "cancel" | "retry" | "release") => req<PublishEntry>(`/api/publish/queue/${id}/${act}`, { method: "POST" }),
   photosZipUrl: (id: string) => `${BASE}/api/collection/${id}/photos.zip`,
   salesReport: () => req<SalesReport>("/api/collection/sales/report"),

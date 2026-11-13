@@ -3,7 +3,7 @@ import { api, money, type PublishEntry } from "../../lib/api";
 import { Button, Skeleton } from "../ui";
 
 export type QueueAct = "cancel" | "retry" | "release";
-const STATE_LABEL: Record<string, string> = { confirmed: "Waiting", publishing: "Publishing", published: "Published", failed: "Failed", cancelled: "Cancelled" };
+const STATE_LABEL: Record<string, string> = { confirmed: "Waiting", publishing: "Publishing", published: "Published", failed: "Failed", cancelled: "Cancelled", removed: "Removed" };
 
 /** Publish queue (6e): what the Claude session will work, is working, or has finished. Confirming a row is the approval; Cancel withdraws it. */
 export function QueueList({ entries, busy, onAct, title = "Vinted publish queue" }: { entries: PublishEntry[]; busy: boolean; onAct: (id: string, a: QueueAct) => void; title?: string }) {

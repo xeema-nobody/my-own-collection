@@ -170,3 +170,33 @@ async def test_photo_served_only_while_publishing(db, client):
     assert (await client.get(f"/api/publish/queue/{item['id']}/photo/x")).status_code == 422
     assert (await client.post(f"/api/publish/queue/{item['id']}/release")).status_code == 200
     assert (await client.get(item["photo_urls"][0])).status_code == 404  # released: temp folder gone
+
+
+async def test_remove_vinted_resets_to_create_and_keeps_other_platforms(db, client):
+    sale = {"status": "withdrawn", "listings": [
+        {"platform": "vinted", "asking_price": 150, "currency": "EUR", "url": "https://www.vinted.nl/items/777-old"},
+        {"platform": "cardmarket", "asking_price": 1200, "currency": "EUR"}]}
+    sid = await stack(db, client, sale=sale)
+    await confirm(client, row(sid))
+    item = (await client.post("/api/publish/queue/next")).json()
+    await client.post(f"/api/publish/queue/{item['id']}/result", json={"state": "published"})
+    r = await client.post(f"/api/publish/stack/{sid}/remove")
+    assert r.status_code == 200 and r.json() == {"item_id": sid, "removed_entries": 1, "dropped_listings": 1}
+    st = (await db.collection_items.find_one({"stack_key": "k1"}))["sale"]
+    assert st["status"] == "listed" and [l["platform"] for l in st["listings"]] == ["cardmarket"]
+    assert [e["state"] for e in (await client.get(f"/api/publish/queue?item_id={sid}")).json()] == ["removed"]
+    assert (await confirm(client, row(sid)))["results"][0]["mode"] == "create"
+
+
+async def test_remove_vinted_listed_without_other_listing_becomes_ready_and_refuses_active(db, client):
+    sale = {"status": "listed", "listings": [{"platform": "vinted", "asking_price": 150, "currency": "EUR", "url": "https://www.vinted.nl/items/9-x"}]}
+    sid = await stack(db, client, sale=sale)
+    await confirm(client, row(sid))
+    assert (await client.post(f"/api/publish/stack/{sid}/remove")).status_code == 409  # waiting in the queue
+    q = (await client.get(f"/api/publish/queue?item_id={sid}")).json()[0]
+    await client.post(f"/api/publish/queue/{q['id']}/cancel")
+    assert (await client.post(f"/api/publish/stack/{sid}/remove")).status_code == 200
+    st = (await db.collection_items.find_one({"stack_key": "k1"}))["sale"]
+    assert st["status"] == "ready" and st["listings"] == []
+    assert (await client.post("/api/publish/stack/6af000000000000000000000/remove")).status_code == 404
+    assert (await client.post("/api/publish/stack/nope/remove")).status_code == 404

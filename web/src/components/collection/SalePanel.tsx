@@ -28,9 +28,16 @@ const VINTED_STATE: Record<string, string> = { confirmed: "Waiting for the Claud
 /** Vinted publish state of one stack + the button that opens the Publish table (the per-item confirm there is the only approval). */
 function VintedPublish({ id, link, onPublish }: { id: string; link: string | null; onPublish: (id: string) => void }) {
   const q = useQuery({ queryKey: ["publish-queue", "stack", id], refetchInterval: 5000, queryFn: () => api.publishQueue(undefined, id) });
-  const last = [...(q.data ?? [])].filter((e) => e.state !== "cancelled").pop();
+  const qc = useQueryClient();
+  const [ask, setAsk] = useState(false);
+  const last = [...(q.data ?? [])].filter((e) => e.state !== "cancelled" && e.state !== "removed").pop();
+  const rm = useMutation({
+    mutationFn: () => api.publishRemoveVinted(id),
+    onSuccess: () => { setAsk(false); qc.invalidateQueries({ queryKey: ["publish-queue"] }); qc.invalidateQueries({ queryKey: ["collection"] }); qc.invalidateQueries({ queryKey: ["sales"] }); },
+  });
   const busy = !!last && (last.state === "confirmed" || last.state === "publishing");
   const url = last?.state === "published" ? last.url : link;
+  const canRemove = !busy && (!!link || last?.state === "published" || last?.state === "failed");
   return (
     <div className="space-y-1 border-t border-line pt-2" aria-label="Vinted publish">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -39,6 +46,13 @@ function VintedPublish({ id, link, onPublish }: { id: string; link: string | nul
           {url && /^https?:/.test(url) && <> · <a className="text-accent hover:underline" href={url} target="_blank" rel="noreferrer">Vinted item</a></>}</div>
         <Button size="sm" disabled={busy} onClick={() => onPublish(id)}>{link ? "Update on Vinted" : "Publish on Vinted"}</Button>
       </div>
+      {canRemove && <div className="flex flex-wrap items-center gap-2">
+        {!ask ? <Button variant="secondary" size="sm" onClick={() => setAsk(true)}>Remove Vinted record</Button> : <>
+          <span className="text-xs text-warn">Forget this Vinted publication here? Nothing changes on Vinted.</span>
+          <Button variant="danger" size="sm" disabled={rm.isPending} onClick={() => rm.mutate()}>Yes, remove</Button>
+          <Button variant="ghost" size="sm" onClick={() => setAsk(false)}>Keep</Button></>}
+      </div>}
+      {rm.error && <p role="alert" className="text-xs text-danger">{(rm.error as Error).message}</p>}
       {last?.state === "failed" && last.error && <p className="text-xs text-danger">{last.error}</p>}
       <p className="text-xs text-muted">Opens the Publish table: you confirm the title, price and photos there; nothing is sent before that.</p>
     </div>);

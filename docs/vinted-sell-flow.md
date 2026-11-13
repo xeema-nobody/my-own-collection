@@ -78,3 +78,6 @@ Limits to verify on the form during the dry run (type past the limit, read the c
 
 ## Sealed products (2026-11-12, unproven)
 Sealed stacks go through the same queue. Pack defaults: title `<product> - sealed`, condition **New with tags**, parcel **medium**, payload category `Sealed trading card products`. Not verified on Vinted: which category Vinted picks from that title and whether it offers the same condition list. The extension recipe still requires the auto-filled category to contain `single trading cards`, so a sealed CREATE stops with `category not auto-filled as expected` and releases the item. Next: user dry run of one sealed stack, report the category Vinted shows, then loosen the recipe check per product kind.
+
+## Removing the app's Vinted record (2026-11-13)
+After withdrawing an item on Vinted, use "Remove Vinted record" in the collection drawer (Sale > Vinted). It only clears the app's side (queue history becomes `removed`, the Vinted listing leaves the sale); "Publish on Vinted" then creates a new listing.

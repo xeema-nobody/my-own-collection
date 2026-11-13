@@ -13,7 +13,7 @@ from app.db.models import PublishConfirmIn, PublishResultIn, StackSaleIn
 from app.services import photos as photos_svc, sale, valuation_cache
 
 ACTIVE = ("confirmed", "publishing")
-STATES = ("confirmed", "publishing", "published", "failed", "cancelled")
+STATES = ("confirmed", "publishing", "published", "failed", "cancelled", "removed")
 VINTED_MAX_PHOTOS = 20
 VINTED_BASE = "https://www.vinted.nl"
 
@@ -208,3 +208,29 @@ async def retry(db, qid: str) -> dict:
     if not r:
         raise QueueError(409, "only failed items can be retried")
     return _view(r)
+
+
+async def remove_vinted(db, item_id: str) -> dict:
+    """Forget a stack's Vinted publication (e.g. withdrawn on Vinted): its published / failed queue entries become
+    `removed` (history kept) and its Vinted listings leave the sale, so the next publish is a fresh create. Other
+    platforms' listings stay; a `listed` stack left without listings becomes `ready`. Nothing is sent to Vinted."""
+    oid = _oid(item_id)
+    stack = await db.collection_items.find_one({"_id": oid})
+    if not stack:
+        raise QueueError(404, "stack not found")
+    if await db.publish_queue.find_one({"item_id": item_id, "state": {"$in": list(ACTIVE)}}, {"_id": 1}):
+        raise QueueError(409, "an item is waiting or publishing: cancel it first")
+    r = await db.publish_queue.update_many({"item_id": item_id, "state": {"$in": ["published", "failed"]}},
+                                           {"$set": {"state": "removed", "updated_at": datetime.now(timezone.utc)}})
+    cur = stack.get("sale") or {}
+    listings = cur.get("listings") or []
+    keep = [l for l in listings if l.get("platform") != "vinted"]
+    dropped = len(listings) - len(keep)
+    if dropped:
+        status = cur.get("status", "none")
+        if status == "listed" and not keep:
+            status = "ready"
+        keep = [{k: v for k, v in l.items() if k != "asking_base"} for l in keep]
+        await sale.set_sale(db, item_id, StackSaleIn(status=status, listings=keep))
+        valuation_cache.bump()
+    return {"item_id": item_id, "removed_entries": r.modified_count, "dropped_listings": dropped}

@@ -430,3 +430,6 @@ User: store and fetch prices only for cards the user selects into the collection
 - Net = pulls value - cost; ROI = net / cost. "Opened vs kept sealed" = pulls value - today's sealed value of the same units (positive = opening beat keeping the box sealed). Sold sealed = `collection_exits` sold rows of sealed products (proceeds after fees / shipping, realised profit where the cost was known).
 - Hit = a pulled copy worth >= `opening_hit_threshold_cents` (setting, default 500 = 5.00 in base currency); hit rate = hit copies / priced pulled copies. Best hit = highest per-copy value.
 - Known limit: values are today's, so an old opening's ROI moves with prices; no frozen "value at opening" snapshot.
+
+## Remove a stack's Vinted record (2026-11-13)
+- Withdrawing an item on Vinted left the app with a stale Vinted listing / "Published" queue entry, so the stack could not start a fresh create. `POST /api/publish/stack/{item_id}/remove` (drawer button "Remove Vinted record", inline confirm) marks the stack's published / failed queue entries `removed` (history kept, new queue state), drops its Vinted listings from the sale (other platforms stay; a `listed` stack left empty becomes `ready`) and refuses with 409 while an entry is waiting / publishing. Nothing is sent to Vinted. After it, "Publish on Vinted" queues a create.
